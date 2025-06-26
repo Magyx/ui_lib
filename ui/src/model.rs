@@ -76,6 +76,12 @@ define_vector!(Position, 2, x, y);
 define_vector!(Color, 4, r, g, b, a);
 
 impl Color<f32> {
+    pub const TRANSPARENT: Self = Self {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    };
     pub const WHITE: Self = Self {
         r: 1.0,
         g: 1.0,
@@ -122,9 +128,4 @@ impl Default for Style {
             italic: false,
         }
     }
-}
-
-pub enum Length {
-    Fill,
-    Fixed(Vector2<i32>),
 }

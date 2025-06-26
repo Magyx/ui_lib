@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use ui::{
-    graphics::Engine,
+    graphics::{Engine, TextureHandle},
     model::*,
-    widget::{Element, TextBox},
+    widget::{BorderStyle, ContentFit, Element, Image, Layout, Length, Rectangle, TextBox},
 };
 
 use winit::{
@@ -15,7 +15,7 @@ use winit::{
 };
 
 struct State {
-    fps: u32,
+    bg_handle: Option<TextureHandle>,
 }
 
 struct App<'a> {
@@ -24,55 +24,48 @@ struct App<'a> {
     state: State,
 }
 
-fn view(engine: &Engine, state: &State) -> Element {
-    // let bg: Option<Element> = if let Some(h) = state.bg_handle {
-    //     let (uv0, uv1) = engine.uv(h);
-    //
-    //     Some(
-    //         Image {
-    //             uv_min: uv0,
-    //             uv_max: uv1,
-    //             position: Position::from_scalar(0),
-    //             size: Length::Fill,
-    //             margin: Size::from_scalar(0),
-    //             padding: Size::from_scalar(0),
-    //             border_color: Color::BLACK,
-    //             border_radius: 0.0,
-    //             border_width: 0,
-    //         }
-    //         .into(),
-    //     )
-    // } else {
-    //     None
-    // };
-    //
-    let fps_box: Element = TextBox {
-        content: format!("FPS: {}", state.fps),
+fn view(state: &State) -> Element {
+    let bg: Element = state
+        .bg_handle
+        .map(|texture_handle| {
+            Image {
+                texture_handle,
+                layout: Layout::default(),
+                border: BorderStyle::default(),
+                fit: ContentFit::Cover,
+            }
+            .into()
+        })
+        .unwrap_or(
+            Rectangle {
+                layout: Layout::default(),
+                border: BorderStyle::default(),
+                background_color: Color::from_rgb(123, 123, 123),
+            }
+            .into(),
+        );
+
+    let time: Element = TextBox {
+        content: chrono::Local::now().format("%H:%M:%S").to_string(),
         text_style: Style {
             font: ui::Family::Fantasy,
             font_size: 26.0,
-            color: Color::BLACK,
+            color: Color::WHITE,
             weight: ui::Weight::BOLD,
             ..Default::default()
         },
-        position: Position::from_scalar(0),
-        size: Length::Fill,
-        margin: Size::from_scalar(12),
-        padding: Size::from_scalar(32),
-        border_radius: 80.0,
-        border_color: Color::BLACK,
-        border_width: 20,
-        background_color: Color::from_rgb(250, 0, 50),
+        layout: Layout {
+            position: Position::from_scalar(0),
+            size: Length::Fill,
+            margin: Size::from_scalar(36),
+            padding: Size::from_scalar(32),
+        },
+        border: BorderStyle::default(),
+        background_color: Color::TRANSPARENT,
     }
     .into();
 
-    let mut children = Vec::new();
-    // if let Some(bg) = bg {
-    //     children.push(bg);
-    // }
-    children.push(fps_box);
-
-    children.into()
+    vec![bg, time].into()
 }
 
 fn request_redraw(app: &mut App) {
@@ -91,9 +84,8 @@ impl<'a> ApplicationHandler for App<'a> {
 
             let mut engine = Engine::new(window.clone(), window.inner_size().into());
 
-            // let test = engine.load_image("assets/background.jpg");
-            // println!("{:?}", test);
-            // self.state.bg_handle = test.ok();
+            let img = image::open("assets/background.jpg").unwrap();
+            self.state.bg_handle = engine.load_texture(img).ok();
 
             self.engine = Some(engine);
             self.window = Some(window);
@@ -139,7 +131,7 @@ impl<'a> ApplicationHandler for App<'a> {
             }
             WindowEvent::RedrawRequested => {
                 let engine = self.engine.as_mut().unwrap();
-                engine.view(|engine| view(engine, &self.state));
+                _ = engine.view(|| view(&self.state));
 
                 _ = engine.render();
             }
@@ -155,7 +147,7 @@ async fn run() -> Result<(), EventLoopError> {
     let mut app = App {
         window: None,
         engine: None,
-        state: State { fps: 144 },
+        state: State { bg_handle: None },
     };
     event_loop.run_app(&mut app)
 }
