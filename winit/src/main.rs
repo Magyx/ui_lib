@@ -2,7 +2,7 @@ use std::sync::Arc;
 use ui::{
     graphics::{Engine, TextureHandle},
     model::*,
-    widget::{BorderStyle, ContentFit, Element, Image, Layout, Length, Rectangle, TextBox},
+    widget::{BorderStyle, ContentFit, Element, Image, Layout, Length, Rectangle, Row, TextBox},
 };
 
 use winit::{
@@ -15,6 +15,7 @@ use winit::{
 };
 
 struct State {
+    window_size: Size<u32>,
     bg_handle: Option<TextureHandle>,
 }
 
@@ -24,7 +25,7 @@ struct App<'a> {
     state: State,
 }
 
-fn view(state: &State) -> Element {
+fn build_ui(state: &State) -> Element {
     let bg: Element = state
         .bg_handle
         .map(|texture_handle| {
@@ -45,27 +46,20 @@ fn view(state: &State) -> Element {
             .into(),
         );
 
-    let time: Element = TextBox {
-        content: chrono::Local::now().format("%H:%M:%S").to_string(),
-        text_style: Style {
-            font: ui::Family::Fantasy,
-            font_size: 26.0,
-            color: Color::WHITE,
-            weight: ui::Weight::BOLD,
+    let actions = Row {
+        children: vec![],
+        layout: Layout {
+            size: Length::Fit,
+            align: Vector2::from_scalar(0.5),
             ..Default::default()
         },
-        layout: Layout {
-            position: Position::from_scalar(0),
-            size: Length::Fill,
-            margin: Size::from_scalar(36),
-            padding: Size::from_scalar(32),
-        },
+        spacing: 12,
         border: BorderStyle::default(),
-        background_color: Color::TRANSPARENT,
+        background_color: Color::from_rgba(50, 50, 50, 120),
     }
     .into();
 
-    vec![bg, time].into()
+    vec![bg, actions].into()
 }
 
 fn request_redraw(app: &mut App) {
@@ -126,12 +120,13 @@ impl<'a> ApplicationHandler for App<'a> {
             }
             WindowEvent::Resized(size) => {
                 state.resize(size.into());
+                self.state.window_size = size.into();
 
                 request_redraw(self);
             }
             WindowEvent::RedrawRequested => {
                 let engine = self.engine.as_mut().unwrap();
-                _ = engine.view(|| view(&self.state));
+                _ = engine.view(|| build_ui(&self.state));
 
                 _ = engine.render();
             }
@@ -147,7 +142,10 @@ async fn run() -> Result<(), EventLoopError> {
     let mut app = App {
         window: None,
         engine: None,
-        state: State { bg_handle: None },
+        state: State {
+            bg_handle: None,
+            window_size: Size::from_scalar(0),
+        },
     };
     event_loop.run_app(&mut app)
 }

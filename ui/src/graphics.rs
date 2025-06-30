@@ -18,7 +18,6 @@ const ATLAS_TILE_SIZE: u32 = 128;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Globals {
-    cursor_position: [f32; 2],
     window_size: [f32; 2],
 }
 
@@ -36,6 +35,7 @@ fn cascade_widgets<'a>(
     widgets: &'a Box<dyn Widget>,
     window_size: &[f32],
     textures: &TextureArray,
+    texts: &mut TextBundle,
 ) -> Result<(Option<Vec<Primitive>>, Option<Vec<Text<'a>>>), &'static str> {
     let RenderOutput { primitives, texts } = widgets.as_primitive(
         Size {
@@ -43,9 +43,13 @@ fn cascade_widgets<'a>(
             height: window_size[1] as i32,
         },
         textures,
+        texts,
     )?;
+
     Ok((
-        primitives.filter(|v| !v.is_empty()),
+        primitives
+            .map(|p| p.iter().map(|p| p.primitive).collect())
+            .filter(|p: &Vec<Primitive>| p.is_empty()),
         texts.filter(|v| !v.is_empty()),
     ))
 }
@@ -72,7 +76,6 @@ impl<'a> Engine<'a> {
         Self {
             config,
             globals: Globals {
-                cursor_position: [0f32; 2],
                 window_size: [size.width as f32, size.height as f32],
             },
 
@@ -93,8 +96,12 @@ impl<'a> Engine<'a> {
 
     pub fn view(&mut self, build: impl FnOnce() -> Element) -> Result<(), &'static str> {
         let element = build();
-        let (primitives, texts) =
-            cascade_widgets(&element.widget, &self.globals.window_size, &self.textures)?;
+        let (primitives, texts) = cascade_widgets(
+            &element.widget,
+            &self.globals.window_size,
+            &self.textures,
+            &mut self.text_bundle,
+        )?;
 
         if let Some(primitives) = primitives {
             self.primitive_bundle
@@ -118,8 +125,12 @@ impl<'a> Engine<'a> {
     }
 
     pub fn update(&mut self, element: &Element) -> Result<(), &'static str> {
-        let (primitives, texts) =
-            cascade_widgets(&element.widget, &self.globals.window_size, &self.textures)?;
+        let (primitives, texts) = cascade_widgets(
+            &element.widget,
+            &self.globals.window_size,
+            &self.textures,
+            &mut self.text_bundle,
+        )?;
 
         if let Some(primitives) = primitives {
             self.primitive_bundle
@@ -363,7 +374,7 @@ impl TextureArray {
         }
     }
 
-    pub(crate) fn bind_group(&mut self, config: &Config) -> &wgpu::BindGroup {
+    fn bind_group(&mut self, config: &Config) -> &wgpu::BindGroup {
         if self.dirty {
             self.update_texture_bind_group(config);
             self.dirty = false;
@@ -390,7 +401,7 @@ impl TextureArray {
         });
     }
 
-    pub(crate) fn load_texture(
+    fn load_texture(
         &mut self,
         config: &Config,
         img: DynamicImage,
@@ -446,13 +457,13 @@ impl TextureArray {
         Ok(handle)
     }
 
-    pub(crate) fn unload_texture(&mut self, handle: TextureHandle) {
+    fn unload_texture(&mut self, handle: TextureHandle) {
         self.handles[handle.0 as usize] = None;
         self.texture_views[handle.0 as usize] = self.dummy_view.clone();
         self.dirty = true;
     }
 
-    pub(crate) fn get_tex_info(
+    pub fn get_tex_info(
         &self,
         texture_handle: &TextureHandle,
     ) -> Result<(u32, Size<u32>), &'static str> {
@@ -853,5 +864,28 @@ impl<'a> TextBundle {
 
         self.text_renderer
             .render(&self.atlas, &self.viewport, &mut render_pass)
+    }
+
+    pub(crate) fn get_min_size(&mut self, style: &TextStyle, content: &str) -> Size<f32> {
+        let metrics = glyphon::Metrics::new(style.font_size, style.font_size * 1.4);
+        let mut buf = glyphon::Buffer::new(&mut self.font_system, metrics);
+
+        let mut attrs = glyphon::Attrs::new().family(glyphon::Family::SansSerif);
+        attrs = attrs.weight(style.weight);
+        if style.italic {
+            attrs.style(glyphon::Style::Italic);
+        }
+        buf.set_text(
+            &mut self.font_system,
+            &content,
+            &glyphon::Attrs::new(),
+            glyphon::Shaping::Advanced,
+        );
+
+        let size = buf.size();
+        Size {
+            width: size.0.unwrap_or(0.0),
+            height: size.1.unwrap_or(0.0),
+        }
     }
 }

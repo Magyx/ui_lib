@@ -37,7 +37,6 @@ struct VertexOutput {
 };
 
 struct Globals {
-    cursor_position: vec2<f32>,
     window_size: vec2<f32>,
 };
 

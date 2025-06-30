@@ -109,8 +109,20 @@ impl Color<f32> {
     }
 }
 
+impl<T> From<(T, T)> for Size<T> {
+    fn from((width, height): (T, T)) -> Self {
+        Self { width, height }
+    }
+}
+
+impl Size<i32> {
+    pub fn to_f32(self) -> Size<f32> {
+        Size::new(self.width as f32, self.height as f32)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
-pub struct Style {
+pub struct TextStyle {
     pub color: Color<f32>,
     pub font: glyphon::Family<'static>,
     pub font_size: f32,
@@ -118,7 +130,7 @@ pub struct Style {
     pub italic: bool,
 }
 
-impl Default for Style {
+impl Default for TextStyle {
     fn default() -> Self {
         Self {
             color: Color::BLACK,
