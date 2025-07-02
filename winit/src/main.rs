@@ -2,7 +2,7 @@ use std::sync::Arc;
 use ui::{
     graphics::{Engine, TextureHandle},
     model::*,
-    widget::{BorderStyle, ContentFit, Element, Image, Layout, Length, Rectangle, Row, TextBox},
+    widget::{ContentFit, Element, Layout, Length, image, rectangle, row},
 };
 
 use winit::{
@@ -14,6 +14,11 @@ use winit::{
     window::{Window, WindowAttributes},
 };
 
+enum Message {
+    Exit,
+    Reload,
+}
+
 struct State {
     window_size: Size<u32>,
     bg_handle: Option<TextureHandle>,
@@ -21,45 +26,40 @@ struct State {
 
 struct App<'a> {
     window: Option<Arc<Window>>,
-    engine: Option<Engine<'a>>,
+    engine: Option<Engine<'a, Message>>,
     state: State,
 }
 
-fn build_ui(state: &State) -> Element {
-    let bg: Element = state
-        .bg_handle
-        .map(|texture_handle| {
-            Image {
-                texture_handle,
-                layout: Layout::default(),
-                border: BorderStyle::default(),
-                fit: ContentFit::Cover,
-            }
-            .into()
-        })
-        .unwrap_or(
-            Rectangle {
-                layout: Layout::default(),
-                border: BorderStyle::default(),
-                background_color: Color::from_rgb(123, 123, 123),
-            }
-            .into(),
-        );
-
-    let actions = Row {
-        children: vec![],
-        layout: Layout {
+fn build_ui(state: &State) -> Element<Message> {
+    vec![
+        state
+            .bg_handle
+            .map(|texture_handle| image!(texture_handle).fit(ContentFit::Cover).into())
+            .unwrap_or(rectangle!(Color::from_rgb(123, 123, 123)).into()),
+        row![
+            rectangle!(Color::from_rgb(150, 150, 150)).layout(Layout {
+                size: Length::Fixed((Some(200), Some(80)).into()),
+                ..Default::default()
+            }),
+            rectangle!(Color::from_rgb(150, 150, 150)).layout(Layout {
+                size: Length::Fixed((Some(200), Some(80)).into()),
+                ..Default::default()
+            }),
+            rectangle!(Color::from_rgb(150, 150, 150)).layout(Layout {
+                size: Length::Fixed((Some(200), Some(80)).into()),
+                ..Default::default()
+            }),
+        ]
+        .layout(Layout {
             size: Length::Fit,
-            align: Vector2::from_scalar(0.5),
+            align: Vector2::splat(0.5),
             ..Default::default()
-        },
-        spacing: 12,
-        border: BorderStyle::default(),
-        background_color: Color::from_rgba(50, 50, 50, 120),
-    }
-    .into();
-
-    vec![bg, actions].into()
+        })
+        .spacing(12)
+        .background_color(Color::from_rgba(50, 50, 50, 120))
+        .into(),
+    ]
+    .into()
 }
 
 fn request_redraw(app: &mut App) {
@@ -144,7 +144,7 @@ async fn run() -> Result<(), EventLoopError> {
         engine: None,
         state: State {
             bg_handle: None,
-            window_size: Size::from_scalar(0),
+            window_size: Size::splat(0),
         },
     };
     event_loop.run_app(&mut app)

@@ -18,10 +18,6 @@ macro_rules! define_vector {
                 Self { $( $field: value ),+ }
             }
 
-            pub fn from_scalar(value: T) -> Self where T: Copy {
-                Self::splat(value)
-            }
-
             pub fn as_slice(&self) -> &[T] {
                 unsafe {
                     std::slice::from_raw_parts(

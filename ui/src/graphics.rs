@@ -4,6 +4,7 @@ use image::DynamicImage;
 use wgpu::{SurfaceConfiguration, util::DeviceExt};
 
 use crate::{
+    context::Context,
     model::*,
     primitive::{Primitive, QUAD_INDICES, QUAD_VERTICES, Vertex},
     utils,
@@ -12,8 +13,6 @@ use crate::{
 
 const DEFAULT_MAX_TEXTURES: u32 = 128;
 const DEFAULT_MAX_INSTANCES: u64 = 10_000;
-const N_ATLAS_SLOTS: usize = 16;
-const ATLAS_TILE_SIZE: u32 = 128;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -21,21 +20,22 @@ pub struct Globals {
     window_size: [f32; 2],
 }
 
-pub struct Engine<'a> {
+pub struct Engine<'a, M> {
     globals: Globals,
     config: Config<'a>,
+    ctx: Context<M>,
 
     textures: TextureArray,
-
     primitive_bundle: PrimitiveBundle,
     text_bundle: TextBundle,
 }
 
-fn cascade_widgets<'a>(
-    widgets: &'a Box<dyn Widget>,
+fn cascade_widgets<'a, M>(
+    widgets: &'a Box<dyn Widget<Message = M> + 'a>,
     window_size: &[f32],
     textures: &TextureArray,
     texts: &mut TextBundle,
+    ctx: &mut Context<M>,
 ) -> Result<(Option<Vec<Primitive>>, Option<Vec<Text<'a>>>), &'static str> {
     let RenderOutput { primitives, texts } = widgets.as_primitive(
         Size {
@@ -44,18 +44,19 @@ fn cascade_widgets<'a>(
         },
         textures,
         texts,
+        ctx,
     )?;
 
     Ok((
         primitives
             .map(|p| p.iter().map(|p| p.primitive).collect())
-            .filter(|p: &Vec<Primitive>| p.is_empty()),
+            .filter(|p: &Vec<Primitive>| !p.is_empty()),
         texts.filter(|v| !v.is_empty()),
     ))
 }
 
-impl<'a> Engine<'a> {
-    pub fn new<T>(target: Arc<T>, size: Size<u32>) -> Engine<'a>
+impl<'a, M: 'static> Engine<'a, M> {
+    pub fn new<T>(target: Arc<T>, size: Size<u32>) -> Engine<'a, M>
     where
         T: wgpu::rwh::HasWindowHandle
             + wgpu::rwh::HasDisplayHandle
@@ -64,6 +65,8 @@ impl<'a> Engine<'a> {
             + std::marker::Send
             + 'a,
     {
+        let ctx = Context::new();
+
         let config = Config::new(target, &size);
 
         let textures = TextureArray::new(&config);
@@ -78,9 +81,9 @@ impl<'a> Engine<'a> {
             globals: Globals {
                 window_size: [size.width as f32, size.height as f32],
             },
+            ctx,
 
             textures,
-
             primitive_bundle,
             text_bundle,
         }
@@ -94,13 +97,14 @@ impl<'a> Engine<'a> {
         self.textures.unload_texture(handle);
     }
 
-    pub fn view(&mut self, build: impl FnOnce() -> Element) -> Result<(), &'static str> {
+    pub fn view(&mut self, build: impl FnOnce() -> Element<M>) -> Result<(), &'static str> {
         let element = build();
         let (primitives, texts) = cascade_widgets(
             &element.widget,
             &self.globals.window_size,
             &self.textures,
             &mut self.text_bundle,
+            &mut self.ctx,
         )?;
 
         if let Some(primitives) = primitives {
@@ -124,12 +128,13 @@ impl<'a> Engine<'a> {
         );
     }
 
-    pub fn update(&mut self, element: &Element) -> Result<(), &'static str> {
+    pub fn update(&mut self, element: &Element<M>) -> Result<(), &'static str> {
         let (primitives, texts) = cascade_widgets(
             &element.widget,
             &self.globals.window_size,
             &self.textures,
             &mut self.text_bundle,
+            &mut self.ctx,
         )?;
 
         if let Some(primitives) = primitives {
@@ -273,7 +278,7 @@ impl<'a> Config<'a> {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct TextureHandle(u32);
+pub struct TextureHandle(pub(crate) u32);
 
 #[derive(Debug, Copy, Clone)]
 pub struct TextureInfo {
