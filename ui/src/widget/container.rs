@@ -74,69 +74,51 @@ impl<M: 'static> Widget for Container<M> {
         texts: &mut TextBundle,
         ctx: &mut Context<Self::Message>,
     ) -> Result<RenderOutput, &'static str> {
-        let mut all_primitives = vec![];
-        let mut all_texts = vec![];
+        let (_, _, _, content_size) = resolve_layout(&self.layout, &parent_size);
 
-        let (outer_position, outer_size, inner_position, content_size) =
-            resolve_layout(&self.layout, &parent_size);
+        let (child_data, _total_w, _total_h, max_w, max_h) =
+            measure_children(&self.children, content_size, textures, texts, ctx)?;
 
-        all_primitives.push(
-            Primitive::color(
-                outer_position,
+        let content_min = Size::new(
+            max_w + self.layout.padding.width as i32 * 2,
+            max_h + self.layout.padding.height as i32 * 2,
+        );
+
+        let self_min = min_for_length(&self.layout.size, content_min, parent_size);
+        let layout = layout_with_fit(&self.layout, self_min);
+        let (outer_pos, outer_size, inner_pos, _) = resolve_layout(&layout, &parent_size);
+
+        let background = PrimitiveWithMeta {
+            primitive: Primitive::color(
+                outer_pos,
                 outer_size,
                 self.background_color,
                 Vector4::splat(self.border.radius),
                 self.border.color,
                 Vector4::splat(self.border.width),
-            )
-            .into(),
-        );
+            ),
+            min_size: self_min.to_f32(),
+        };
 
-        let mut max_child_w = 0;
-        let mut max_child_h = 0;
+        let mut all_primitives = vec![background];
+        let mut all_texts = Vec::new();
 
-        for child in self.children.iter() {
-            let RenderOutput { primitives, texts } =
-                child.as_primitive(content_size, textures, texts, ctx)?;
-
-            if let Some(mut primitives) = primitives {
-                for p in primitives.iter_mut() {
-                    p.primitive.position[0] += inner_position.x as f32;
-                    p.primitive.position[1] += inner_position.y as f32;
-                    max_child_w = max_child_w.max(p.min_size.width as i32);
-                    max_child_h = max_child_h.max(p.min_size.height as i32);
+        for (primitives, texts, _child_w, _child_h) in child_data {
+            if let Some(mut prims) = primitives {
+                for p in prims.iter_mut() {
+                    p.primitive.position[0] += inner_pos.x as f32;
+                    p.primitive.position[1] += inner_pos.y as f32;
                 }
-
-                all_primitives.extend(primitives);
+                all_primitives.extend(prims);
             }
-
-            if let Some(mut texts) = texts {
-                for t in texts.iter_mut() {
-                    t.position.x += inner_position.x;
-                    t.position.y += inner_position.y;
-                    max_child_w = max_child_w.max(t.min_size.width as i32);
-                    max_child_h = max_child_h.max(t.min_size.height as i32);
+            if let Some(mut txts) = texts {
+                for t in txts.iter_mut() {
+                    t.position.x += inner_pos.x;
+                    t.position.y += inner_pos.y;
                 }
-                all_texts.extend(texts);
+                all_texts.extend(txts);
             }
         }
-
-        let content_min = Size::new(max_child_w, max_child_h);
-        let self_min = min_for_length(&self.layout.size, content_min, parent_size);
-
-        let layout = layout_with_fit(&self.layout, self_min);
-        let (outer_pos, outer_size, _, _content_size) = resolve_layout(&layout, &parent_size);
-
-        all_primitives[0] = Primitive::color(
-            outer_pos,
-            outer_size,
-            self.background_color,
-            Vector4::splat(self.border.radius),
-            self.border.color,
-            Vector4::splat(self.border.width),
-        )
-        .into();
-        all_primitives[0].min_size = self_min.to_f32();
 
         Ok(RenderOutput {
             primitives: Some(all_primitives),

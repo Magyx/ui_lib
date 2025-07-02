@@ -14,7 +14,10 @@ macro_rules! rectangle {
         $crate::widget::Rectangle {
             id: $crate::ui_id!(),
             layout: $crate::widget::Layout::default(),
-            border: $crate::widget::BorderStyle::default(),
+            border: $crate::widget::BorderStyle {
+                color: $color,
+                ..Default::default()
+            },
             color: $color,
             _marker: std::marker::PhantomData,
         }

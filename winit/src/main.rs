@@ -2,7 +2,7 @@ use std::sync::Arc;
 use ui::{
     graphics::{Engine, TextureHandle},
     model::*,
-    widget::{ContentFit, Element, Layout, Length, image, rectangle, row},
+    widget::{BorderStyle, ContentFit, Element, Layout, Length, image, rectangle, row},
 };
 
 use winit::{
@@ -30,29 +30,49 @@ struct App<'a> {
     state: State,
 }
 
-fn build_ui(state: &State) -> Element<Message> {
+fn view(state: &State) -> Element<Message> {
     vec![
         state
             .bg_handle
             .map(|texture_handle| image!(texture_handle).fit(ContentFit::Cover).into())
             .unwrap_or(rectangle!(Color::from_rgb(123, 123, 123)).into()),
         row![
-            rectangle!(Color::from_rgb(150, 150, 150)).layout(Layout {
-                size: Length::Fixed((Some(200), Some(80)).into()),
-                ..Default::default()
-            }),
-            rectangle!(Color::from_rgb(150, 150, 150)).layout(Layout {
-                size: Length::Fixed((Some(200), Some(80)).into()),
-                ..Default::default()
-            }),
-            rectangle!(Color::from_rgb(150, 150, 150)).layout(Layout {
-                size: Length::Fixed((Some(200), Some(80)).into()),
-                ..Default::default()
-            }),
+            rectangle!(Color::from_rgb(150, 150, 150))
+                .layout(Layout {
+                    size: Length::Fixed((Some(200), Some(80)).into()),
+                    ..Default::default()
+                })
+                .border(BorderStyle {
+                    radius: 12.0,
+                    ..Default::default()
+                }),
+            rectangle!(Color::from_rgb(150, 150, 150))
+                .layout(Layout {
+                    size: Length::Fixed((Some(200), Some(80)).into()),
+                    ..Default::default()
+                })
+                .border(BorderStyle {
+                    radius: 12.0,
+                    ..Default::default()
+                }),
+            rectangle!(Color::from_rgb(150, 150, 150))
+                .layout(Layout {
+                    size: Length::Fixed((Some(200), Some(80)).into()),
+                    ..Default::default()
+                })
+                .border(BorderStyle {
+                    radius: 12.0,
+                    ..Default::default()
+                }),
         ]
         .layout(Layout {
             size: Length::Fit,
             align: Vector2::splat(0.5),
+            padding: Size::splat(12),
+            ..Default::default()
+        })
+        .border(BorderStyle {
+            radius: 24.0,
             ..Default::default()
         })
         .spacing(12)
@@ -126,7 +146,7 @@ impl<'a> ApplicationHandler for App<'a> {
             }
             WindowEvent::RedrawRequested => {
                 let engine = self.engine.as_mut().unwrap();
-                _ = engine.view(|| build_ui(&self.state));
+                _ = engine.view(|| view(&self.state));
 
                 _ = engine.render();
             }

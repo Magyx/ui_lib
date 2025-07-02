@@ -83,68 +83,58 @@ impl<M: 'static> Widget for Column<M> {
         texts: &mut TextBundle,
         ctx: &mut Context<Self::Message>,
     ) -> Result<RenderOutput, &'static str> {
-        let mut all_primitives = Vec::new();
-        let mut all_texts = Vec::new();
+        let (_, _, _, content_size) = resolve_layout(&self.layout, &parent_size);
 
-        let (outer_pos, outer_size, inner_pos, content_size) =
-            resolve_layout(&self.layout, &parent_size);
+        let (child_data, _total_w, total_h, max_w, _max_h) =
+            measure_children(&self.children, content_size, textures, texts, ctx)?;
 
-        all_primitives.push(
-            Primitive::color(
+        let content_min = Size::new(
+            max_w + self.layout.padding.width as i32 * 2,
+            total_h
+                + self.spacing * (self.children.len().saturating_sub(1) as i32)
+                + self.layout.padding.height as i32 * 2,
+        );
+
+        let self_min = min_for_length(&self.layout.size, content_min, parent_size);
+        let layout = layout_with_fit(&self.layout, self_min);
+        let (outer_pos, outer_size, inner_pos, _) = resolve_layout(&layout, &parent_size);
+
+        let background = PrimitiveWithMeta {
+            primitive: Primitive::color(
                 outer_pos,
                 outer_size,
                 self.background_color,
                 Vector4::splat(self.border.radius),
                 self.border.color,
                 Vector4::splat(self.border.width),
-            )
-            .into(),
-        );
+            ),
+            min_size: self_min.to_f32(),
+        };
+
+        let mut all_primitives = vec![background];
+        let mut all_texts = Vec::new();
 
         let mut cursor_y = inner_pos.y;
-        let mut max_child_w = 0;
-        let mut content_h = 0;
 
-        for child in &self.children {
-            let RenderOutput {
-                primitives,
-                texts: child_texts,
-            } = child.as_primitive(content_size, textures, texts, ctx)?;
-
-            let mut child_height: i32 = 0;
-            let mut child_width: i32 = 0;
-
+        for (primitives, texts, _child_w, child_h) in child_data {
             if let Some(mut prims) = primitives {
                 for p in prims.iter_mut() {
                     p.primitive.position[0] += inner_pos.x as f32;
                     p.primitive.position[1] += cursor_y as f32;
-                    child_height = child_height.max(p.min_size.height as i32);
-                    child_width = child_width.max(p.min_size.width as i32);
                 }
                 all_primitives.extend(prims);
             }
 
-            if let Some(mut txts) = child_texts {
+            if let Some(mut txts) = texts {
                 for t in txts.iter_mut() {
                     t.position.x += inner_pos.x;
                     t.position.y += cursor_y;
-                    child_height = child_height.max(t.min_size.height as i32);
-                    child_width = child_width.max(t.min_size.width as i32);
                 }
                 all_texts.extend(txts);
             }
 
-            cursor_y += child_height + self.spacing;
-            max_child_w = max_child_w.max(child_width);
-            content_h += child_height;
+            cursor_y += child_h + self.spacing;
         }
-
-        let content_min = Size::new(
-            max_child_w,
-            content_h + self.spacing * self.children.len().saturating_sub(1) as i32,
-        );
-        let self_min = min_for_length(&self.layout.size, content_min, parent_size);
-        all_primitives[0].min_size = self_min.to_f32();
 
         Ok(RenderOutput {
             primitives: Some(all_primitives),

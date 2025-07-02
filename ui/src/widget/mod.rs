@@ -203,6 +203,65 @@ fn resolve_layout(
     (outer_position, outer_size, inner_position, content_size)
 }
 
+fn measure_children<'a, M>(
+    children: &'a [Element<M>],
+    content_size: Size<i32>,
+    textures: &TextureArray,
+    texts: &mut TextBundle,
+    ctx: &mut Context<M>,
+) -> Result<
+    (
+        Vec<(
+            Option<Vec<PrimitiveWithMeta>>,
+            Option<Vec<Text<'a>>>,
+            i32,
+            i32,
+        )>,
+        i32,
+        i32,
+        i32,
+        i32,
+    ),
+    &'static str,
+> {
+    let mut child_data = Vec::new();
+
+    let mut total_w = 0;
+    let mut total_h = 0;
+    let mut max_w = 0;
+    let mut max_h = 0;
+
+    for child in children {
+        let RenderOutput { primitives, texts } =
+            child.as_primitive(content_size, textures, texts, ctx)?;
+
+        let mut child_w = 0;
+        let mut child_h = 0;
+
+        if let Some(ref prims) = primitives {
+            for p in prims.iter() {
+                child_w = child_w.max(p.min_size.width as i32);
+                child_h = child_h.max(p.min_size.height as i32);
+            }
+        }
+        if let Some(ref txts) = texts {
+            for t in txts.iter() {
+                child_w = child_w.max(t.min_size.width as i32);
+                child_h = child_h.max(t.min_size.height as i32);
+            }
+        }
+
+        total_w += child_w;
+        total_h += child_h;
+        max_w = max_w.max(child_w);
+        max_h = max_h.max(child_h);
+
+        child_data.push((primitives, texts, child_w, child_h));
+    }
+
+    Ok((child_data, total_w, total_h, max_w, max_h))
+}
+
 pub struct BorderStyle {
     pub radius: f32,
     pub color: Color<f32>,
