@@ -2,9 +2,10 @@ use std::sync::Arc;
 use ui::{
     button,
     event::Event,
-    graphics::{Engine, TextureHandle},
+    graphics::Engine,
     model::*,
     text_box,
+    texture::TextureHandle,
     widget::{BorderStyle, ContentFit, Element, Layout, Length, TextStyle, image, rectangle, row},
 };
 

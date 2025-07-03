@@ -1,0 +1,1 @@
+pub const DEFAULT_MAX_TEXTURES: u32 = 128;

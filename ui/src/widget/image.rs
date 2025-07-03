@@ -1,5 +1,5 @@
 use super::*;
-use crate::graphics::TextureHandle;
+use crate::texture::TextureHandle;
 
 pub struct Image<M: 'static> {
     pub id: Id,

@@ -1,10 +1,11 @@
 pub use crate::{button, column, container, image, rectangle, row, text_box};
 use crate::{
     context::{Context, Id},
-    graphics::{TextBundle, TextureArray},
     model::Size,
     model::*,
     primitive::Primitive,
+    text::TextBundle,
+    texture::TextureArray,
 };
 
 pub use button::Button;

@@ -1,5 +1,12 @@
-use crate::model::{Color, Position, Size, Vector4};
+use crate::{
+    graphics::{Config, Globals},
+    model::{Color, Position, Size, Vector4},
+    utils,
+};
+use std::path::PathBuf;
+use wgpu::util::DeviceExt;
 
+const DEFAULT_MAX_INSTANCES: u64 = 10_000;
 pub const QUAD_VERTICES: &[Vertex] = &[
     Vertex { uv: [0.0, 0.0] },
     Vertex { uv: [1.0, 0.0] },
@@ -175,6 +182,252 @@ impl Primitive {
                     format: wgpu::VertexFormat::Float32x4,
                 },
             ],
+        }
+    }
+}
+
+pub(crate) struct PrimitiveBundle {
+    shader_path: PathBuf,
+    render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: Option<wgpu::Buffer>,
+    instance_buffer: wgpu::Buffer,
+
+    num_indices: u32,
+    num_instances: u32,
+}
+
+impl PrimitiveBundle {
+    pub fn primitive(
+        config: &Config,
+        texture_array_layout: &wgpu::BindGroupLayout,
+        max_instances: Option<u64>,
+    ) -> PrimitiveBundle {
+        Self::new(
+            "Primitive",
+            std::path::Path::new("ui/src/shaders/primitive_shader.wgsl"),
+            QUAD_VERTICES,
+            QUAD_INDICES,
+            max_instances.unwrap_or(DEFAULT_MAX_INSTANCES),
+            config,
+            texture_array_layout,
+        )
+    }
+
+    pub fn new(
+        name: &str,
+        shader_path: &std::path::Path,
+        vertices: &[Vertex],
+        indices: &[u16],
+        max_instances: u64,
+        config: &Config,
+        texture_array_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
+        let shader_module = utils::wgsl::load_wgsl(&config.device, shader_path, name);
+
+        let render_pipeline_layout =
+            config
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Primitive Render Pipeline Layout"),
+                    bind_group_layouts: &[texture_array_layout],
+                    push_constant_ranges: &[wgpu::PushConstantRange {
+                        stages: wgpu::ShaderStages::VERTEX,
+                        range: 0..std::mem::size_of::<Globals>() as u32,
+                    }],
+                });
+        let render_pipeline =
+            config
+                .device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("Primitive Render Pipeline"),
+                    layout: Some(&render_pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader_module,
+                        entry_point: Some("vs_main"),
+                        buffers: &[Vertex::desc(), Primitive::desc()],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader_module,
+                        entry_point: Some("fs_main"),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: config.config.format,
+                            blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        strip_index_format: None,
+                        front_face: wgpu::FrontFace::Ccw,
+                        cull_mode: Some(wgpu::Face::Back),
+                        polygon_mode: wgpu::PolygonMode::Fill,
+                        unclipped_depth: false,
+                        conservative: false,
+                    },
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState {
+                        count: 1,
+                        mask: !0,
+                        alpha_to_coverage_enabled: false,
+                    },
+                    multiview: None,
+                    cache: None,
+                });
+
+        let vertex_buffer = config
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Primitive Vertex Buffer"),
+                contents: bytemuck::cast_slice(vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        let index_buffer = if indices.is_empty() {
+            None
+        } else {
+            Some(
+                config
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Primitive Index Buffer"),
+                        contents: bytemuck::cast_slice(indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    }),
+            )
+        };
+
+        let instance_buffer = config.device.create_buffer(&wgpu::wgt::BufferDescriptor {
+            label: Some("Primitive Instance Buffer"),
+            size: std::mem::size_of::<Primitive>() as u64 * max_instances,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let num_indices = if !indices.is_empty() {
+            indices.len()
+        } else {
+            vertices.len()
+        } as u32;
+
+        Self {
+            shader_path: shader_path.to_path_buf(),
+            render_pipeline,
+            vertex_buffer,
+            index_buffer,
+            instance_buffer,
+
+            num_indices,
+            num_instances: 0,
+        }
+    }
+
+    pub fn reload(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        texture_array_layout: &wgpu::BindGroupLayout,
+    ) {
+        let shader_module = utils::wgsl::load_wgsl(device, &self.shader_path, "Primitive");
+        self.render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Primitive Render Pipeline"),
+            layout: Some(
+                &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("Primitive Layout"),
+                    bind_group_layouts: &[texture_array_layout],
+                    push_constant_ranges: &[wgpu::PushConstantRange {
+                        stages: wgpu::ShaderStages::VERTEX,
+                        range: 0..std::mem::size_of::<Globals>() as u32,
+                    }],
+                }),
+            ),
+            vertex: wgpu::VertexState {
+                module: &shader_module,
+                entry_point: Some("vs_main"),
+                buffers: &[Vertex::desc(), Primitive::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader_module,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+    }
+
+    pub(crate) fn update(&mut self, queue: &wgpu::Queue, instances: &[Primitive]) {
+        self.num_instances = instances.len() as u32;
+        queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(instances));
+    }
+
+    pub(crate) fn render(
+        &self,
+        view: &wgpu::TextureView,
+        encoder: &mut wgpu::CommandEncoder,
+        globals: &Globals,
+        texture_bind_group: &wgpu::BindGroup,
+        clear_color: &mut Option<wgpu::Color>,
+    ) {
+        if self.num_instances <= 0 {
+            return;
+        }
+
+        let load = if let Some(clear_color) = clear_color.take() {
+            wgpu::LoadOp::Clear(clear_color)
+        } else {
+            wgpu::LoadOp::Load
+        };
+
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Primitive Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+
+        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_bind_group(0, texture_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+        render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, bytemuck::bytes_of(globals));
+
+        if let Some(index_buffer) = self.index_buffer.as_ref() {
+            render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.num_instances);
+        } else {
+            render_pass.draw(0..self.num_indices, 0..self.num_instances);
         }
     }
 }
