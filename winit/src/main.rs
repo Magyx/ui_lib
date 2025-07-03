@@ -1,27 +1,40 @@
 use std::sync::Arc;
 use ui::{
+    button,
+    event::Event,
     graphics::{Engine, TextureHandle},
     model::*,
-    widget::{BorderStyle, ContentFit, Element, Layout, Length, image, rectangle, row},
+    text_box,
+    widget::{BorderStyle, ContentFit, Element, Layout, Length, TextStyle, image, rectangle, row},
 };
 
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
-    event::{ElementState, KeyEvent, WindowEvent},
+    event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop},
-    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowAttributes},
 };
 
-enum Message {
-    Exit,
-    Reload,
+struct State {
+    show_message: bool,
+    bg_handle: Option<TextureHandle>,
 }
 
-struct State {
-    window_size: Size<u32>,
-    bg_handle: Option<TextureHandle>,
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            show_message: false,
+            bg_handle: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum Message {
+    ToggleMessage,
+    Reload,
+    Exit,
 }
 
 struct App<'a> {
@@ -30,40 +43,76 @@ struct App<'a> {
     state: State,
 }
 
+fn update<'a>(
+    engine: &mut Engine<'a, Message>,
+    event: &Event<Message, WindowEvent>,
+    state: &mut State,
+    event_loop: &ActiveEventLoop,
+) -> Option<Message> {
+    match event {
+        Event::Message(m) => match m {
+            Message::ToggleMessage => state.show_message = !state.show_message,
+            Message::Reload => engine.reload_all(),
+            Message::Exit => event_loop.exit(),
+        },
+        Event::Platform(window_event) => match window_event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            _ => (),
+        },
+        _ => (),
+    };
+    None
+}
+
 fn view(state: &State) -> Element<Message> {
+    let button_layout = Layout {
+        size: Length::Fit,
+        padding: Size::splat(8),
+        ..Default::default()
+    };
+    let button_border = BorderStyle {
+        radius: 12.0,
+        ..Default::default()
+    };
     vec![
         state
             .bg_handle
             .map(|texture_handle| image!(texture_handle).fit(ContentFit::Cover).into())
             .unwrap_or(rectangle!(Color::from_rgb(123, 123, 123)).into()),
+        text_box!("Test")
+            .text_style(TextStyle {
+                font_size: 32.0,
+                ..Default::default()
+            })
+            .layout(Layout {
+                size: Length::Fit,
+                ..Default::default()
+            })
+            .into(),
         row![
-            rectangle!(Color::from_rgb(150, 150, 150))
-                .layout(Layout {
-                    size: Length::Fixed((Some(200), Some(80)).into()),
-                    ..Default::default()
-                })
-                .border(BorderStyle {
-                    radius: 12.0,
-                    ..Default::default()
-                }),
-            rectangle!(Color::from_rgb(150, 150, 150))
-                .layout(Layout {
-                    size: Length::Fixed((Some(200), Some(80)).into()),
-                    ..Default::default()
-                })
-                .border(BorderStyle {
-                    radius: 12.0,
-                    ..Default::default()
-                }),
-            rectangle!(Color::from_rgb(150, 150, 150))
-                .layout(Layout {
-                    size: Length::Fixed((Some(200), Some(80)).into()),
-                    ..Default::default()
-                })
-                .border(BorderStyle {
-                    radius: 12.0,
-                    ..Default::default()
-                }),
+            button!("Toggle Message")
+                .layout(button_layout)
+                .border(button_border)
+                .background_color(Color::from_rgb(211, 211, 211))
+                .hover_color(Color::from_rgb(238, 238, 238))
+                .pressed_color(Color::from_rgb(182, 182, 182))
+                .on_click(Message::ToggleMessage),
+            // button!("Reload")
+            //     .layout(button_layout)
+            //     .border(button_border)
+            //     .background_color(Color::from_rgb(211, 211, 211))
+            //     .hover_color(Color::from_rgb(238, 238, 238))
+            //     .pressed_color(Color::from_rgb(182, 182, 182))
+            //     .on_click(Message::Reload),
+            // button!("Exit")
+            //     .layout(button_layout)
+            //     .border(button_border)
+            //     .background_color(Color::from_rgb(211, 211, 211))
+            //     .hover_color(Color::from_rgb(238, 238, 238))
+            //     .pressed_color(Color::from_rgb(182, 182, 182))
+            //     .on_click(Message::Exit),
         ]
         .layout(Layout {
             size: Length::Fit,
@@ -80,11 +129,6 @@ fn view(state: &State) -> Element<Message> {
         .into(),
     ]
     .into()
-}
-
-fn request_redraw(app: &mut App) {
-    let window = app.window.as_ref().unwrap();
-    window.request_redraw();
 }
 
 impl<'a> ApplicationHandler for App<'a> {
@@ -112,46 +156,9 @@ impl<'a> ApplicationHandler for App<'a> {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let state = self.engine.as_mut().unwrap();
-        match event {
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(KeyCode::Escape),
-                        ..
-                    },
-                ..
-            } => event_loop.exit(),
+        let engine = self.engine.as_mut().unwrap();
 
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(KeyCode::F5),
-                        state: ElementState::Pressed,
-                        ..
-                    },
-                ..
-            } => {
-                self.engine.as_mut().unwrap().reload_all();
-                request_redraw(self);
-            }
-            WindowEvent::Resized(size) => {
-                state.resize(size.into());
-                self.state.window_size = size.into();
-
-                request_redraw(self);
-            }
-            WindowEvent::RedrawRequested => {
-                let engine = self.engine.as_mut().unwrap();
-                _ = engine.view(|| view(&self.state));
-
-                _ = engine.render();
-            }
-            _ => (),
-        }
+        engine.handle_event(&event, view, &mut update, &mut self.state, event_loop);
     }
 }
 
@@ -162,10 +169,7 @@ async fn run() -> Result<(), EventLoopError> {
     let mut app = App {
         window: None,
         engine: None,
-        state: State {
-            bg_handle: None,
-            window_size: Size::splat(0),
-        },
+        state: State::default(),
     };
     event_loop.run_app(&mut app)
 }

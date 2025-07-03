@@ -1,34 +1,37 @@
 use super::*;
 
-pub struct TextBox<M> {
+pub struct Button<M> {
     pub id: Id,
-    pub content: String,
+    pub label: String,
     pub text_style: TextStyle,
     pub layout: Layout,
     pub border: BorderStyle,
     pub background_color: Color<f32>,
-
-    pub _marker: std::marker::PhantomData<M>,
+    pub hover_color: Color<f32>,
+    pub pressed_color: Color<f32>,
+    pub on_click: Option<M>,
 }
 
 #[macro_export]
-macro_rules! text_box {
-    ($content:expr) => {
-        $crate::widget::TextBox {
+macro_rules! button {
+    ($label:expr) => {
+        $crate::widget::Button {
             id: $crate::ui_id!(),
-            content: $content.to_string(),
+            label: $label.to_string(),
             text_style: $crate::widget::TextStyle::default(),
             layout: $crate::widget::Layout::default(),
             border: $crate::widget::BorderStyle::default(),
-            background_color: $crate::model::Color::WHITE,
-            _marker: std::marker::PhantomData,
+            background_color: $crate::model::Color::from_rgb(200, 200, 200),
+            hover_color: $crate::model::Color::from_rgb(220, 220, 220),
+            pressed_color: $crate::model::Color::from_rgb(180, 180, 180),
+            on_click: None,
         }
     };
 }
 
-impl<M: 'static> TextBox<M> {
-    pub fn text_style(mut self, style: TextStyle) -> Self {
-        self.text_style = style;
+impl<M: Clone + 'static> Button<M> {
+    pub fn text_style(mut self, text_style: TextStyle) -> Self {
+        self.text_style = text_style;
         self
     }
 
@@ -46,17 +49,32 @@ impl<M: 'static> TextBox<M> {
         self.background_color = color;
         self
     }
+
+    pub fn hover_color(mut self, color: Color<f32>) -> Self {
+        self.background_color = color;
+        self
+    }
+
+    pub fn pressed_color(mut self, color: Color<f32>) -> Self {
+        self.background_color = color;
+        self
+    }
+
+    pub fn on_click(mut self, message: M) -> Self {
+        self.on_click = Some(message);
+        self
+    }
 }
 
-impl<M: 'static> From<TextBox<M>> for Element<M> {
-    fn from(tb: TextBox<M>) -> Self {
+impl<M: Clone + std::fmt::Debug + 'static> From<Button<M>> for Element<M> {
+    fn from(btn: Button<M>) -> Self {
         Element {
-            widget: Box::new(tb),
+            widget: Box::new(btn),
         }
     }
 }
 
-impl<M> Widget for TextBox<M> {
+impl<M: Clone + std::fmt::Debug + 'static> Widget for Button<M> {
     type Message = M;
 
     fn as_primitive(
@@ -64,9 +82,9 @@ impl<M> Widget for TextBox<M> {
         parent_size: Size<i32>,
         _textures: &TextureArray,
         texts: &mut TextBundle,
-        _ctx: &mut Context<Self::Message>,
+        ctx: &mut Context<Self::Message>,
     ) -> Result<RenderOutput, &'static str> {
-        let txt_min = texts.get_min_size(&self.text_style, &self.content);
+        let txt_min = texts.get_min_size(&self.text_style, &self.label);
         let content_min = Size::new(
             txt_min.width as i32 + self.layout.padding.width as i32 * 2,
             txt_min.height as i32 + self.layout.padding.height as i32 * 2,
@@ -78,11 +96,28 @@ impl<M> Widget for TextBox<M> {
         let (outer_position, outer_size, inner_position, content_size) =
             resolve_layout(&layout, &parent_size);
 
+        let state = ctx.item(self.id, outer_position, outer_size);
+
+        let fill_color = if state.active {
+            self.pressed_color
+        } else if state.hovered {
+            self.hover_color
+        } else {
+            self.background_color
+        };
+        dbg!(fill_color);
+
+        if state.clicked {
+            if let Some(ref on_click) = self.on_click {
+                ctx.emit(on_click.clone());
+            }
+        }
+
         let background = PrimitiveWithMeta {
             primitive: Primitive::color(
                 outer_position,
                 outer_size,
-                self.background_color,
+                fill_color,
                 Vector4::splat(self.border.radius),
                 self.border.color,
                 Vector4::splat(self.border.width),
@@ -92,7 +127,7 @@ impl<M> Widget for TextBox<M> {
 
         let text = Text {
             min_size: txt_min,
-            content: &self.content,
+            content: &self.label,
             position: inner_position,
             size: content_size,
             style: self.text_style,

@@ -116,24 +116,3 @@ impl Size<i32> {
         Size::new(self.width as f32, self.height as f32)
     }
 }
-
-#[derive(Clone, Copy, Debug)]
-pub struct TextStyle {
-    pub color: Color<f32>,
-    pub font: glyphon::Family<'static>,
-    pub font_size: f32,
-    pub weight: glyphon::Weight,
-    pub italic: bool,
-}
-
-impl Default for TextStyle {
-    fn default() -> Self {
-        Self {
-            color: Color::BLACK,
-            font_size: 16.0,
-            font: glyphon::Family::SansSerif,
-            weight: glyphon::Weight::NORMAL,
-            italic: false,
-        }
-    }
-}

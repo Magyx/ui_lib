@@ -5,30 +5,15 @@ use wgpu::{SurfaceConfiguration, util::DeviceExt};
 
 use crate::{
     context::Context,
+    event::{Event, ToEvent},
     model::*,
     primitive::{Primitive, QUAD_INDICES, QUAD_VERTICES, Vertex},
     utils,
-    widget::{Element, RenderOutput, Text, Widget},
+    widget::{Element, RenderOutput, Text, TextStyle, Widget},
 };
 
 const DEFAULT_MAX_TEXTURES: u32 = 128;
 const DEFAULT_MAX_INSTANCES: u64 = 10_000;
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Globals {
-    window_size: [f32; 2],
-}
-
-pub struct Engine<'a, M> {
-    globals: Globals,
-    config: Config<'a>,
-    ctx: Context<M>,
-
-    textures: TextureArray,
-    primitive_bundle: PrimitiveBundle,
-    text_bundle: TextBundle,
-}
 
 fn cascade_widgets<'a, M>(
     widgets: &'a Box<dyn Widget<Message = M> + 'a>,
@@ -55,7 +40,23 @@ fn cascade_widgets<'a, M>(
     ))
 }
 
-impl<'a, M: 'static> Engine<'a, M> {
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Globals {
+    window_size: [f32; 2],
+}
+
+pub struct Engine<'a, M> {
+    globals: Globals,
+    config: Config<'a>,
+    ctx: Context<M>,
+
+    textures: TextureArray,
+    primitive_bundle: PrimitiveBundle,
+    text_bundle: TextBundle,
+}
+
+impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
     pub fn new<T>(target: Arc<T>, size: Size<u32>) -> Engine<'a, M>
     where
         T: wgpu::rwh::HasWindowHandle
@@ -97,8 +98,68 @@ impl<'a, M: 'static> Engine<'a, M> {
         self.textures.unload_texture(handle);
     }
 
-    pub fn view(&mut self, build: impl FnOnce() -> Element<M>) -> Result<(), &'static str> {
-        let element = build();
+    pub fn reload_all(&mut self) {
+        self.primitive_bundle.reload(
+            &self.config.device,
+            self.config.config.format,
+            &self.textures.texture_array_layout,
+        );
+    }
+
+    pub fn handle_event<S, P, E: ToEvent<M, E>>(
+        &mut self,
+        event: &E,
+        build: impl FnOnce(&S) -> Element<M>,
+        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> Option<M>,
+        state: &mut S,
+        params: &P,
+    ) {
+        let event = event.to_event();
+        let prev_mouse_down = self.ctx.mouse_down;
+
+        match event {
+            Event::Resized { size } => {
+                if size.width > 0 && size.height > 0 {
+                    self.config.config.width = size.width;
+                    self.config.config.height = size.height;
+                    self.globals.window_size = [size.width as f32, size.height as f32];
+                    self.config
+                        .surface
+                        .configure(&self.config.device, &self.config.config);
+                    self.text_bundle.resize(&self.config.queue, &size);
+                }
+            }
+            Event::CursorMoved { position } => self.ctx.mouse_pos = position,
+            Event::MouseInput { mouse_down } => {
+                self.ctx.mouse_down = mouse_down;
+                self.ctx.mouse_pressed = !prev_mouse_down && mouse_down;
+                self.ctx.mouse_released = prev_mouse_down && !mouse_down;
+            }
+            _ => (),
+        }
+
+        _ = self.view(build, state);
+
+        let mut should_redraw = matches!(event, Event::RedrawRequested);
+
+        let messages = self.ctx.take();
+        for msg in messages {
+            let msg_event = Event::Message(msg);
+            _ = update(self, &msg_event, state, params);
+            should_redraw = true;
+        }
+
+        if should_redraw {
+            _ = self.render();
+        }
+    }
+
+    fn view<S>(
+        &mut self,
+        build: impl FnOnce(&S) -> Element<M>,
+        state: &S,
+    ) -> Result<(), &'static str> {
+        let element = build(state);
         let (primitives, texts) = cascade_widgets(
             &element.widget,
             &self.globals.window_size,
@@ -120,46 +181,7 @@ impl<'a, M: 'static> Engine<'a, M> {
         Ok(())
     }
 
-    pub fn reload_all(&mut self) {
-        self.primitive_bundle.reload(
-            &self.config.device,
-            self.config.config.format,
-            &self.textures.texture_array_layout,
-        );
-    }
-
-    pub fn update(&mut self, element: &Element<M>) -> Result<(), &'static str> {
-        let (primitives, texts) = cascade_widgets(
-            &element.widget,
-            &self.globals.window_size,
-            &self.textures,
-            &mut self.text_bundle,
-            &mut self.ctx,
-        )?;
-
-        if let Some(primitives) = primitives {
-            self.primitive_bundle
-                .update(&self.config.queue, &primitives);
-        }
-        if let Some(texts) = texts {
-            self.text_bundle.update(&texts);
-        }
-        Ok(())
-    }
-
-    pub fn resize(&mut self, new_size: Size<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.config.config.width = new_size.width;
-            self.config.config.height = new_size.height;
-            self.globals.window_size = [new_size.width as f32, new_size.height as f32];
-            self.config
-                .surface
-                .configure(&self.config.device, &self.config.config);
-            self.text_bundle.resize(&self.config.queue, &new_size);
-        }
-    }
-
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.config.surface.get_current_texture()?;
 
         let view = output
@@ -878,19 +900,18 @@ impl<'a> TextBundle {
         let mut attrs = glyphon::Attrs::new().family(glyphon::Family::SansSerif);
         attrs = attrs.weight(style.weight);
         if style.italic {
-            attrs.style(glyphon::Style::Italic);
+            attrs = attrs.style(glyphon::Style::Italic);
         }
         buf.set_text(
             &mut self.font_system,
             &content,
-            &glyphon::Attrs::new(),
+            &attrs,
             glyphon::Shaping::Advanced,
         );
 
-        let size = buf.size();
-        Size {
-            width: size.0.unwrap_or(0.0),
-            height: size.1.unwrap_or(0.0),
-        }
+        let width = buf.layout_runs().map(|run| run.line_w).fold(0.0, f32::max);
+        let height = buf.metrics().line_height;
+
+        Size { width, height }
     }
 }

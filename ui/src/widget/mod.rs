@@ -1,4 +1,4 @@
-pub use crate::{column, container, image, rectangle, row, text_box};
+pub use crate::{button, column, container, image, rectangle, row, text_box};
 use crate::{
     context::{Context, Id},
     graphics::{TextBundle, TextureArray},
@@ -6,6 +6,8 @@ use crate::{
     model::*,
     primitive::Primitive,
 };
+
+pub use button::Button;
 pub use column::Column;
 pub use container::Container;
 pub use image::Image;
@@ -13,6 +15,7 @@ pub use rectangle::Rectangle;
 pub use row::Row;
 pub use textbox::TextBox;
 
+mod button;
 mod column;
 mod container;
 mod image;
@@ -85,6 +88,27 @@ impl From<Primitive> for PrimitiveWithMeta {
         Self {
             min_size: value.size.into(),
             primitive: value,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct TextStyle {
+    pub color: Color<f32>,
+    pub font: glyphon::Family<'static>,
+    pub font_size: f32,
+    pub weight: glyphon::Weight,
+    pub italic: bool,
+}
+
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self {
+            color: Color::BLACK,
+            font_size: 16.0,
+            font: glyphon::Family::SansSerif,
+            weight: glyphon::Weight::NORMAL,
+            italic: false,
         }
     }
 }
@@ -262,6 +286,7 @@ fn measure_children<'a, M>(
     Ok((child_data, total_w, total_h, max_w, max_h))
 }
 
+#[derive(Clone, Copy)]
 pub struct BorderStyle {
     pub radius: f32,
     pub color: Color<f32>,

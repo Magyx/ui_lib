@@ -11,11 +11,7 @@ macro_rules! ui_id {
     }};
 }
 
-pub struct Input {
-    pub mouse_pos: Position<f32>,
-    pub mouse_down: bool,
-}
-
+#[derive(Debug)]
 pub struct ItemState {
     pub hovered: bool,
     pub active: bool,
@@ -51,19 +47,6 @@ impl<'a, M> Context<M> {
         }
     }
 
-    pub fn begin_frame(&mut self, input: &Input) {
-        self.mouse_pressed = !self.mouse_down && input.mouse_down;
-        self.mouse_released = self.mouse_down && !input.mouse_down;
-        self.mouse_down = input.mouse_down;
-        self.mouse_pos = input.mouse_pos;
-
-        self.hot_item = None;
-        if self.mouse_released {
-            self.active_item = None;
-        }
-        self.messages.clear();
-    }
-
     pub fn take(&mut self) -> Vec<M> {
         std::mem::take(&mut self.messages)
     }
@@ -73,6 +56,9 @@ impl<'a, M> Context<M> {
     }
 
     pub fn item(&mut self, id: Id, pos: Position<i32>, size: Size<i32>) -> ItemState {
+        dbg!(pos);
+        dbg!(size);
+        dbg!(self.mouse_pos);
         let hovered = {
             let p = self.mouse_pos;
             p.x >= pos.x as f32

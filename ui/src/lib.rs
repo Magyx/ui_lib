@@ -2,6 +2,7 @@ use crate::model::*;
 pub use const_crc32;
 pub use glyphon::{Family, Weight};
 
+pub mod event;
 pub mod graphics;
 pub mod model;
 pub mod primitive;
