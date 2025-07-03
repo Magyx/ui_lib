@@ -1,6 +1,6 @@
 use crate::{
     graphics::{Config, Globals},
-    model::{Color, Position, Size, Vector4},
+    model::{Color, Position, Size},
     utils,
 };
 use std::path::PathBuf;
@@ -35,102 +35,27 @@ impl Vertex {
     }
 }
 
-#[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PrimitiveKind {
-    Solid = 0,
-    Atlas = 1,
-    Texture = 2,
-}
+// #[repr(u32)]
+// #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// pub enum PrimitiveKind {
+//     Solid = 0,
+//     Texture = 1,
+// }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Primitive {
     pub position: [f32; 2],
     pub size: [f32; 2],
-    pub kind: u32,
-    pub tex_id: u32,
-    pub color_or_uv: [f32; 4],
-    pub border_color: [f32; 4],
-    pub border_radius: [f32; 4],
-    pub border_width: [f32; 4],
-
-    _padding: [f32; 2],
+    pub color: [f32; 4],
 }
 
 impl Primitive {
-    pub fn color(
-        position: Position<i32>,
-        size: Size<i32>,
-        fill_color: Color<f32>,
-        border_radius: Vector4<f32>,
-        border_color: Color<f32>,
-        border_width: Vector4<i32>,
-    ) -> Self {
+    pub fn color(position: Position<i32>, size: Size<i32>, color: Color<f32>) -> Self {
         Self {
             position: [position.x as f32, position.y as f32],
             size: [size.width as f32, size.height as f32],
-            kind: PrimitiveKind::Solid as u32,
-            tex_id: 0,
-            color_or_uv: [fill_color.r, fill_color.g, fill_color.b, fill_color.a],
-            border_color: [
-                border_color.r,
-                border_color.g,
-                border_color.b,
-                border_color.a,
-            ],
-            border_radius: [
-                border_radius.x,
-                border_radius.y,
-                border_radius.z,
-                border_radius.w,
-            ],
-            border_width: [
-                border_width.x as f32,
-                border_width.y as f32,
-                border_width.z as f32,
-                border_width.w as f32,
-            ],
-
-            _padding: [0.0; 2],
-        }
-    }
-
-    pub fn texture(
-        position: Position<i32>,
-        size: Size<i32>,
-        tex_id: u32,
-        uv: [f32; 4],
-        border_radius: Vector4<f32>,
-        border_color: Color<f32>,
-        border_width: Vector4<i32>,
-    ) -> Self {
-        Self {
-            position: [position.x as f32, position.y as f32],
-            size: [size.width as f32, size.height as f32],
-            kind: PrimitiveKind::Atlas as u32,
-            tex_id,
-            color_or_uv: uv,
-            border_color: [
-                border_color.r,
-                border_color.g,
-                border_color.b,
-                border_color.a,
-            ],
-            border_radius: [
-                border_radius.x,
-                border_radius.y,
-                border_radius.z,
-                border_radius.w,
-            ],
-            border_width: [
-                border_width.x as f32,
-                border_width.y as f32,
-                border_width.z as f32,
-                border_width.w as f32,
-            ],
-
-            _padding: [0.0; 2],
+            color: [color.r, color.g, color.b, color.a],
         }
     }
 }
@@ -154,31 +79,6 @@ impl Primitive {
                 wgpu::VertexAttribute {
                     offset: 16,
                     shader_location: 2,
-                    format: wgpu::VertexFormat::Uint32,
-                },
-                wgpu::VertexAttribute {
-                    offset: 20,
-                    shader_location: 3,
-                    format: wgpu::VertexFormat::Uint32,
-                },
-                wgpu::VertexAttribute {
-                    offset: 24,
-                    shader_location: 4,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: 40,
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: 56,
-                    shader_location: 6,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: 72,
-                    shader_location: 7,
                     format: wgpu::VertexFormat::Float32x4,
                 },
             ],
@@ -198,11 +98,7 @@ pub(crate) struct PrimitiveBundle {
 }
 
 impl PrimitiveBundle {
-    pub fn primitive(
-        config: &Config,
-        texture_array_layout: &wgpu::BindGroupLayout,
-        max_instances: Option<u64>,
-    ) -> PrimitiveBundle {
+    pub fn primitive(config: &Config, max_instances: Option<u64>) -> PrimitiveBundle {
         Self::new(
             "Primitive",
             std::path::Path::new("ui/src/shaders/primitive_shader.wgsl"),
@@ -210,7 +106,6 @@ impl PrimitiveBundle {
             QUAD_INDICES,
             max_instances.unwrap_or(DEFAULT_MAX_INSTANCES),
             config,
-            texture_array_layout,
         )
     }
 
@@ -221,7 +116,6 @@ impl PrimitiveBundle {
         indices: &[u16],
         max_instances: u64,
         config: &Config,
-        texture_array_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let shader_module = utils::wgsl::load_wgsl(&config.device, shader_path, name);
 
@@ -230,11 +124,11 @@ impl PrimitiveBundle {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Primitive Render Pipeline Layout"),
-                    bind_group_layouts: &[texture_array_layout],
                     push_constant_ranges: &[wgpu::PushConstantRange {
                         stages: wgpu::ShaderStages::VERTEX,
                         range: 0..std::mem::size_of::<Globals>() as u32,
                     }],
+                    bind_group_layouts: &[],
                 });
         let render_pipeline =
             config
@@ -324,23 +218,18 @@ impl PrimitiveBundle {
         }
     }
 
-    pub fn reload(
-        &mut self,
-        device: &wgpu::Device,
-        format: wgpu::TextureFormat,
-        texture_array_layout: &wgpu::BindGroupLayout,
-    ) {
+    pub fn reload(&mut self, device: &wgpu::Device, format: wgpu::TextureFormat) {
         let shader_module = utils::wgsl::load_wgsl(device, &self.shader_path, "Primitive");
         self.render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Primitive Render Pipeline"),
             layout: Some(
                 &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Primitive Layout"),
-                    bind_group_layouts: &[texture_array_layout],
                     push_constant_ranges: &[wgpu::PushConstantRange {
                         stages: wgpu::ShaderStages::VERTEX,
                         range: 0..std::mem::size_of::<Globals>() as u32,
                     }],
+                    bind_group_layouts: &[],
                 }),
             ),
             vertex: wgpu::VertexState {
@@ -389,7 +278,6 @@ impl PrimitiveBundle {
         view: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
         globals: &Globals,
-        texture_bind_group: &wgpu::BindGroup,
         clear_color: &mut Option<wgpu::Color>,
     ) {
         if self.num_instances <= 0 {
@@ -418,7 +306,6 @@ impl PrimitiveBundle {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, texture_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
         render_pass.set_push_constants(wgpu::ShaderStages::VERTEX, 0, bytemuck::bytes_of(globals));

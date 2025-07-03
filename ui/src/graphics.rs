@@ -1,43 +1,13 @@
 use std::sync::Arc;
 
-use image::DynamicImage;
-use wgpu::SurfaceConfiguration;
-
 use crate::{
     consts::*,
     context::Context,
     event::{Event, ToEvent},
     model::*,
     primitive::{Primitive, PrimitiveBundle},
-    text::TextBundle,
-    texture::{TextureArray, TextureHandle},
-    widget::{Element, RenderOutput, Text, TextStyle, Widget},
+    widget::Element,
 };
-
-fn cascade_widgets<'a, M>(
-    widgets: &'a Box<dyn Widget<Message = M> + 'a>,
-    window_size: &[f32],
-    textures: &TextureArray,
-    texts: &mut TextBundle,
-    ctx: &mut Context<M>,
-) -> Result<(Option<Vec<Primitive>>, Option<Vec<Text<'a>>>), &'static str> {
-    let RenderOutput { primitives, texts } = widgets.as_primitive(
-        Size {
-            width: window_size[0] as i32,
-            height: window_size[1] as i32,
-        },
-        textures,
-        texts,
-        ctx,
-    )?;
-
-    Ok((
-        primitives
-            .map(|p| p.iter().map(|p| p.primitive).collect())
-            .filter(|p: &Vec<Primitive>| !p.is_empty()),
-        texts.filter(|v| !v.is_empty()),
-    ))
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -50,9 +20,7 @@ pub struct Engine<'a, M> {
     pub(crate) config: Config<'a>,
     ctx: Context<M>,
 
-    textures: TextureArray,
     primitive_bundle: PrimitiveBundle,
-    text_bundle: TextBundle,
 }
 
 impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
@@ -69,12 +37,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         let config = Config::new(target, &size);
 
-        let textures = TextureArray::new(&config);
-
-        let primitive_bundle =
-            PrimitiveBundle::primitive(&config, &textures.texture_array_layout, None);
-        let mut text_bundle = TextBundle::new(&config.device, &config.queue, &config.config);
-        text_bundle.resize(&config.queue, &size);
+        let primitive_bundle = PrimitiveBundle::primitive(&config, None);
 
         Self {
             config,
@@ -83,26 +46,13 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             },
             ctx,
 
-            textures,
             primitive_bundle,
-            text_bundle,
         }
     }
 
-    pub fn load_texture(&mut self, img: DynamicImage) -> Result<TextureHandle, String> {
-        self.textures.load_texture(&self.config, img)
-    }
-
-    pub fn unload_texture(&mut self, handle: TextureHandle) {
-        self.textures.unload_texture(handle);
-    }
-
     pub fn reload_all(&mut self) {
-        self.primitive_bundle.reload(
-            &self.config.device,
-            self.config.config.format,
-            &self.textures.texture_array_layout,
-        );
+        self.primitive_bundle
+            .reload(&self.config.device, self.config.config.format);
     }
 
     pub fn handle_event<S, P, E: ToEvent<M, E>>(
@@ -125,7 +75,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                     self.config
                         .surface
                         .configure(&self.config.device, &self.config.config);
-                    self.text_bundle.resize(&self.config.queue, &size);
                 }
             }
             Event::CursorMoved { position } => self.ctx.mouse_pos = position,
@@ -158,25 +107,17 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         build: impl FnOnce(&S) -> Element<M>,
         state: &S,
     ) -> Result<(), &'static str> {
-        let element = build(state);
-        let (primitives, texts) = cascade_widgets(
-            &element.widget,
-            &self.globals.window_size,
-            &self.textures,
-            &mut self.text_bundle,
-            &mut self.ctx,
-        )?;
+        let _ = build(state);
 
-        if let Some(primitives) = primitives {
-            self.primitive_bundle
-                .update(&self.config.queue, &primitives);
-        }
-        if let Some(texts) = texts {
-            self.text_bundle.update(&texts);
-
-            self.text_bundle
-                .prepare(&self.config.device, &self.config.queue, &texts);
-        }
+        // TODO: placeholder
+        self.primitive_bundle.update(
+            &self.config.queue,
+            &[Primitive::color(
+                Position::splat(0),
+                Size::new(768, 480),
+                Color::from_rgba(204, 51, 204, 230),
+            )],
+        );
         Ok(())
     }
 
@@ -196,16 +137,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         let mut clear_color = Some(wgpu::Color::WHITE);
 
-        self.primitive_bundle.render(
-            &view,
-            &mut encoder,
-            &self.globals,
-            &self.textures.bind_group(&self.config),
-            &mut clear_color,
-        );
-        _ = self
-            .text_bundle
-            .render(&view, &mut encoder, &mut clear_color);
+        self.primitive_bundle
+            .render(&view, &mut encoder, &self.globals, &mut clear_color);
 
         self.config.queue.submit(std::iter::once(encoder.finish()));
         output.present();
