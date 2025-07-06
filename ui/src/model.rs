@@ -64,9 +64,9 @@ macro_rules! define_vector {
     };
 }
 
-define_vector!(Vector2, 2, x, y);
-define_vector!(Vector3, 3, x, y, z);
-define_vector!(Vector4, 4, x, y, z, w);
+define_vector!(Vec2, 2, x, y);
+define_vector!(Vec3, 3, x, y, z);
+define_vector!(Vec4, 4, x, y, z, w);
 define_vector!(Size, 2, width, height);
 define_vector!(Position, 2, x, y);
 define_vector!(Color, 4, r, g, b, a);
@@ -88,6 +88,24 @@ impl Color<f32> {
         r: 0.0,
         g: 0.0,
         b: 0.0,
+        a: 1.0,
+    };
+    pub const RED: Self = Self {
+        r: 1.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const GREEN: Self = Self {
+        r: 0.0,
+        g: 1.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const BLUE: Self = Self {
+        r: 0.0,
+        g: 0.0,
+        b: 1.0,
         a: 1.0,
     };
 
@@ -114,5 +132,15 @@ impl<T> From<(T, T)> for Size<T> {
 impl Size<i32> {
     pub fn to_f32(self) -> Size<f32> {
         Size::new(self.width as f32, self.height as f32)
+    }
+}
+
+pub struct Rect<T> {
+    pub position: Position<T>,
+    pub size: Size<T>,
+}
+impl<T> Rect<T> {
+    pub fn new(position: Position<T>, size: Size<T>) -> Self {
+        Self { position, size }
     }
 }

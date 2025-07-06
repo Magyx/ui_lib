@@ -5,7 +5,7 @@ use crate::{
     context::Context,
     event::{Event, ToEvent},
     model::*,
-    primitive::{Primitive, PrimitiveBundle},
+    primitive::PrimitiveBundle,
     widget::Element,
 };
 
@@ -17,10 +17,13 @@ pub struct Globals {
 
 pub struct Engine<'a, M> {
     globals: Globals,
-    pub(crate) config: Config<'a>,
+    config: Config<'a>,
     ctx: Context<M>,
 
     primitive_bundle: PrimitiveBundle,
+
+    root: Option<Element<M>>,
+    needs_redraw: bool,
 }
 
 impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
@@ -33,33 +36,36 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             + std::marker::Send
             + 'a,
     {
-        let ctx = Context::new();
-
         let config = Config::new(target, &size);
+        let ctx = Context::new();
 
         let primitive_bundle = PrimitiveBundle::primitive(&config, None);
 
         Self {
-            config,
             globals: Globals {
                 window_size: [size.width as f32, size.height as f32],
             },
+            config,
             ctx,
 
             primitive_bundle,
+
+            root: None,
+            needs_redraw: true,
         }
     }
 
     pub fn reload_all(&mut self) {
         self.primitive_bundle
             .reload(&self.config.device, self.config.config.format);
+        self.needs_redraw = true;
     }
 
-    pub fn handle_event<S, P, E: ToEvent<M, E>>(
+    pub fn handle_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
         &mut self,
         event: &E,
-        build: impl FnOnce(&S) -> Element<M>,
-        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> Option<M>,
+        view: impl Fn(&S) -> Element<M>,
+        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
         state: &mut S,
         params: &P,
     ) {
@@ -86,43 +92,58 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             _ => (),
         }
 
-        _ = self.view(build, state);
+        let mut require_redraw = matches!(event, Event::Resized { .. } | Event::RedrawRequested)
+            || update(self, &event, state, params);
 
-        let mut should_redraw = matches!(event, Event::RedrawRequested);
-
-        let messages = self.ctx.take();
-        for msg in messages {
-            let msg_event = Event::Message(msg);
-            _ = update(self, &msg_event, state, params);
-            should_redraw = true;
-        }
-
-        if should_redraw {
-            _ = self.render();
-        }
-    }
-
-    fn view<S>(
-        &mut self,
-        build: impl FnOnce(&S) -> Element<M>,
-        state: &S,
-    ) -> Result<(), &'static str> {
-        let _ = build(state);
-
-        // TODO: placeholder
-        self.primitive_bundle.update(
-            &self.config.queue,
-            &[Primitive::color(
-                Position::splat(0),
-                Size::new(768, 480),
-                Color::from_rgba(204, 51, 204, 230),
-            )],
+        let max = Size::new(
+            self.globals.window_size[0] as i32,
+            self.globals.window_size[1] as i32,
         );
-        Ok(())
+
+        if self.root.is_some() {
+            let root = self.root.as_mut().unwrap();
+            _ = root.fit_size();
+            root.grow_size(max);
+            root.place(Position::splat(0));
+            root.handle(&mut self.ctx);
+
+            let messages = self.ctx.take();
+            if !messages.is_empty() {
+                for message in messages {
+                    require_redraw =
+                        require_redraw || update(self, &Event::Message(message), state, params);
+                }
+            }
+        }
+
+        if require_redraw {
+            self.root = Some(view(state));
+
+            let root = self.root.as_mut().unwrap();
+            _ = root.fit_size();
+            root.grow_size(max);
+            root.place(Position::splat(0));
+
+            let mut prims = Vec::new();
+            root.draw(&mut prims);
+            self.primitive_bundle.update(&self.config.queue, &prims);
+
+            let _ = self.render();
+        }
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let output = self.config.surface.get_current_texture()?;
+        let output = match self.config.surface.get_current_texture() {
+            Ok(o) => o,
+            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                self.config
+                    .surface
+                    .configure(&self.config.device, &self.config.config);
+                self.config.surface.get_current_texture()?
+            }
+            Err(wgpu::SurfaceError::Timeout) => return Ok(()),
+            Err(e) => return Err(e),
+        };
 
         let view = output
             .texture

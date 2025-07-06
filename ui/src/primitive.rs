@@ -35,12 +35,12 @@ impl Vertex {
     }
 }
 
-// #[repr(u32)]
-// #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-// pub enum PrimitiveKind {
-//     Solid = 0,
-//     Texture = 1,
-// }
+#[repr(u32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PrimitiveKind {
+    Solid = 0,
+    Texture = 1,
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -147,7 +147,7 @@ impl PrimitiveBundle {
                         entry_point: Some("fs_main"),
                         targets: &[Some(wgpu::ColorTargetState {
                             format: config.config.format,
-                            blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                             write_mask: wgpu::ColorWrites::ALL,
                         })],
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -243,7 +243,7 @@ impl PrimitiveBundle {
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -280,10 +280,6 @@ impl PrimitiveBundle {
         globals: &Globals,
         clear_color: &mut Option<wgpu::Color>,
     ) {
-        if self.num_instances <= 0 {
-            return;
-        }
-
         let load = if let Some(clear_color) = clear_color.take() {
             wgpu::LoadOp::Clear(clear_color)
         } else {

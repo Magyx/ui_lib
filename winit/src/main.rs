@@ -1,42 +1,94 @@
 use std::sync::Arc;
-use ui::{event::Event, graphics::Engine, model::*, widget::Element};
+use ui::{
+    event::Event,
+    graphics::Engine,
+    model::*,
+    widget::{Column, Element, Length, Rectangle, Row, Widget},
+};
 
 use winit::{
     application::ApplicationHandler,
     error::EventLoopError,
-    event::WindowEvent,
+    event::{KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowAttributes},
 };
 
 #[derive(Clone, Debug)]
 enum Message {}
 
+struct State {}
+
 struct App<'a> {
     window: Option<Arc<Window>>,
     engine: Option<Engine<'a, Message>>,
+    state: State,
 }
 
 fn update<'a>(
     _engine: &mut Engine<'a, Message>,
     event: &Event<Message, WindowEvent>,
-    _state: &mut (),
+    _state: &mut State,
     event_loop: &ActiveEventLoop,
-) -> Option<Message> {
-    match event {
-        Event::Platform(window_event) => match window_event {
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
+) -> bool {
+    if let Event::Platform(window_event) = event {
+        match window_event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(KeyCode::Escape),
+                        ..
+                    },
+                ..
             }
+            | WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::PinchGesture { .. } => todo!(),
             _ => (),
-        },
-        _ => (),
+        }
     };
-    None
+
+    false
 }
 
-fn view(state: &()) -> Element<Message> {
-    Element::new()
+fn view(_state: &State) -> Element<Message> {
+    Column::new(vec![
+        Row::new(vec![
+            Rectangle::new(
+                Size::new(Length::Fixed(200), Length::Fixed(100)),
+                Color::RED,
+            )
+            .einto(),
+            Rectangle::new(Size::new(Length::Grow, Length::Grow), Color::GREEN).einto(),
+        ])
+        .spacing(10)
+        .color(Color::from_rgb(200, 10, 200))
+        .padding(Vec4::splat(10))
+        .size(Size::new(Length::Grow, Length::Grow))
+        .einto(),
+        Row::new(vec![
+            Rectangle::new(
+                Size::new(Length::Fixed(100), Length::Fixed(100)),
+                Color::BLUE,
+            )
+            .einto(),
+            Rectangle::new(
+                Size::new(Length::Fixed(100), Length::Fixed(100)),
+                Color::BLUE,
+            )
+            .einto(),
+        ])
+        .spacing(10)
+        .color(Color::from_rgb(200, 10, 200))
+        .padding(Vec4::splat(10))
+        .size(Size::new(Length::Grow, Length::Grow))
+        .einto(),
+    ])
+    .color(Color::from_rgb(100, 80, 100))
+    .padding(Vec4::splat(20))
+    .spacing(20)
+    .size(Size::new(Length::Grow, Length::Grow))
+    .einto()
 }
 
 impl<'a> ApplicationHandler for App<'a> {
@@ -63,7 +115,7 @@ impl<'a> ApplicationHandler for App<'a> {
     ) {
         let engine = self.engine.as_mut().unwrap();
 
-        engine.handle_event(&event, view, &mut update, &mut (), event_loop);
+        engine.handle_event(&event, view, &mut update, &mut self.state, event_loop);
     }
 }
 
@@ -74,6 +126,7 @@ async fn run() -> Result<(), EventLoopError> {
     let mut app = App {
         window: None,
         engine: None,
+        state: State {},
     };
     event_loop.run_app(&mut app)
 }
