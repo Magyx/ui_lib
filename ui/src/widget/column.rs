@@ -142,6 +142,11 @@ impl<M: 'static> Widget<M> for Column<M> {
             self.children[grow_items[0].0].grow_size(grow_size);
         }
 
+        for i in 0..self.children.len() {
+            let h = self.children[i].layout().current_size.height;
+            self.children[i].grow_size(Size::new(width, h));
+        }
+
         if let Some(layout) = self.layout.as_mut() {
             layout.current_size = self.size.from_fixed();
         }
