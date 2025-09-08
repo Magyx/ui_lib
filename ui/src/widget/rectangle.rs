@@ -28,13 +28,13 @@ impl<M> Widget<M> for Rectangle {
     }
 
     fn layout(&self) -> Layout {
-        self.layout.expect("Layout not set in fit_size!")
+        self.layout.expect(LAYOUT_ERROR)
     }
 
     fn fit_size(&mut self) -> Layout {
         self.layout = Some(Layout {
             size: self.size,
-            current_size: self.size.from_fixed(),
+            current_size: self.size.into_fixed(),
         });
 
         self.layout.unwrap()
@@ -49,19 +49,19 @@ impl<M> Widget<M> for Rectangle {
         }
 
         if let Some(layout) = self.layout.as_mut() {
-            layout.current_size = self.size.from_fixed();
+            layout.current_size = self.size.into_fixed();
         }
     }
 
     fn place(&mut self, position: Position<i32>) -> Size<i32> {
         self.position = position;
-        self.size.from_fixed()
+        self.size.into_fixed()
     }
 
     fn draw(&self, primitives: &mut Vec<Primitive>) {
         primitives.push(Primitive::color(
             self.position,
-            self.size.from_fixed(),
+            self.size.into_fixed(),
             self.color,
         ));
     }

@@ -54,7 +54,7 @@ impl<M: 'static> Widget<M> for Column<M> {
     }
 
     fn layout(&self) -> Layout {
-        self.layout.expect("Layout not set during fit_size!")
+        self.layout.expect(LAYOUT_ERROR)
     }
 
     fn fit_size(&mut self) -> Layout {
@@ -81,7 +81,7 @@ impl<M: 'static> Widget<M> for Column<M> {
 
         self.layout = Some(Layout {
             size: self.size,
-            current_size: self.size.from_fixed(),
+            current_size: self.size.into_fixed(),
         });
         self.layout.unwrap()
     }
@@ -94,7 +94,7 @@ impl<M: 'static> Widget<M> for Column<M> {
             self.size.height = Length::Fixed(max.height);
         }
 
-        let mut remaining_height = self.size.from_fixed().height
+        let mut remaining_height = self.size.into_fixed().height
             - (self.children.len() as i32 - 1) * self.spacing
             - self.padding.y
             - self.padding.w;
@@ -107,7 +107,7 @@ impl<M: 'static> Widget<M> for Column<M> {
             }
         }
 
-        let width = self.size.from_fixed().width - self.padding.x - self.padding.z;
+        let width = self.size.into_fixed().width - self.padding.x - self.padding.z;
         if grow_items.len() > 1 {
             while remaining_height > grow_items.len() as i32 {
                 let mut smallest = grow_items[0];
@@ -148,7 +148,7 @@ impl<M: 'static> Widget<M> for Column<M> {
         }
 
         if let Some(layout) = self.layout.as_mut() {
-            layout.current_size = self.size.from_fixed();
+            layout.current_size = self.size.into_fixed();
         }
     }
 
@@ -164,13 +164,13 @@ impl<M: 'static> Widget<M> for Column<M> {
             cursor.y += child_size.height + self.spacing;
         }
 
-        self.size.from_fixed()
+        self.size.into_fixed()
     }
 
     fn draw(&self, primitives: &mut Vec<Primitive>) {
         primitives.push(Primitive::color(
             self.position,
-            self.size.from_fixed(),
+            self.size.into_fixed(),
             self.color,
         ));
         for child in self.children.iter() {

@@ -6,6 +6,8 @@ use crate::{
     primitive::Primitive,
 };
 
+pub const LAYOUT_ERROR: &str = "Layout not set during fit_size!";
+
 #[derive(Debug, Copy, Clone)]
 pub struct Layout {
     pub size: Size<Length<i32>>,
@@ -20,7 +22,7 @@ pub enum Length<U> {
 }
 
 impl<U> Size<Length<U>> {
-    pub(crate) fn from_fixed(self) -> Size<U>
+    pub(crate) fn into_fixed(self) -> Size<U>
     where
         U: Default,
     {
@@ -69,12 +71,16 @@ impl<M> Element<M> {
     {
         Element(Box::new(widget))
     }
+}
 
-    pub fn as_ref(&self) -> &dyn Widget<M> {
+impl<M> AsRef<dyn Widget<M> + 'static> for Element<M> {
+    fn as_ref(&self) -> &(dyn Widget<M> + 'static) {
         self.0.as_ref()
     }
+}
 
-    pub fn as_mut(&mut self) -> &mut dyn Widget<M> {
+impl<M> AsMut<dyn Widget<M> + 'static> for Element<M> {
+    fn as_mut(&mut self) -> &mut (dyn Widget<M> + 'static) {
         self.0.as_mut()
     }
 }
