@@ -1,3 +1,4 @@
+use super::helpers::{Height, clamp_size, equalize_sizes};
 use super::*;
 
 pub struct Column<M> {
@@ -10,6 +11,8 @@ pub struct Column<M> {
     size: Size<Length<i32>>,
     color: Color<f32>,
     padding: Vec4<i32>,
+    min: Size<i32>,
+    max: Size<i32>,
 }
 
 impl<M> Column<M> {
@@ -24,6 +27,8 @@ impl<M> Column<M> {
             size: Size::splat(Length::Fit),
             color: Color::TRANSPARENT,
             padding: Vec4::splat(0),
+            min: Size::splat(0),
+            max: Size::splat(i32::MAX),
         }
     }
 
@@ -44,6 +49,16 @@ impl<M> Column<M> {
 
     pub fn padding(mut self, amount: Vec4<i32>) -> Self {
         self.padding = amount;
+        self
+    }
+
+    pub fn min(mut self, size: Size<i32>) -> Self {
+        self.min = size;
+        self
+    }
+
+    pub fn max(mut self, size: Size<i32>) -> Self {
+        self.max = size;
         self
     }
 }
@@ -79,9 +94,16 @@ impl<M: 'static> Widget<M> for Column<M> {
             self.size.height = Length::Fixed(min_height);
         }
 
+        let intrinsic_min = Size::new(min_width, min_height);
+        let min = Size::new(
+            intrinsic_min.width.max(self.min.width),
+            intrinsic_min.height.max(self.min.height),
+        );
         self.layout = Some(Layout {
             size: self.size,
-            current_size: self.size.into_fixed(),
+            current_size: helpers::clamp_size(self.size.into_fixed(), min, self.max),
+            min,
+            max: self.max,
         });
         self.layout.unwrap()
     }
@@ -94,61 +116,28 @@ impl<M: 'static> Widget<M> for Column<M> {
             self.size.height = Length::Fixed(max.height);
         }
 
-        let mut remaining_height = self.size.into_fixed().height
+        let (min, max) = {
+            let layout = self.layout.expect(LAYOUT_ERROR);
+            (layout.min, layout.max)
+        };
+        let outer_size = clamp_size(self.size.into_fixed(), min, max);
+        self.size.width = Length::Fixed(outer_size.width);
+        self.size.height = Length::Fixed(outer_size.height);
+
+        let inner_width = outer_size.width - self.padding.x - self.padding.z;
+        let inner_height = outer_size.height
             - (self.children.len() as i32 - 1) * self.spacing
             - self.padding.y
             - self.padding.w;
-        let mut grow_items = Vec::with_capacity(self.children.len());
-        for (index, child) in self.children.iter().enumerate() {
-            let Layout { size, current_size } = child.layout();
-            remaining_height -= current_size.height;
-            if matches!(size.height, Length::Grow) {
-                grow_items.push((index, current_size));
-            }
-        }
 
-        let width = self.size.into_fixed().width - self.padding.x - self.padding.z;
-        if grow_items.len() > 1 {
-            while remaining_height > grow_items.len() as i32 {
-                let mut smallest = grow_items[0];
-                let mut second_smallest = grow_items[1];
-                let mut height_to_add = remaining_height;
-                for child in grow_items.iter() {
-                    if child.1.height < smallest.1.height {
-                        second_smallest = smallest;
-                        smallest = *child;
-                    }
+        let equalized_sizes = equalize_sizes(&self.children, Height, Height, inner_height);
 
-                    if child.1.height > smallest.1.height {
-                        second_smallest.1.height = second_smallest.1.height.min(child.1.height);
-                        height_to_add = second_smallest.1.height - smallest.1.height;
-                    }
-                }
-                height_to_add = height_to_add.min(remaining_height / grow_items.len() as i32);
-
-                for (_, size) in grow_items.iter_mut() {
-                    if size.height == smallest.1.height {
-                        size.height += height_to_add;
-                        remaining_height -= height_to_add;
-                    }
-                }
-            }
-
-            for child in grow_items.iter() {
-                self.children[child.0].grow_size(Size::new(width, child.1.height));
-            }
-        } else if !grow_items.is_empty() {
-            let grow_size = Size::new(width, remaining_height);
-            self.children[grow_items[0].0].grow_size(grow_size);
-        }
-
-        for i in 0..self.children.len() {
-            let h = self.children[i].layout().current_size.height;
-            self.children[i].grow_size(Size::new(width, h));
+        for (i, current) in equalized_sizes {
+            self.children[i].grow_size(Size::new(inner_width, current));
         }
 
         if let Some(layout) = self.layout.as_mut() {
-            layout.current_size = self.size.into_fixed();
+            layout.current_size = outer_size;
         }
     }
 

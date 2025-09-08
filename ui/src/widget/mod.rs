@@ -6,12 +6,27 @@ use crate::{
     primitive::Primitive,
 };
 
+mod helpers;
+
 pub const LAYOUT_ERROR: &str = "Layout not set during fit_size!";
 
 #[derive(Debug, Copy, Clone)]
 pub struct Layout {
     pub size: Size<Length<i32>>,
     pub current_size: Size<i32>,
+    pub min: Size<i32>,
+    pub max: Size<i32>,
+}
+
+impl Layout {
+    pub fn unconstrained(size: Size<Length<i32>>, current: Size<i32>) -> Self {
+        Self {
+            size,
+            current_size: current,
+            min: Size::splat(0),
+            max: Size::splat(i32::MAX),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]

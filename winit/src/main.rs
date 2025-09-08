@@ -195,7 +195,24 @@ fn view(_state: &State) -> Element<Message> {
         .size(Size::new(Grow, Fixed(56)))
         .einto(),
 
-        /* 9) Transparent container background over content below */
+        /* 9) Test clampig */
+        Row::new(vec![
+            Rectangle::new(Size::new(Length::Grow, Length::Fixed(24)), Color::GREEN)
+                .min(Size::new(120, 24))       // >= 120px wide, one line tall
+                .max(Size::new(300, 24))       // <= 300px wide
+                .einto(),
+            Rectangle::new(Size::new(Length::Fixed(100), Length::Grow), Color::BLUE)
+                .min(Size::new(100, 60))       // at least 60px tall
+                .max(Size::new(100, 120))      // at most 120px tall
+                .einto(),
+        ])
+        .spacing(6)
+        .padding(Vec4::splat(16))
+        .color(Color::from_rgb(245, 245, 220))
+        .size(Size::new(Length::Grow, Length::Grow))
+        .einto(),
+
+        /* 10) Transparent container background over content below */
         Column::new(vec![
             Rectangle::new(Size::new(Grow, Fixed(20)), Color::from_rgb(30, 200, 30)).einto(),
             Rectangle::new(Size::new(Grow, Fixed(20)), Color::from_rgb(30, 30, 200)).einto(),
