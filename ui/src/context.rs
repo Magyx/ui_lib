@@ -8,6 +8,10 @@ pub fn next_id() -> Id {
     NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
+pub fn reset_ids_for_frame() {
+    NEXT_ID.store(1, Ordering::Relaxed);
+}
+
 pub struct Context<M> {
     pub mouse_pos: Position<f32>,
     pub mouse_down: bool,
@@ -19,6 +23,7 @@ pub struct Context<M> {
     pub kbd_focus_item: Option<Id>,
 
     messages: Vec<M>,
+    redraw_requested: bool,
 }
 
 impl<M> Default for Context<M> {
@@ -40,6 +45,7 @@ impl<M> Context<M> {
             kbd_focus_item: None,
 
             messages: Vec::new(),
+            redraw_requested: false,
         }
     }
 
@@ -49,5 +55,15 @@ impl<M> Context<M> {
 
     pub fn emit(&mut self, msg: M) {
         self.messages.push(msg);
+    }
+
+    pub fn request_redraw(&mut self) {
+        self.redraw_requested = true;
+    }
+
+    pub fn take_redraw(&mut self) -> bool {
+        let r = self.redraw_requested;
+        self.redraw_requested = false;
+        r
     }
 }

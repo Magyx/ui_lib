@@ -23,7 +23,6 @@ pub struct Engine<'a, M> {
     primitive_bundle: PrimitiveBundle,
 
     root: Option<Element<M>>,
-    needs_redraw: bool,
 }
 
 impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
@@ -51,14 +50,12 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             primitive_bundle,
 
             root: None,
-            needs_redraw: true,
         }
     }
 
     pub fn reload_all(&mut self) {
         self.primitive_bundle
             .reload(&self.config.device, self.config.config.format);
-        self.needs_redraw = true;
     }
 
     pub fn handle_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
@@ -92,8 +89,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             _ => (),
         }
 
-        let mut require_redraw = matches!(event, Event::Resized { .. } | Event::RedrawRequested)
-            || update(self, &event, state, params);
+        let mut require_redraw = matches!(event, Event::Resized { .. } | Event::RedrawRequested);
 
         let max = Size::new(
             self.globals.window_size[0] as i32,
@@ -102,27 +98,31 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         if self.root.is_some() {
             let root = self.root.as_mut().unwrap();
-            _ = root.fit_size();
-            root.grow_size(max);
-            root.place(Position::splat(0));
+            if require_redraw {
+                _ = root.fit_size();
+                root.grow_size(max);
+                root.place(Position::splat(0));
+            }
             root.handle(&mut self.ctx);
 
-            let messages = self.ctx.take();
-            if !messages.is_empty() {
-                for message in messages {
-                    require_redraw =
-                        require_redraw || update(self, &Event::Message(message), state, params);
-                }
+            require_redraw |= self.ctx.take_redraw();
+
+            for message in self.ctx.take() {
+                require_redraw |= update(self, &Event::Message(message), state, params);
             }
         }
 
+        require_redraw |= update(self, &event, state, params);
+
         if require_redraw {
+            crate::context::reset_ids_for_frame();
             self.root = Some(view(state));
 
             let root = self.root.as_mut().unwrap();
             _ = root.fit_size();
             root.grow_size(max);
             root.place(Position::splat(0));
+            root.handle(&mut self.ctx);
 
             let mut prims = Vec::new();
             root.draw(&mut prims);

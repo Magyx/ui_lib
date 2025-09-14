@@ -3,7 +3,7 @@ use ui::{
     event::Event,
     graphics::Engine,
     model::*,
-    widget::{Column, Element, Length, Rectangle, Row, Widget},
+    widget::{Button, Column, Container, Element, Length, Rectangle, Row, Widget},
 };
 
 use winit::{
@@ -16,7 +16,9 @@ use winit::{
 };
 
 #[derive(Clone, Debug)]
-enum Message {}
+enum Message {
+    ButtonPressed,
+}
 
 struct State {}
 
@@ -43,10 +45,13 @@ fn update<'a>(
                 ..
             }
             | WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::PinchGesture { .. } => todo!(),
             _ => (),
         }
-    };
+    } else if let Event::Message(msg) = event {
+        match msg {
+            Message::ButtonPressed => println!("Button pressed!"),
+        }
+    }
 
     false
 }
@@ -221,6 +226,23 @@ fn view(_state: &State) -> Element<Message> {
         .padding(Vec4::splat(10))
         .color(Color::TRANSPARENT)
         .size(Size::new(Grow, Fixed(60)))
+        .einto(),
+
+        /* 11) Container with background, padding, and a single child */
+        Container::new(vec![
+            Rectangle::new(Size::new(Grow, Grow), Color::from_rgb(220, 240, 255)).einto(),
+            Rectangle::new(Size::new(Fixed(60), Fixed(60)), Color::from_rgb(255, 0, 0)).einto(),
+        ])
+        .padding(Vec4::splat(10))
+        .color(Color::from_rgb(210, 210, 210))
+        .size(Size::new(Grow, Fixed(60)))
+        .einto(),
+
+        /* 12) interactive button */
+        Button::new(Size::new(Fixed(120), Fixed(36)), Color::from_rgb(200, 50, 50))
+        .hover_color(Color::from_rgb(50, 200, 50))
+        .pressed_color(Color::from_rgb(50, 50, 200))
+        .on_press(Message::ButtonPressed)
         .einto(),
     ])
     .color(Color::from_rgb(100, 80, 100))
