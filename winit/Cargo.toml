@@ -4,13 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ui = { path = "../ui/", features = ["winit"] }
-
-wgpu = { version = "25.0.2" }
+ui = { path = "../ui/", features = ["winit", "env_logging"] }
 env_logger = "0.11.8"
 pollster = "0.4.0"
 winit = "0.30.11"
 bytemuck = "1.23.0"
-tracing = "0.1.41"
-image = "0.25.6"
-chrono = "0.4.41"

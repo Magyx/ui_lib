@@ -7,17 +7,17 @@ edition = "2024"
 bytemuck = { version = "1.23.0", default-features = false, features = [
   "derive",
 ] }
-env_logger = { version = "0.11.8", default-features = false }
-image = { version = "0.25.6", default-features = false }
 pollster = { version = "0.4.0", default-features = false }
-tracing = { version = "0.1.41", default-features = false }
 wgpu = { version = "25.0.2", default-features = false, features = [
   "wgsl",
   "vulkan",
   "metal",
 ] }
+env_logger = { version = "0.11.8", default-features = false, optional = true }
+tracing = { version = "0.1.41", default-features = false, optional = true }
 winit = { version = "0.30.11", default-features = false, optional = true }
 
 [features]
 default = []
 winit = ["dep:winit"]
+env_logging = ["dep:env_logger", "dep:tracing"]
