@@ -6,7 +6,6 @@ use crate::{
 use std::path::PathBuf;
 use wgpu::util::DeviceExt;
 
-const DEFAULT_MAX_INSTANCES: u64 = 10_000;
 pub const QUAD_VERTICES: &[Vertex] = &[
     Vertex { uv: [0.0, 0.0] },
     Vertex { uv: [1.0, 0.0] },
@@ -33,13 +32,6 @@ impl Vertex {
             }],
         }
     }
-}
-
-#[repr(u32)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum PrimitiveKind {
-    Solid = 0,
-    Texture = 1,
 }
 
 #[repr(C)]
@@ -104,7 +96,7 @@ impl PrimitiveBundle {
             std::path::Path::new("ui/src/shaders/primitive_shader.wgsl"),
             QUAD_VERTICES,
             QUAD_INDICES,
-            max_instances.unwrap_or(DEFAULT_MAX_INSTANCES),
+            max_instances.unwrap_or(crate::consts::DEFAULT_MAX_INSTANCES),
             config,
         )
     }

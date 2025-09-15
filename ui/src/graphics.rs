@@ -187,7 +187,7 @@ impl<'a> Config<'a> {
             + 'a,
     {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
+            backends: crate::consts::default_backends(),
             flags: wgpu::InstanceFlags::DEBUG,
             ..Default::default()
         });
