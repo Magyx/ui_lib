@@ -1,5 +1,5 @@
 use super::*;
-use crate::widget::helpers::clamp_size;
+use crate::{render::pipeline::PipelineKey, widget::helpers::clamp_size};
 
 pub struct Rectangle {
     layout: Option<Layout>,
@@ -82,11 +82,13 @@ impl<M> Widget<M> for Rectangle {
         self.size.into_fixed()
     }
 
-    fn draw(&self, primitives: &mut Vec<Primitive>) {
-        primitives.push(Primitive::color(
+    fn draw(&self, instances: &mut Vec<Instance>) {
+        instances.push(Instance::new(
+            PipelineKey::Ui,
             self.position,
             self.size.into_fixed(),
-            self.color,
+            [self.color.r, self.color.g, self.color.b, self.color.a],
+            [0, 0, 0, 0],
         ));
     }
 }

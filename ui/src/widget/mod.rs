@@ -3,7 +3,7 @@ use std::ops::{Deref, DerefMut};
 use crate::{
     context::{Context, Id},
     model::*,
-    primitive::Primitive,
+    primitive::Instance,
 };
 
 mod helpers;
@@ -63,7 +63,7 @@ pub trait Widget<M> {
     fn place(&mut self, position: Position<i32>) -> Size<i32>;
 
     /* ----- paint ----- */
-    fn draw(&self, primitives: &mut Vec<Primitive>);
+    fn draw(&self, instances: &mut Vec<Instance>);
 
     /* ----- interaction ----- */
     fn id(&self) -> Id;

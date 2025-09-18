@@ -6,7 +6,7 @@ pub mod event;
 pub mod graphics;
 pub mod model;
 pub(crate) mod primitive;
-pub(crate) mod utils;
+pub(crate) mod render;
 pub mod widget;
 #[cfg(feature = "winit")]
 pub mod winit;

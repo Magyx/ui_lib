@@ -3,6 +3,7 @@ struct VertexInput {
     @location(0) position: vec2<f32>,
     @location(1) size: vec2<f32>,
     @location(2) color: vec4<f32>,
+    @location(3) _data: vec4<u32>,
 
     // vertex buffer
     @location(10) uv: vec2<f32>,

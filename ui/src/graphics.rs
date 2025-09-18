@@ -5,7 +5,7 @@ use crate::{
     context::Context,
     event::{Event, ToEvent},
     model::*,
-    primitive::PrimitiveBundle,
+    render::{pipeline::PipelineRegistry, renderer::Renderer},
     widget::Element,
 };
 
@@ -20,7 +20,9 @@ pub struct Engine<'a, M> {
     config: Config<'a>,
     ctx: Context<M>,
 
-    primitive_bundle: PrimitiveBundle,
+    push_constant_ranges: Vec<wgpu::PushConstantRange>,
+    pipeline_registry: PipelineRegistry,
+    renderer: Renderer,
 
     root: Option<Element<M>>,
 }
@@ -38,7 +40,15 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         let config = Config::new(target, &size);
         let ctx = Context::new();
 
-        let primitive_bundle = PrimitiveBundle::primitive(&config, None);
+        let push_constant_ranges = vec![wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            range: 0..std::mem::size_of::<Globals>() as u32,
+        }];
+
+        let mut pipeline_registry = PipelineRegistry::new();
+        pipeline_registry.register_default_pipelines(&config, &push_constant_ranges);
+
+        let renderer = Renderer::new(&config);
 
         Self {
             globals: Globals {
@@ -47,15 +57,17 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             config,
             ctx,
 
-            primitive_bundle,
+            push_constant_ranges,
+            pipeline_registry,
+            renderer,
 
             root: None,
         }
     }
 
     pub fn reload_all(&mut self) {
-        self.primitive_bundle
-            .reload(&self.config.device, self.config.config.format);
+        self.pipeline_registry
+            .reload(&self.config, &self.push_constant_ranges);
     }
 
     pub fn handle_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
@@ -124,56 +136,24 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             root.place(Position::splat(0));
             root.handle(&mut self.ctx);
 
-            let mut prims = Vec::new();
-            root.draw(&mut prims);
-            self.primitive_bundle.update(&self.config.queue, &prims);
-
-            let _ = self.render();
+            let mut instances = Vec::new();
+            root.draw(&mut instances);
+            _ = self.renderer.render(
+                &self.config,
+                &self.pipeline_registry,
+                &self.globals,
+                &instances,
+            );
         }
-    }
-
-    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        let output = match self.config.surface.get_current_texture() {
-            Ok(o) => o,
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                self.config
-                    .surface
-                    .configure(&self.config.device, &self.config.config);
-                self.config.surface.get_current_texture()?
-            }
-            Err(wgpu::SurfaceError::Timeout) => return Ok(()),
-            Err(e) => return Err(e),
-        };
-
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder =
-            self.config
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
-
-        let mut clear_color = Some(wgpu::Color::WHITE);
-
-        self.primitive_bundle
-            .render(&view, &mut encoder, &self.globals, &mut clear_color);
-
-        self.config.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
-
-        Ok(())
     }
 }
 
 #[derive(Debug)]
 pub struct Config<'a> {
-    surface: wgpu::Surface<'a>,
-    pub(crate) device: wgpu::Device,
+    pub(crate) surface: wgpu::Surface<'a>,
     pub(crate) queue: wgpu::Queue,
-    pub(crate) config: wgpu::SurfaceConfiguration,
+    pub device: wgpu::Device,
+    pub config: wgpu::SurfaceConfiguration,
 }
 
 impl<'a> Config<'a> {
@@ -188,7 +168,7 @@ impl<'a> Config<'a> {
     {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: crate::consts::default_backends(),
-            flags: wgpu::InstanceFlags::DEBUG,
+            flags: wgpu::InstanceFlags::DEBUG, // TODO: make this configurable
             ..Default::default()
         });
 
@@ -245,8 +225,8 @@ impl<'a> Config<'a> {
 
         Self {
             surface,
-            device,
             queue,
+            device,
             config,
         }
     }

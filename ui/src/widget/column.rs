@@ -1,5 +1,8 @@
-use super::helpers::{Height, clamp_size, equalize_sizes};
 use super::*;
+use crate::{
+    render::pipeline::PipelineKey,
+    widget::helpers::{Height, clamp_size, equalize_sizes},
+};
 
 pub struct Column<M> {
     layout: Option<Layout>,
@@ -156,14 +159,16 @@ impl<M: 'static> Widget<M> for Column<M> {
         self.size.into_fixed()
     }
 
-    fn draw(&self, primitives: &mut Vec<Primitive>) {
-        primitives.push(Primitive::color(
+    fn draw(&self, instances: &mut Vec<Instance>) {
+        instances.push(Instance::new(
+            PipelineKey::Ui,
             self.position,
             self.size.into_fixed(),
-            self.color,
+            [self.color.r, self.color.g, self.color.b, self.color.a],
+            [0, 0, 0, 0],
         ));
         for child in self.children.iter() {
-            child.draw(primitives);
+            child.draw(instances);
         }
     }
 
