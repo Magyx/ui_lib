@@ -11,14 +11,16 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) uv: vec2<f32>,
-    @location(1) color: vec4<f32>,
-    @location(2) local_pos: vec2<f32>,
-    @location(3) size: vec2<f32>,
+    @location(0) color: vec4<f32>,
 };
 
 struct Globals {
     window_size: vec2<f32>,
+    time: f32,
+    delta_time: f32,
+    mouse_pos: vec2<f32>,
+    mouse_buttons: u32,
+    frame: u32,
 };
 
 var<push_constant> globals: Globals;
@@ -37,10 +39,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     );
 
     out.position = vec4<f32>(ndc, 0.0, 1.0);
-    out.uv = uv;
     out.color = in.color;
-    out.local_pos = local_pos;
-    out.size = in.size;
 
     return out;
 }

@@ -1,4 +1,6 @@
-use ui::{event::Event, graphics::Engine, widget::Element};
+use ui::{
+    event::Event, graphics::Engine, pipeline_factories, render::pipeline::Pipeline, widget::Element,
+};
 use winit::{
     event::{ElementState, KeyEvent, WindowEvent},
     event_loop::ActiveEventLoop,
@@ -6,21 +8,26 @@ use winit::{
     window::WindowAttributes,
 };
 
+use crate::pipeline::PlanetPipeline;
+
 mod demos;
+mod pipeline;
 
 #[derive(Clone)]
 enum View {
     Layout = 0,
     Interaction = 1,
+    Pipeline,
 }
 
 impl View {
-    const COUNT: u8 = 2;
+    const COUNT: u8 = 3;
 
     fn from_u8(v: u8) -> Self {
         match v {
             0 => Self::Layout,
             1 => Self::Interaction,
+            2 => Self::Pipeline,
             _ => unreachable!("value out of range"),
         }
     }
@@ -82,13 +89,22 @@ fn view(state: &State) -> Element<Message> {
     match state.view {
         View::Layout => demos::layout::view(state),
         View::Interaction => demos::interaction::view(state),
+        View::Pipeline => demos::pipeline::view(state),
     }
+}
+
+fn make_planet(
+    cfg: &ui::graphics::Config,
+    ranges: &[wgpu::PushConstantRange],
+) -> Box<dyn ui::render::pipeline::Pipeline> {
+    Box::new(PlanetPipeline::new(cfg, ranges))
 }
 
 fn main() {
     env_logger::init();
     let attrs = WindowAttributes::default().with_title("My Test GUI lib");
-    _ = ui::winit::run_app::<Message, _, _, _>(
+
+    _ = ui::winit::run_app_with::<Message, _, _, _, _>(
         State {
             view: View::Layout,
             counter: 0,
@@ -96,5 +112,6 @@ fn main() {
         view,
         update,
         attrs,
+        pipeline_factories!["planet" => make_planet],
     );
 }

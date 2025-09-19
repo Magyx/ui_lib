@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use crate::{
     consts::*,
@@ -12,15 +12,23 @@ use crate::{
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Globals {
-    window_size: [f32; 2],
+    window_size: [f32; 2], // pixels
+    time: f32,             // seconds since start
+    delta_time: f32,       // seconds since last frame
+    mouse_pos: [f32; 2],   // pixels
+    mouse_buttons: u32,    // bit 0: left, bit 1: right (etc.)
+    frame: u32,            // frame counter
 }
 
 pub struct Engine<'a, M> {
     globals: Globals,
-    config: Config<'a>,
+    pub(crate) config: Config<'a>,
     ctx: Context<M>,
 
-    push_constant_ranges: Vec<wgpu::PushConstantRange>,
+    start_time: Instant,
+    last_frame_time: Instant,
+
+    pub(crate) push_constant_ranges: Vec<wgpu::PushConstantRange>,
     pipeline_registry: PipelineRegistry,
     renderer: Renderer,
 
@@ -50,12 +58,22 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         let renderer = Renderer::new(&config);
 
+        let now = Instant::now();
+
         Self {
             globals: Globals {
                 window_size: [size.width as f32, size.height as f32],
+                time: 0.0,
+                delta_time: 0.0,
+                mouse_pos: [0.0, 0.0],
+                mouse_buttons: 0,
+                frame: 0,
             },
             config,
             ctx,
+
+            start_time: now,
+            last_frame_time: now,
 
             push_constant_ranges,
             pipeline_registry,
@@ -68,6 +86,14 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
     pub fn reload_all(&mut self) {
         self.pipeline_registry
             .reload(&self.config, &self.push_constant_ranges);
+    }
+
+    pub fn register_pipeline(
+        &mut self,
+        key: crate::render::pipeline::PipelineKey,
+        pipeline: Box<dyn crate::render::pipeline::Pipeline>,
+    ) {
+        self.pipeline_registry.register_pipeline(key, pipeline);
     }
 
     pub fn handle_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
@@ -97,6 +123,12 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 self.ctx.mouse_down = mouse_down;
                 self.ctx.mouse_pressed = !prev_mouse_down && mouse_down;
                 self.ctx.mouse_released = prev_mouse_down && !mouse_down;
+
+                if mouse_down {
+                    self.globals.mouse_buttons |= 1;
+                } else {
+                    self.globals.mouse_buttons &= !1;
+                }
             }
             _ => (),
         }
@@ -138,6 +170,16 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
             let mut instances = Vec::new();
             root.draw(&mut instances);
+
+            let now = Instant::now();
+            let total = now.duration_since(self.start_time);
+            let dt = now.duration_since(self.last_frame_time);
+            self.last_frame_time = now;
+
+            self.globals.time = total.as_secs_f32();
+            self.globals.delta_time = dt.as_secs_f32();
+            self.globals.frame = self.globals.frame.wrapping_add(1);
+
             _ = self.renderer.render(
                 &self.config,
                 &self.pipeline_registry,

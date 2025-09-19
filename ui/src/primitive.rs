@@ -82,6 +82,7 @@ impl Primitive {
     }
 }
 
+#[derive(Debug)]
 pub struct Instance {
     pub(crate) kind: PipelineKey,
     position: Position<i32>,

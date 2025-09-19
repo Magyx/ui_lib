@@ -37,7 +37,7 @@ pub enum Length<U> {
 }
 
 impl<U> Size<Length<U>> {
-    pub(crate) fn into_fixed(self) -> Size<U>
+    pub fn into_fixed(self) -> Size<U>
     where
         U: Default,
     {
