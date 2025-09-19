@@ -83,8 +83,6 @@ impl Renderer {
 
         let mut draw_commands = Vec::<DrawCommand>::new();
         let mut primitives = Vec::<Primitive>::with_capacity(instances.len());
-        println!("Instances: {:?}", instances.iter().collect::<Vec<_>>());
-        println!("{:?}", globals);
 
         let mut base = 0u32;
         let mut current_key: Option<&PipelineKey> = None;

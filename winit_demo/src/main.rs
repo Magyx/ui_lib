@@ -93,13 +93,6 @@ fn view(state: &State) -> Element<Message> {
     }
 }
 
-fn make_planet(
-    cfg: &ui::graphics::Config,
-    ranges: &[wgpu::PushConstantRange],
-) -> Box<dyn ui::render::pipeline::Pipeline> {
-    Box::new(PlanetPipeline::new(cfg, ranges))
-}
-
 fn main() {
     env_logger::init();
     let attrs = WindowAttributes::default().with_title("My Test GUI lib");
@@ -112,6 +105,6 @@ fn main() {
         view,
         update,
         attrs,
-        pipeline_factories!["planet" => make_planet],
+        pipeline_factories!["planet" => PlanetPipeline],
     );
 }

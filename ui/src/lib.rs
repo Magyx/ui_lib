@@ -10,3 +10,22 @@ pub mod render;
 pub mod widget;
 #[cfg(feature = "winit")]
 pub mod winit;
+
+#[macro_export]
+macro_rules! pipeline_factories {
+    ( $( $name:literal => $ty:path ),+ $(,)? ) => {{
+        [
+            $(
+                ($name, {
+                    fn __factory(
+                        cfg: &$crate::graphics::Config,
+                        ranges: &[wgpu::PushConstantRange],
+                    ) -> ::std::boxed::Box<dyn $crate::render::pipeline::Pipeline> {
+                        ::std::boxed::Box::new(<$ty>::new(cfg, ranges))
+                    }
+                    __factory as $crate::winit::PipelineFactoryFn
+                }),
+            )+
+        ]
+    }};
+}
