@@ -12,8 +12,9 @@ use winit::{
 use crate::{
     Size,
     event::{Event, ToEvent},
-    graphics::{Config, Engine},
+    graphics::Engine,
     model::Position,
+    render::PipelineFactoryFn,
     widget::Element,
 };
 
@@ -22,9 +23,6 @@ impl<P> From<PhysicalSize<P>> for Size<P> {
         Size::new(s.width, s.height)
     }
 }
-
-pub type PipelineFactoryFn =
-    fn(&Config, &[wgpu::PushConstantRange]) -> Box<dyn crate::render::pipeline::Pipeline>;
 
 impl<M> ToEvent<M, winit::event::WindowEvent> for winit::event::WindowEvent {
     fn to_event(&self) -> Event<M, Self> {

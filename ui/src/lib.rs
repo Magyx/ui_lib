@@ -25,7 +25,7 @@ macro_rules! pipeline_factories {
                     ) -> ::std::boxed::Box<dyn $crate::render::pipeline::Pipeline> {
                         ::std::boxed::Box::new(<$ty>::new(cfg, ranges))
                     }
-                    __factory as $crate::winit::PipelineFactoryFn
+                    __factory as $crate::render::PipelineFactoryFn
                 }),
             )+
         ]
