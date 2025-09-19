@@ -129,18 +129,24 @@ impl<T> From<(T, T)> for Size<T> {
     }
 }
 
-impl Size<i32> {
-    pub fn to_f32(self) -> Size<f32> {
-        Size::new(self.width as f32, self.height as f32)
+impl<T> Size<T> {
+    pub fn max(self, other: Size<T>) -> Size<T>
+    where
+        T: Ord,
+    {
+        Size {
+            width: self.width.max(other.width),
+            height: self.height.max(other.height),
+        }
     }
-}
 
-pub struct Rect<T> {
-    pub position: Position<T>,
-    pub size: Size<T>,
-}
-impl<T> Rect<T> {
-    pub fn new(position: Position<T>, size: Size<T>) -> Self {
-        Self { position, size }
+    pub fn min(self, other: Size<T>) -> Size<T>
+    where
+        T: Ord,
+    {
+        Size {
+            width: self.width.min(other.width),
+            height: self.height.min(other.height),
+        }
     }
 }

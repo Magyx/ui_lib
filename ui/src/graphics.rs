@@ -45,6 +45,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             + std::marker::Send
             + 'a,
     {
+        let size = size.max(Size::new(1, 1));
         let config = Config::new(target, &size);
         let ctx = Context::new();
 
@@ -138,7 +139,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         let max = Size::new(
             self.globals.window_size[0] as i32,
             self.globals.window_size[1] as i32,
-        );
+        )
+        .max(Size::new(1, 1));
 
         if self.root.is_some() {
             let root = self.root.as_mut().unwrap();
