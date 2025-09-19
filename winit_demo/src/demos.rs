@@ -249,97 +249,13 @@ pub mod interaction {
 pub mod pipeline {
 
     use super::*;
-
-    mod widgets {
-        use super::*;
-        use ui::{
-            context::Id,
-            primitive::Instance,
-            render::pipeline::PipelineKey,
-            widget::{LAYOUT_ERROR, Layout},
-        };
-
-        pub struct Planet {
-            layout: Option<Layout>,
-
-            id: Id,
-            position: Position<i32>,
-            size: Size<Length<i32>>,
-        }
-
-        impl Planet {
-            pub fn new(size: Size<Length<i32>>) -> Self {
-                Self {
-                    layout: None,
-
-                    id: ui::context::next_id(),
-                    position: Position::splat(0),
-                    size,
-                }
-            }
-        }
-
-        impl<M> Widget<M> for Planet {
-            fn id(&self) -> Id {
-                self.id
-            }
-
-            fn layout(&self) -> Layout {
-                self.layout.expect(LAYOUT_ERROR)
-            }
-
-            fn fit_size(&mut self) -> Layout {
-                self.layout = Some(Layout {
-                    size: self.size,
-                    current_size: self.size.into_fixed(),
-                    min: Size::splat(0),
-                    max: Size::splat(i32::MAX),
-                });
-
-                self.layout.unwrap()
-            }
-
-            fn grow_size(&mut self, max: Size<i32>) {
-                let width = match self.size.width {
-                    Length::Grow => max.width,
-                    Length::Fixed(x) => x,
-                    _ => 0,
-                };
-                let height = match self.size.height {
-                    Length::Grow => max.height,
-                    Length::Fixed(x) => x,
-                    _ => 0,
-                };
-
-                self.size.width = Length::Fixed(width);
-                self.size.height = Length::Fixed(height);
-                if let Some(layout) = self.layout.as_mut() {
-                    layout.current_size = self.size.into_fixed();
-                }
-            }
-
-            fn place(&mut self, position: Position<i32>) -> Size<i32> {
-                self.position = position;
-                self.size.into_fixed()
-            }
-
-            fn draw(&self, instances: &mut Vec<Instance>) {
-                instances.push(Instance::new(
-                    PipelineKey::Other("planet"),
-                    self.position,
-                    self.size.into_fixed(),
-                    [1.0, 0.0, 0.0, 1.0],
-                    [0, 0, 0, 0],
-                ));
-            }
-        }
-    }
+    use ui::widget::SimpleCanvas;
 
     pub fn view(_state: &State) -> Element<Message> {
         use Length::{Fixed, Grow};
 
         Container::new(vec![
-            widgets::Planet::new(Size::new(Grow, Grow)).einto(),
+            SimpleCanvas::new(Size::new(Grow, Grow), "planet").einto(),
             Column::new(vec![
                 Rectangle::new(
                     Size::new(Fixed(70), Fixed(20)),

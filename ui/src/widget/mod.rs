@@ -128,3 +128,6 @@ pub use container::Container;
 
 mod button;
 pub use button::Button;
+
+mod simple_canvas;
+pub use simple_canvas::SimpleCanvas;
