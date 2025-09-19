@@ -13,7 +13,22 @@ wgpu = { version = "25.0.2", default-features = false, features = ["wgsl"] }
 
 env_logger = { version = "0.11.8", default-features = false, optional = true }
 tracing = { version = "0.1.41", default-features = false, optional = true }
+
 winit = { version = "0.30.11", default-features = false, optional = true }
+
+anyhow = { version = "1.0.71", default-features = false, features = [
+  "backtrace",
+], optional = true }
+smithay-client-toolkit = { version = "0.20.0", default-features = false, features = [
+  "calloop",
+  "xkbcommon",
+], optional = true }
+wayland-client = { version = "0.31", default-features = false, optional = true }
+wayland-backend = { version = "0.3", features = [
+  "client_system",
+], optional = true } # for raw pointer export
+calloop = { version = "0.14", optional = true }
+calloop-wayland-source = { version = "0.4", optional = true }
 
 [features]
 default = []
@@ -22,5 +37,14 @@ vulkan = ["wgpu/vulkan"]
 metal = ["wgpu/metal"]
 
 image = []
-winit = ["dep:winit"]
+
 env_logging = ["dep:env_logger", "dep:tracing"]
+winit = ["dep:winit"]
+sctk = [
+  "dep:anyhow",
+  "dep:smithay-client-toolkit",
+  "dep:wayland-client",
+  "dep:wayland-backend",
+  "dep:calloop",
+  "dep:calloop-wayland-source",
+]

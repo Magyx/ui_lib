@@ -17,7 +17,7 @@ mod pipeline;
 enum View {
     Layout = 0,
     Interaction = 1,
-    Pipeline,
+    Pipeline = 2,
 }
 
 impl View {
