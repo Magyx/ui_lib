@@ -1,46 +1,39 @@
-use crate::{
-    graphics::{Config, Globals},
-    primitive::{Primitive, Vertex},
-    render::pipeline::Pipeline,
-};
-use wgpu::{PushConstantRange, RenderPipeline};
+use ui::graphics::{Config, Globals};
+use ui::primitive::{Primitive, Vertex};
+use ui::render::pipeline::Pipeline;
 
-pub(super) struct UiPipeline {
-    render_pipeline: Option<RenderPipeline>,
+pub struct PlanetPipeline {
+    render_pipeline: Option<wgpu::RenderPipeline>,
 }
 
-impl Pipeline for UiPipeline {
-    fn new(config: &Config, push_constant_ranges: &[PushConstantRange]) -> Self {
-        let mut pipeline = Self {
+impl Pipeline for PlanetPipeline {
+    fn new(config: &Config, push_constant_ranges: &[wgpu::PushConstantRange]) -> Self {
+        let mut p = Self {
             render_pipeline: None,
         };
-
-        pipeline.reload(config, push_constant_ranges);
-
-        pipeline
+        p.reload(config, push_constant_ranges);
+        p
     }
 
-    fn reload(&mut self, config: &Config, push_constant_ranges: &[PushConstantRange]) {
+    fn reload(&mut self, config: &Config, push_constant_ranges: &[wgpu::PushConstantRange]) {
         let shader_module = config
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("UI Shader"),
-                source: wgpu::ShaderSource::Wgsl(
-                    include_str!("../../shaders/ui_shader.wgsl").into(),
-                ),
+                label: Some("Planet Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/planet.wgsl").into()),
             });
 
         let layout = config
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("UI Render Pipeline Layout"),
-                push_constant_ranges,
+                label: Some("Planet Layout"),
                 bind_group_layouts: &[],
+                push_constant_ranges,
             });
 
         self.render_pipeline = Some(config.device.create_render_pipeline(
             &wgpu::RenderPipelineDescriptor {
-                label: Some("UI Render Pipeline"),
+                label: Some("Planet Render Pipeline"),
                 layout: Some(&layout),
                 vertex: wgpu::VertexState {
                     module: &shader_module,
@@ -99,7 +92,7 @@ impl Pipeline for UiPipeline {
                 bytemuck::bytes_of(globals),
             );
         } else {
-            panic!("UI Render Pipeline not initialized!");
+            panic!("Planet Render Pipeline not initialized!");
         }
     }
 }

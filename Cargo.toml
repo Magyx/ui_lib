@@ -1,3 +1,37 @@
-[workspace]
-resolver = "3"
-members = ["ui", "winit_demo"]
+[package]
+name = "ui"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+bytemuck = { version = "1.23.0", default-features = false, features = [
+  "derive",
+] }
+pollster = { version = "0.4.0", default-features = false }
+wgpu = { version = "25.0.2", default-features = false, features = ["wgsl"] }
+
+env_logger = { version = "0.11.8", default-features = false, optional = true }
+tracing = { version = "0.1.41", default-features = false, optional = true }
+
+winit = { version = "0.30.11", default-features = false, optional = true }
+
+[features]
+default = []
+
+vulkan = ["wgpu/vulkan"]
+metal = ["wgpu/metal"]
+
+image = []
+
+env_logging = ["dep:env_logger", "dep:tracing"]
+winit = ["dep:winit"]
+
+[dev-dependencies]
+winit = "0.30.11"
+
+[[example]]
+name = "winit"
+required-features = ["winit", "env_logging", "vulkan", "metal"]
