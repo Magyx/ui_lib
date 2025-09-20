@@ -1,4 +1,4 @@
-use crate::{Message, State};
+use super::{Message, State};
 use ui::{
     model::*,
     widget::{Button, Column, Container, Element, Length, Rectangle, Row, Widget},

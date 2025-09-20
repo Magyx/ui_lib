@@ -6,47 +6,11 @@ use ui::{
     pipeline_factories,
     render::pipeline::Pipeline,
     sctk::{DefaultHandler, LayerOptions, OutputSelector, SctkEvent, SctkLoop},
-    widget::Element,
 };
 
-use crate::pipeline::PlanetPipeline;
-
-mod demos;
-mod pipeline;
-
-#[derive(Clone)]
-enum View {
-    Layout = 0,
-    Interaction = 1,
-    Pipeline,
-}
-
-impl View {
-    const COUNT: u8 = 3;
-
-    fn from_u8(v: u8) -> Self {
-        match v {
-            0 => Self::Layout,
-            1 => Self::Interaction,
-            2 => Self::Pipeline,
-            _ => unreachable!("value out of range"),
-        }
-    }
-
-    fn next(self) -> Self {
-        Self::from_u8((self as u8 + 1) % Self::COUNT)
-    }
-}
-
-#[derive(Clone, Debug)]
-enum Message {
-    ButtonPressed,
-}
-
-struct State {
-    counter: u32,
-    view: View,
-}
+#[path = "../common/mod.rs"]
+mod common;
+use common::{Message, State, View, pipeline::PlanetPipeline, view};
 
 fn update<'a>(
     _engine: &mut Engine<'a, Message>,
@@ -73,13 +37,6 @@ fn update<'a>(
     }
 
     false
-}
-fn view(state: &State) -> Element<Message> {
-    match state.view {
-        View::Layout => demos::layout::view(state),
-        View::Interaction => demos::interaction::view(state),
-        View::Pipeline => demos::pipeline::view(state),
-    }
 }
 
 fn main() -> anyhow::Result<()> {

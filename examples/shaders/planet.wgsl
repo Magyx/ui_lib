@@ -1,9 +1,10 @@
+// From: https://www.shadertoy.com/view/ldyXRw
 struct VertexInput {
     // instance buffer
     @location(0) position: vec2<f32>, // top-left in pixels
     @location(1) size: vec2<f32>,     // width/height in pixels
-    @location(2) data1: vec4<f32>,    // unused here
-    @location(3) data2: vec4<u32>,    // unused here
+    @location(2) _data1: vec4<f32>,    // unused here
+    @location(3) _data2: vec4<u32>,    // unused here
 
     // vertex buffer
     @location(10) uv: vec2<f32>,
