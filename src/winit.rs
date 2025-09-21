@@ -1,4 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
 
 use winit::{
     application::ApplicationHandler,
@@ -40,6 +47,10 @@ impl<M> ToEvent<M, winit::event::WindowEvent> for winit::event::WindowEvent {
             _ => Event::Platform(self.clone()),
         }
     }
+}
+
+enum UserEvent {
+    Tick,
 }
 
 pub struct WinitApp<'a, M, S, V, U>
@@ -84,7 +95,7 @@ where
     }
 }
 
-impl<'a, M, S, V, U> ApplicationHandler for WinitApp<'a, M, S, V, U>
+impl<'a, M, S, V, U> ApplicationHandler<UserEvent> for WinitApp<'a, M, S, V, U>
 where
     M: 'static + std::fmt::Debug,
     V: Fn(&S) -> Element<M> + 'static,
@@ -114,21 +125,72 @@ where
         }
     }
 
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
+        match event {
+            UserEvent::Tick => {
+                if let Some(window) = self.window.as_ref() {
+                    window.request_redraw();
+                }
+            }
+        }
+    }
+
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let engine = self.engine.as_mut().expect("engine not initialized");
-        engine.handle_event(
-            &event,
-            &self.view,
-            &mut self.update,
-            &mut self.state,
-            event_loop,
-        );
+        match event {
+            WindowEvent::RedrawRequested => {
+                let engine = self.engine.as_mut().unwrap();
+                let should_redraw =
+                    engine.poll(&self.view, &mut self.update, &mut self.state, event_loop);
+                engine.render_if_needed(should_redraw, &self.view, &mut self.state);
+            }
+            _ => {
+                let engine = self.engine.as_mut().unwrap();
+                engine.handle_platform_event(&event, &mut self.update, &mut self.state, event_loop);
+            }
+        }
     }
+}
+
+fn run_app_core<'a, M, S, V, U>(
+    state: S,
+    view: V,
+    update: U,
+    window_attrs: WindowAttributes,
+    extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
+) -> Result<(), EventLoopError>
+where
+    M: 'static + std::fmt::Debug,
+    V: Fn(&S) -> Element<M> + 'static,
+    U: FnMut(&mut Engine<'a, M>, &Event<M, WindowEvent>, &mut S, &ActiveEventLoop) -> bool
+        + 'static,
+{
+    let event_loop = EventLoop::with_user_event().build()?;
+    let proxy = event_loop.create_proxy();
+    let running = Arc::new(AtomicBool::new(true));
+    let t_running = running.clone();
+
+    // TODO: make tarket fps configurable
+    let poll_thread = std::thread::spawn(move || {
+        let target = Duration::from_micros(16_666);
+        while t_running.load(Ordering::Relaxed) {
+            let _ = proxy.send_event(UserEvent::Tick);
+            std::thread::sleep(target);
+        }
+    });
+
+    let mut app =
+        WinitApp::<'a, M, S, V, U>::new(state, view, update, window_attrs, extra_pipelines);
+    let result = event_loop.run_app(&mut app);
+
+    running.store(false, Ordering::Relaxed);
+    poll_thread.join().unwrap();
+
+    result
 }
 
 pub fn run_app<'a, M, S, V, U>(
@@ -143,9 +205,7 @@ where
     U: FnMut(&mut Engine<'a, M>, &Event<M, WindowEvent>, &mut S, &ActiveEventLoop) -> bool
         + 'static,
 {
-    let event_loop = EventLoop::new()?;
-    let mut app = WinitApp::<'a, M, S, V, U>::new(state, view, update, window_attrs, None);
-    event_loop.run_app(&mut app)
+    run_app_core(state, view, update, window_attrs, None)
 }
 
 pub fn run_app_with<'a, M, S, V, U, I>(
@@ -164,8 +224,5 @@ where
 {
     let extra_pipelines: HashMap<&'static str, PipelineFactoryFn> =
         extra_pipelines.into_iter().collect();
-    let event_loop = EventLoop::new()?;
-    let mut app =
-        WinitApp::<'a, M, S, V, U>::new(state, view, update, window_attrs, Some(extra_pipelines));
-    event_loop.run_app(&mut app)
+    run_app_core(state, view, update, window_attrs, Some(extra_pipelines))
 }

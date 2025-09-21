@@ -221,7 +221,7 @@ where
     let mut engine = {
         let size = st.size;
         let mut engine = Engine::new(window_target, size);
-        post_engine_init(&mut engine); // <-- new hook
+        post_engine_init(&mut engine);
         engine
     };
 
@@ -232,13 +232,12 @@ where
         event_queue.blocking_dispatch(&mut st)?;
 
         for ev in st.take_events() {
-            engine.handle_event(&ev, &view, &mut update, &mut state, &loop_ctl);
+            engine.handle_platform_event(&ev, &mut update, &mut state, &loop_ctl);
         }
 
         while let Ok(m) = rx.try_recv() {
-            engine.handle_event(
+            engine.handle_platform_event(
                 &SctkEvent::message(m),
-                &view,
                 &mut update,
                 &mut state,
                 &loop_ctl,
@@ -246,14 +245,12 @@ where
         }
 
         if st.needs_redraw {
+            // only happens once, on configure
             st.needs_redraw = false;
-            engine.handle_event(
-                &SctkEvent::Redraw,
-                &view,
-                &mut update,
-                &mut state,
-                &loop_ctl,
-            );
+            engine.render_if_needed(true, &view, &mut state);
+        } else {
+            let require_redraw = engine.poll(&view, &mut update, &mut state, &loop_ctl);
+            engine.render_if_needed(require_redraw, &view, &mut state);
         }
     }
 

@@ -13,11 +13,11 @@ use crate::{
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Globals {
     window_size: [f32; 2], // pixels
-    time: f32,             // seconds since start
-    delta_time: f32,       // seconds since last frame
+    pub time: f32,         // seconds since start
+    pub delta_time: f32,   // seconds since last frame
     mouse_pos: [f32; 2],   // pixels
     mouse_buttons: u32,    // bit 0: left, bit 1: right (etc.)
-    frame: u32,            // frame counter
+    pub frame: u32,        // frame counter
 }
 
 pub struct Engine<'a, M> {
@@ -97,10 +97,88 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         self.pipeline_registry.register_pipeline(key, pipeline);
     }
 
-    pub fn handle_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
+    pub fn poll<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
+        &mut self,
+        view: &impl Fn(&S) -> Element<M>,
+        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
+        state: &mut S,
+        params: &P,
+    ) -> bool {
+        let now = std::time::Instant::now();
+        let total = now.duration_since(self.start_time);
+        let dt = now.duration_since(self.last_frame_time);
+        self.last_frame_time = now;
+        self.globals.time = total.as_secs_f32();
+        self.globals.delta_time = dt.as_secs_f32();
+
+        let mut require_redraw = false;
+
+        if let Some(root) = self.root.as_mut() {
+            root.handle(&self.globals, &mut self.ctx);
+        } else {
+            self.root = Some(view(state));
+            if let Some(root) = self.root.as_mut() {
+                root.handle(&self.globals, &mut self.ctx);
+            }
+        }
+
+        require_redraw |= self.ctx.take_redraw();
+
+        for message in self.ctx.take() {
+            require_redraw |= update(self, &Event::Message(message), state, params);
+        }
+
+        // TODO: add option to force redraw every frame
+        // require_redraw |= update(self, &Event::RedrawRequested, state, params);
+
+        require_redraw
+    }
+
+    pub fn render_if_needed<S>(
+        &mut self,
+        need: bool,
+        view: &impl Fn(&S) -> Element<M>,
+        state: &mut S,
+    ) {
+        if !need {
+            return;
+        }
+
+        // TODO: this should eventually be removed, as it is not accurate way to have id's
+        // maybe move to a depth based id system where id is passed from context instead of
+        // generated in each widget
+        crate::context::reset_ids_for_frame();
+
+        self.root = Some(view(state));
+        let root = self.root.as_mut().expect("root built");
+
+        let max = Size::new(
+            self.globals.window_size[0] as i32,
+            self.globals.window_size[1] as i32,
+        )
+        .max(Size::new(1, 1));
+        let _ = root.fit_size();
+        root.grow_size(max);
+        root.place(Position::splat(0));
+        root.handle(&self.globals, &mut self.ctx);
+        self.ctx.take_redraw();
+
+        let mut instances = Vec::new();
+        root.draw(&mut instances);
+
+        self.globals.frame = self.globals.frame.wrapping_add(1);
+
+        let _ = self.renderer.render(
+            &self.config,
+            &self.pipeline_registry,
+            &self.globals,
+            &instances,
+        );
+    }
+
+    pub fn handle_platform_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
         &mut self,
         event: &E,
-        view: impl Fn(&S) -> Element<M>,
         update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
         state: &mut S,
         params: &P,
@@ -118,8 +196,12 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                         .surface
                         .configure(&self.config.device, &self.config.config);
                 }
+                self.ctx.request_redraw();
             }
-            Event::CursorMoved { position } => self.ctx.mouse_pos = position,
+            Event::CursorMoved { position } => {
+                self.ctx.mouse_pos = position;
+                self.globals.mouse_pos = [position.x, position.y];
+            }
             Event::MouseInput { mouse_down } => {
                 self.ctx.mouse_down = mouse_down;
                 self.ctx.mouse_pressed = !prev_mouse_down && mouse_down;
@@ -134,60 +216,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             _ => (),
         }
 
-        let mut require_redraw = matches!(event, Event::Resized { .. } | Event::RedrawRequested);
-
-        let max = Size::new(
-            self.globals.window_size[0] as i32,
-            self.globals.window_size[1] as i32,
-        )
-        .max(Size::new(1, 1));
-
-        if self.root.is_some() {
-            let root = self.root.as_mut().unwrap();
-            if require_redraw {
-                _ = root.fit_size();
-                root.grow_size(max);
-                root.place(Position::splat(0));
-            }
-            root.handle(&mut self.ctx);
-
-            require_redraw |= self.ctx.take_redraw();
-
-            for message in self.ctx.take() {
-                require_redraw |= update(self, &Event::Message(message), state, params);
-            }
-        }
-
-        require_redraw |= update(self, &event, state, params);
-
-        if require_redraw {
-            crate::context::reset_ids_for_frame();
-            self.root = Some(view(state));
-
-            let root = self.root.as_mut().unwrap();
-            _ = root.fit_size();
-            root.grow_size(max);
-            root.place(Position::splat(0));
-            root.handle(&mut self.ctx);
-
-            let mut instances = Vec::new();
-            root.draw(&mut instances);
-
-            let now = Instant::now();
-            let total = now.duration_since(self.start_time);
-            let dt = now.duration_since(self.last_frame_time);
-            self.last_frame_time = now;
-
-            self.globals.time = total.as_secs_f32();
-            self.globals.delta_time = dt.as_secs_f32();
-            self.globals.frame = self.globals.frame.wrapping_add(1);
-
-            _ = self.renderer.render(
-                &self.config,
-                &self.pipeline_registry,
-                &self.globals,
-                &instances,
-            );
+        if update(self, &event, state, params) {
+            self.ctx.request_redraw();
         }
     }
 }
@@ -259,10 +289,10 @@ impl<'a> Config<'a> {
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::AutoNoVsync,
+            present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: 1,
         };
 
         surface.configure(&device, &config);

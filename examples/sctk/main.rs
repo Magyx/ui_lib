@@ -10,7 +10,7 @@ use ui::{
 
 #[path = "../common/mod.rs"]
 mod common;
-use common::{Message, State, View, pipeline::PlanetPipeline, view};
+use common::{Message, State, pipeline::PlanetPipeline, view};
 
 fn update<'a>(
     _engine: &mut Engine<'a, Message>,
@@ -19,13 +19,10 @@ fn update<'a>(
     loop_ctl: &SctkLoop,
 ) -> bool {
     match event {
-        Event::Platform(SctkEvent::Closed) => {
+        Event::Platform(SctkEvent::Closed) | Event::KeyboardInput { char: b'q' } => {
             loop_ctl.exit();
         }
-        Event::KeyboardInput { char } if *char == b'q' => {
-            loop_ctl.exit();
-        }
-        Event::KeyboardInput { char } if *char == b'n' => {
+        Event::KeyboardInput { char: b'n' } => {
             state.view = state.view.clone().next();
             return true;
         }
@@ -53,10 +50,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     ui::sctk::run_app_with::<Message, State, DefaultHandler, _, _, _>(
-        State {
-            view: View::Layout,
-            counter: 0,
-        },
+        State::default(),
         view,
         update,
         opts,

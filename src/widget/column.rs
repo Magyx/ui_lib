@@ -172,9 +172,9 @@ impl<M: 'static> Widget<M> for Column<M> {
         }
     }
 
-    fn handle(&mut self, ctx: &mut Context<M>) {
+    fn handle(&mut self, globals: &Globals, ctx: &mut Context<M>) {
         for child in self.children.iter_mut() {
-            child.handle(ctx);
+            child.handle(globals, ctx);
         }
     }
 }

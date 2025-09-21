@@ -1,34 +1,41 @@
 use crate::{
     Position, Size,
-    context::Id,
+    context::{Context, Id},
+    graphics::Globals,
     primitive::Instance,
     render::pipeline::PipelineKey,
     widget::{LAYOUT_ERROR, Layout, Length, Widget},
 };
 
-pub struct SimpleCanvas {
+pub struct SimpleCanvas<M> {
     layout: Option<Layout>,
 
     id: Id,
     key: &'static str,
+    with_handle: Option<fn(&Globals, &mut Context<M>)>,
     position: Position<i32>,
     size: Size<Length<i32>>,
 }
 
-impl SimpleCanvas {
-    pub fn new(size: Size<Length<i32>>, pipeline_key: &'static str) -> Self {
+impl<M> SimpleCanvas<M> {
+    pub fn new(
+        size: Size<Length<i32>>,
+        pipeline_key: &'static str,
+        with_handle: Option<fn(&Globals, &mut Context<M>)>,
+    ) -> Self {
         Self {
             layout: None,
 
             id: crate::context::next_id(),
             key: pipeline_key,
+            with_handle,
             position: Position::splat(0),
             size,
         }
     }
 }
 
-impl<M> Widget<M> for SimpleCanvas {
+impl<M> Widget<M> for SimpleCanvas<M> {
     fn id(&self) -> Id {
         self.id
     }
@@ -80,5 +87,11 @@ impl<M> Widget<M> for SimpleCanvas {
             [0.0, 0.0, 0.0, 0.0],
             [0, 0, 0, 0],
         ));
+    }
+
+    fn handle(&mut self, globals: &Globals, ctx: &mut Context<M>) {
+        if let Some(f) = self.with_handle {
+            f(globals, ctx);
+        }
     }
 }

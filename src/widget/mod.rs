@@ -2,6 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     context::{Context, Id},
+    graphics::Globals,
     model::*,
     primitive::Instance,
 };
@@ -67,7 +68,7 @@ pub trait Widget<M> {
 
     /* ----- interaction ----- */
     fn id(&self) -> Id;
-    fn handle(&mut self, _ctx: &mut Context<M>) {}
+    fn handle(&mut self, _globals: &Globals, _ctx: &mut Context<M>) {}
 
     fn einto(self) -> Element<M>
     where

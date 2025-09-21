@@ -181,7 +181,6 @@ impl CompositorHandler for SctkState {
         _surface: &WlSurface,
         _time: u32,
     ) {
-        self.needs_redraw = true;
     }
 
     fn surface_enter(

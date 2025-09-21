@@ -255,7 +255,14 @@ pub mod pipeline {
         use Length::{Fixed, Grow};
 
         Container::new(vec![
-            SimpleCanvas::new(Size::new(Grow, Grow), "planet").einto(),
+            SimpleCanvas::new(
+                Size::new(Grow, Grow),
+                "planet",
+                Some(|_g, ctx| {
+                    ctx.request_redraw();
+                }),
+            )
+            .einto(),
             Column::new(vec![
                 Rectangle::new(
                     Size::new(Fixed(70), Fixed(20)),

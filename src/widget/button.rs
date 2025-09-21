@@ -140,7 +140,7 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         ));
     }
 
-    fn handle(&mut self, ctx: &mut Context<M>) {
+    fn handle(&mut self, _globals: &Globals, ctx: &mut Context<M>) {
         let was_hovered = self.hovered;
         let was_pressed = self.pressed;
 

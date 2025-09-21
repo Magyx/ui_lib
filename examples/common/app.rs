@@ -36,6 +36,15 @@ pub struct State {
     pub view: View,
 }
 
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            counter: 0,
+            view: View::Layout,
+        }
+    }
+}
+
 pub fn view(state: &State) -> Element<Message> {
     match state.view {
         View::Layout => demos::layout::view(state),
