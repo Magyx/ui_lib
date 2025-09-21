@@ -11,14 +11,16 @@ bytemuck = { version = "1.23.0", default-features = false, features = [
   "derive",
 ] }
 pollster = { version = "0.4.0", default-features = false }
-
 wgpu = { version = "25.0.2", default-features = false, features = ["wgsl"] }
 
+# Env Logging dependencies
 env_logger = { version = "0.11.8", default-features = false, optional = true }
 tracing = { version = "0.1.41", default-features = false, optional = true }
 
+# Winit dependencies
 winit = { version = "0.30.12", default-features = false, optional = true }
 
+# SCTK dependencies
 anyhow = { version = "1.0.100", default-features = false, optional = true }
 smithay-client-toolkit = { version = "0.20.0", default-features = false, features = [
   "calloop",
@@ -27,7 +29,7 @@ smithay-client-toolkit = { version = "0.20.0", default-features = false, feature
 wayland-client = { version = "0.31", default-features = false, optional = true }
 wayland-backend = { version = "0.3", features = [
   "client_system",
-], optional = true } # for raw pointer export
+], optional = true }
 calloop = { version = "0.14", optional = true }
 calloop-wayland-source = { version = "0.4", optional = true }
 

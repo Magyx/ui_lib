@@ -91,15 +91,11 @@ impl Pipeline for UiPipeline {
     }
 
     fn apply_pipeline(&self, globals: &Globals, render_pass: &mut wgpu::RenderPass<'_>) {
-        if let Some(pipeline) = &self.render_pipeline {
-            render_pass.set_pipeline(pipeline);
-            render_pass.set_push_constants(
-                wgpu::ShaderStages::VERTEX_FRAGMENT,
-                0,
-                bytemuck::bytes_of(globals),
-            );
-        } else {
-            panic!("UI Render Pipeline not initialized!");
-        }
+        render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
+        render_pass.set_push_constants(
+            wgpu::ShaderStages::VERTEX_FRAGMENT,
+            0,
+            bytemuck::bytes_of(globals),
+        );
     }
 }
