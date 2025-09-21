@@ -2,21 +2,22 @@ pub const DEFAULT_MAX_TEXTURES: u32 = 128;
 pub const DEFAULT_MAX_INSTANCES: u64 = 10_000;
 
 pub(crate) fn feature_backends() -> wgpu::Backends {
-    let mut b = wgpu::Backends::empty();
-    #[cfg(feature = "vulkan")]
-    {
-        b |= wgpu::Backends::VULKAN;
-    }
     #[cfg(feature = "metal")]
-    {
-        b |= wgpu::Backends::METAL;
+    #[cfg(feature = "vulkan")]
+    if cfg!(all(feature = "metal", feature = "vulkan")) {
+        let mut b = wgpu::Backends::empty();
+        #[cfg(feature = "vulkan")]
+        {
+            b |= wgpu::Backends::VULKAN;
+        }
+        #[cfg(feature = "metal")]
+        {
+            b |= wgpu::Backends::METAL;
+        }
+        return b;
     }
 
-    if b.is_empty() {
-        wgpu::Backends::PRIMARY
-    } else {
-        b
-    }
+    wgpu::Backends::PRIMARY
 }
 
 pub(crate) fn env_override_backends(current: wgpu::Backends) -> wgpu::Backends {
