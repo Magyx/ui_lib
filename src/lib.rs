@@ -21,9 +21,11 @@ macro_rules! pipeline_factories {
                 ($name, {
                     fn __factory(
                         cfg: &$crate::graphics::Config,
+                        buffers: &[wgpu::VertexBufferLayout],
+                        texture_bgl: &wgpu::BindGroupLayout,
                         ranges: &[wgpu::PushConstantRange],
                     ) -> ::std::boxed::Box<dyn $crate::render::pipeline::Pipeline> {
-                        ::std::boxed::Box::new(<$ty>::new(cfg, ranges))
+                        ::std::boxed::Box::new(<$ty>::new(cfg, buffers, texture_bgl, ranges))
                     }
                     __factory as $crate::render::PipelineFactoryFn
                 }),

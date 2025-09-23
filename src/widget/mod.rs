@@ -132,3 +132,6 @@ pub use button::Button;
 
 mod simple_canvas;
 pub use simple_canvas::SimpleCanvas;
+
+mod image;
+pub use image::Image;

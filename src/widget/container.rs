@@ -1,5 +1,5 @@
 use super::*;
-use crate::{render::pipeline::PipelineKey, widget::helpers::clamp_size};
+use crate::widget::helpers::clamp_size;
 
 pub struct Container<M> {
     layout: Option<Layout>,
@@ -140,12 +140,10 @@ impl<M: 'static> Widget<M> for Container<M> {
     }
 
     fn draw(&self, instances: &mut Vec<Instance>) {
-        instances.push(Instance::new(
-            PipelineKey::Ui,
+        instances.push(Instance::ui(
             self.position,
             self.size.into_fixed(),
-            [self.color.r, self.color.g, self.color.b, self.color.a],
-            [0, 0, 0, 0],
+            self.color,
         ));
         for child in self.children.iter() {
             child.draw(instances);

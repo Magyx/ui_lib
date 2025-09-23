@@ -11,13 +11,29 @@ pub enum PipelineKey {
 }
 
 pub trait Pipeline {
-    fn new(config: &Config, push_constant_ranges: &[wgpu::PushConstantRange]) -> Self
+    fn new(
+        config: &Config,
+        buffers: &[wgpu::VertexBufferLayout],
+        texture_bgl: &wgpu::BindGroupLayout,
+        push_constant_ranges: &[wgpu::PushConstantRange],
+    ) -> Self
     where
         Self: Sized;
 
-    fn reload(&mut self, config: &Config, push_constant_ranges: &[wgpu::PushConstantRange]);
+    fn reload(
+        &mut self,
+        config: &Config,
+        buffers: &[wgpu::VertexBufferLayout],
+        texture_bgl: &wgpu::BindGroupLayout,
+        push_constant_ranges: &[wgpu::PushConstantRange],
+    );
 
-    fn apply_pipeline(&self, globals: &Globals, render_pass: &mut wgpu::RenderPass<'_>);
+    fn apply_pipeline(
+        &self,
+        globals: &Globals,
+        texture_bindgroup: &wgpu::BindGroup,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    );
 }
 
 pub(crate) struct PipelineRegistry {
@@ -34,11 +50,18 @@ impl PipelineRegistry {
     pub(crate) fn register_default_pipelines(
         &mut self,
         config: &Config,
+        buffers: &[wgpu::VertexBufferLayout],
+        texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
         self.register_pipeline(
             PipelineKey::Ui,
-            Box::new(ui::UiPipeline::new(config, push_constant_ranges)),
+            Box::new(ui::UiPipeline::new(
+                config,
+                buffers,
+                texture_bgl,
+                push_constant_ranges,
+            )),
         );
     }
 
@@ -49,10 +72,12 @@ impl PipelineRegistry {
     pub(crate) fn reload(
         &mut self,
         config: &Config,
+        buffers: &[wgpu::VertexBufferLayout],
+        texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
         for pipeline in self.pipelines.values_mut() {
-            pipeline.reload(config, push_constant_ranges);
+            pipeline.reload(config, buffers, texture_bgl, push_constant_ranges);
         }
     }
 
@@ -60,12 +85,13 @@ impl PipelineRegistry {
         &self,
         key: &PipelineKey,
         globals: &Globals,
+        texture_bindgroup: &wgpu::BindGroup,
         pass: &mut wgpu::RenderPass<'_>,
     ) {
         self.pipelines
             .get(key)
             .expect("Pipeline not registered!")
             .as_ref()
-            .apply_pipeline(globals, pass);
+            .apply_pipeline(globals, texture_bindgroup, pass);
     }
 }

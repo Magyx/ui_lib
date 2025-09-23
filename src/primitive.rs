@@ -1,6 +1,6 @@
 use crate::{
-    model::{Position, Size},
-    render::pipeline::PipelineKey,
+    model::{Color, Position, Size},
+    render::{pipeline::PipelineKey, texture::TextureHandle},
 };
 
 pub const QUAD_VERTICES: &[Vertex] = &[
@@ -105,6 +105,36 @@ impl Instance {
             size,
             data1,
             data2,
+        }
+    }
+
+    pub fn ui(position: Position<i32>, size: Size<i32>, color: Color<f32>) -> Self {
+        Self {
+            kind: PipelineKey::Ui,
+            position,
+            size,
+            data1: [color.r, color.g, color.b, color.a],
+            data2: [0, 0, 0, 0],
+        }
+    }
+
+    pub fn ui_tex(
+        position: Position<i32>,
+        size: Size<i32>,
+        color: Color<f32>,
+        handle: TextureHandle,
+    ) -> Self {
+        Self {
+            kind: PipelineKey::Ui,
+            position,
+            size,
+            data1: [color.r, color.g, color.b, color.a],
+            data2: [
+                handle.index + 1,
+                handle.generation,
+                handle.scale_packed,
+                handle.offset_packed,
+            ],
         }
     }
 

@@ -1,32 +1,35 @@
 use super::*;
-use crate::widget::helpers::clamp_size;
+use crate::{render::texture::TextureHandle, widget::helpers::clamp_size};
 
-pub struct Rectangle {
+pub struct Image {
     layout: Option<Layout>,
-
     id: Id,
     position: Position<i32>,
     size: Size<Length<i32>>,
-    color: Color<f32>,
-
     min: Size<i32>,
     max: Size<i32>,
+
+    handle: TextureHandle,
+    tint: Color<f32>,
 }
 
-impl Rectangle {
-    pub fn new(size: Size<Length<i32>>, color: Color<f32>) -> Self {
+impl Image {
+    pub fn new(size: Size<Length<i32>>, handle: TextureHandle) -> Self {
         Self {
             layout: None,
-
             id: crate::context::next_id(),
             position: Position::splat(0),
             size,
-            color,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
+            handle,
+            tint: Color::WHITE,
         }
     }
-
+    pub fn tint(mut self, tint: Color<f32>) -> Self {
+        self.tint = tint;
+        self
+    }
     pub fn min(mut self, size: Size<i32>) -> Self {
         self.min = size;
         self
@@ -37,11 +40,10 @@ impl Rectangle {
     }
 }
 
-impl<M> Widget<M> for Rectangle {
+impl<M> Widget<M> for Image {
     fn id(&self) -> Id {
         self.id
     }
-
     fn layout(&self) -> Layout {
         self.layout.expect(LAYOUT_ERROR)
     }
@@ -53,27 +55,25 @@ impl<M> Widget<M> for Rectangle {
             min: self.min,
             max: self.max,
         });
-
         self.layout.unwrap()
     }
 
     fn grow_size(&mut self, max: Size<i32>) {
-        let width = match self.size.width {
+        let w = match self.size.width {
             Length::Grow => max.width,
             Length::Fixed(x) => x,
             _ => 0,
         };
-        let height = match self.size.height {
+        let h = match self.size.height {
             Length::Grow => max.height,
             Length::Fixed(x) => x,
             _ => 0,
         };
-        let clamped = clamp_size(Size::new(width, height), self.min, self.max);
-
+        let clamped = clamp_size(Size::new(w, h), self.min, self.max);
         self.size.width = Length::Fixed(clamped.width);
         self.size.height = Length::Fixed(clamped.height);
-        if let Some(layout) = self.layout.as_mut() {
-            layout.current_size = clamped;
+        if let Some(l) = self.layout.as_mut() {
+            l.current_size = clamped;
         }
     }
 
@@ -83,10 +83,11 @@ impl<M> Widget<M> for Rectangle {
     }
 
     fn draw(&self, instances: &mut Vec<Instance>) {
-        instances.push(Instance::ui(
+        instances.push(Instance::ui_tex(
             self.position,
             self.size.into_fixed(),
-            self.color,
+            self.tint,
+            self.handle,
         ));
     }
 }

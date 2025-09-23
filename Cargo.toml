@@ -39,8 +39,6 @@ default = []
 vulkan = ["wgpu/vulkan"]
 metal = ["wgpu/metal"]
 
-image = []
-
 env_logging = ["dep:env_logger", "dep:tracing"]
 winit = ["dep:winit"]
 sctk = [
@@ -55,6 +53,7 @@ sctk = [
 [dev-dependencies]
 winit = "0.30.12"
 anyhow = "1.0.100"
+image = { version = "0.25.8", features = ["jpeg"] }
 
 [[example]]
 name = "winit"

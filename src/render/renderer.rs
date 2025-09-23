@@ -4,7 +4,10 @@ use crate::{
     consts::DEFAULT_MAX_INSTANCES,
     graphics::{Config, Globals},
     primitive::{Instance, Primitive, QUAD_INDICES, QUAD_VERTICES},
-    render::pipeline::{PipelineKey, PipelineRegistry},
+    render::{
+        pipeline::{PipelineKey, PipelineRegistry},
+        texture::TextureRegistry,
+    },
 };
 
 struct DrawCommand<'a> {
@@ -18,6 +21,7 @@ pub(crate) struct Renderer {
     index_buffer: wgpu::Buffer,
     number_of_indices: u32,
     instance_buffer: wgpu::Buffer,
+    pub(crate) textures: TextureRegistry,
 }
 
 impl Renderer {
@@ -51,6 +55,7 @@ impl Renderer {
             index_buffer,
             number_of_indices,
             instance_buffer,
+            textures: TextureRegistry::new(config),
         }
     }
 
@@ -139,7 +144,12 @@ impl Renderer {
             pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
             for command in draw_commands.iter() {
-                pipeline_registry.apply_pipeline(command.pipe, globals, &mut pass);
+                pipeline_registry.apply_pipeline(
+                    command.pipe,
+                    globals,
+                    self.textures.bind_group(),
+                    &mut pass,
+                );
                 pass.draw_indexed(
                     0..self.number_of_indices,
                     0,

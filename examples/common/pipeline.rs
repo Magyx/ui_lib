@@ -1,5 +1,4 @@
 use ui::graphics::{Config, Globals};
-use ui::primitive::{Primitive, Vertex};
 use ui::render::pipeline::Pipeline;
 
 pub struct PlanetPipeline {
@@ -7,15 +6,26 @@ pub struct PlanetPipeline {
 }
 
 impl Pipeline for PlanetPipeline {
-    fn new(config: &Config, push_constant_ranges: &[wgpu::PushConstantRange]) -> Self {
+    fn new(
+        config: &Config,
+        buffers: &[wgpu::VertexBufferLayout],
+        texture_bgl: &wgpu::BindGroupLayout,
+        push_constant_ranges: &[wgpu::PushConstantRange],
+    ) -> Self {
         let mut p = Self {
             render_pipeline: None,
         };
-        p.reload(config, push_constant_ranges);
+        p.reload(config, buffers, texture_bgl, push_constant_ranges);
         p
     }
 
-    fn reload(&mut self, config: &Config, push_constant_ranges: &[wgpu::PushConstantRange]) {
+    fn reload(
+        &mut self,
+        config: &Config,
+        buffers: &[wgpu::VertexBufferLayout],
+        _texture_bgl: &wgpu::BindGroupLayout,
+        push_constant_ranges: &[wgpu::PushConstantRange],
+    ) {
         let shader_module = config
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -38,7 +48,7 @@ impl Pipeline for PlanetPipeline {
                 vertex: wgpu::VertexState {
                     module: &shader_module,
                     entry_point: Some("vs_main"),
-                    buffers: &[Vertex::desc(), Primitive::desc()],
+                    buffers,
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -83,16 +93,17 @@ impl Pipeline for PlanetPipeline {
         ));
     }
 
-    fn apply_pipeline(&self, globals: &Globals, render_pass: &mut wgpu::RenderPass<'_>) {
-        if let Some(pipeline) = &self.render_pipeline {
-            render_pass.set_pipeline(pipeline);
-            render_pass.set_push_constants(
-                wgpu::ShaderStages::VERTEX_FRAGMENT,
-                0,
-                bytemuck::bytes_of(globals),
-            );
-        } else {
-            panic!("Planet Render Pipeline not initialized!");
-        }
+    fn apply_pipeline(
+        &self,
+        globals: &Globals,
+        _texture_bindgroup: &wgpu::BindGroup,
+        render_pass: &mut wgpu::RenderPass<'_>,
+    ) {
+        render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
+        render_pass.set_push_constants(
+            wgpu::ShaderStages::VERTEX_FRAGMENT,
+            0,
+            bytemuck::bytes_of(globals),
+        );
     }
 }

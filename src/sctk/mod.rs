@@ -289,9 +289,8 @@ where
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
 
     run_app_core::<M, S, V, U, H, _>(state, view, update, opts, move |engine| {
-        for (key, factory) in &pipelines {
-            let pipeline = factory(&engine.config, &engine.push_constant_ranges);
-            engine.register_pipeline(crate::render::pipeline::PipelineKey::Other(key), pipeline);
+        for (key, factory) in pipelines {
+            engine.register_pipeline(crate::render::pipeline::PipelineKey::Other(key), factory);
         }
     })
 }

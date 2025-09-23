@@ -5,7 +5,8 @@ use crate::{
     context::Context,
     event::{Event, ToEvent},
     model::*,
-    render::{pipeline::PipelineRegistry, renderer::Renderer},
+    primitive::{Primitive, Vertex},
+    render::{pipeline::PipelineRegistry, renderer::Renderer, texture::TextureHandle},
     widget::Element,
 };
 
@@ -54,10 +55,15 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             range: 0..std::mem::size_of::<Globals>() as u32,
         }];
 
-        let mut pipeline_registry = PipelineRegistry::new();
-        pipeline_registry.register_default_pipelines(&config, &push_constant_ranges);
-
         let renderer = Renderer::new(&config);
+
+        let mut pipeline_registry = PipelineRegistry::new();
+        pipeline_registry.register_default_pipelines(
+            &config,
+            &[Vertex::desc(), Primitive::desc()],
+            renderer.textures.layout(),
+            &push_constant_ranges,
+        );
 
         let now = Instant::now();
 
@@ -85,16 +91,36 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
     }
 
     pub fn reload_all(&mut self) {
-        self.pipeline_registry
-            .reload(&self.config, &self.push_constant_ranges);
+        self.pipeline_registry.reload(
+            &self.config,
+            &[Vertex::desc(), Primitive::desc()],
+            self.renderer.textures.layout(),
+            &self.push_constant_ranges,
+        );
     }
 
     pub fn register_pipeline(
         &mut self,
         key: crate::render::pipeline::PipelineKey,
-        pipeline: Box<dyn crate::render::pipeline::Pipeline>,
+        pipeline_factory: crate::render::PipelineFactoryFn,
     ) {
+        let pipeline = pipeline_factory(
+            &self.config,
+            &[Vertex::desc(), Primitive::desc()],
+            self.renderer.textures.layout(),
+            &self.push_constant_ranges,
+        );
         self.pipeline_registry.register_pipeline(key, pipeline);
+    }
+
+    pub fn load_texture_rgba8(&mut self, width: u32, height: u32, pixels: &[u8]) -> TextureHandle {
+        self.renderer
+            .textures
+            .load_rgba8(&self.config, width, height, pixels)
+    }
+
+    pub fn unload_texture(&mut self, handle: TextureHandle) -> bool {
+        self.renderer.textures.unload(&self.config, handle)
     }
 
     pub fn poll<S, P, E: ToEvent<M, E> + std::fmt::Debug>(

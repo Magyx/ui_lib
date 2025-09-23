@@ -112,11 +112,10 @@ where
             let size = window.inner_size().into();
             let mut engine = Engine::new(window.clone(), size);
             if let Some(pipelines) = self.extra_pipelines.take() {
-                for (key, pipeline_factory) in pipelines {
-                    let pipeline = pipeline_factory(&engine.config, &engine.push_constant_ranges);
+                for (key, factory) in pipelines {
                     engine.register_pipeline(
                         crate::render::pipeline::PipelineKey::Other(key),
-                        pipeline,
+                        factory,
                     );
                 }
             }

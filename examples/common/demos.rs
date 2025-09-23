@@ -287,3 +287,38 @@ pub mod pipeline {
         .einto()
     }
 }
+
+pub mod texture {
+
+    use super::*;
+    use ui::widget::Image;
+
+    pub fn view(state: &State) -> Element<Message> {
+        use Length::{Fixed, Grow};
+
+        Container::new(vec![
+            Image::new(Size::new(Grow, Grow), state.background.unwrap_or_default()).einto(),
+            Column::new(vec![
+                Rectangle::new(
+                    Size::new(Fixed(70), Fixed(20)),
+                    Color::from_rgb(100, 0, 100),
+                )
+                .einto(),
+                Rectangle::new(
+                    Size::new(Fixed(40), Fixed(30)),
+                    Color::from_rgb(140, 0, 140),
+                )
+                .einto(),
+            ])
+            .spacing(10)
+            .padding(Vec4::splat(10))
+            .color(Color::from_rgba(220, 240, 240, 1))
+            .size(Size::new(Fixed(70), Fixed(80)))
+            .einto(),
+        ])
+        .color(Color::from_rgb(20, 20, 40))
+        .padding(Vec4::splat(0))
+        .size(Size::new(Grow, Grow))
+        .einto()
+    }
+}

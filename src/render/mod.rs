@@ -1,5 +1,11 @@
 pub mod pipeline;
 pub(crate) mod renderer;
 
-pub type PipelineFactoryFn =
-    fn(&crate::graphics::Config, &[wgpu::PushConstantRange]) -> Box<dyn pipeline::Pipeline>;
+pub mod texture;
+
+pub type PipelineFactoryFn = fn(
+    &crate::graphics::Config,
+    &[wgpu::VertexBufferLayout],
+    &wgpu::BindGroupLayout,
+    &[wgpu::PushConstantRange],
+) -> Box<dyn pipeline::Pipeline>;

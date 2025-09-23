@@ -13,7 +13,7 @@ mod common;
 use common::{Message, State, pipeline::PlanetPipeline, view};
 
 fn update<'a>(
-    _engine: &mut Engine<'a, Message>,
+    engine: &mut Engine<'a, Message>,
     event: &Event<Message, SctkEvent>,
     state: &mut State,
     loop_ctl: &SctkLoop,
@@ -24,6 +24,23 @@ fn update<'a>(
         }
         Event::KeyboardInput { char: b'n' } => {
             state.view = state.view.clone().next();
+            if let common::View::Texture = state.view
+                && state.background.is_none()
+            {
+                if let Ok(reader) = image::ImageReader::open("assets/background.jpg")
+                    && let Ok(img) = reader.decode()
+                {
+                    let rgba = img.to_rgba8();
+                    let (w, h) = rgba.dimensions();
+                    println!("Loaded image with dimensions: {}x{}", w, h);
+
+                    let handle = engine.load_texture_rgba8(w, h, rgba.as_raw());
+
+                    state.background = Some(handle);
+                } else {
+                    eprintln!("Couldn't load image!");
+                }
+            }
             return true;
         }
         Event::Message(Message::ButtonPressed) => {

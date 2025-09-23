@@ -1,5 +1,5 @@
 use super::*;
-use crate::{render::pipeline::PipelineKey, widget::helpers::clamp_size};
+use crate::widget::helpers::clamp_size;
 
 pub struct Button<M> {
     layout: Option<Layout>,
@@ -131,13 +131,7 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
             self.normal_color
         };
 
-        instances.push(Instance::new(
-            PipelineKey::Ui,
-            self.position,
-            self.size.into_fixed(),
-            [color.r, color.g, color.b, color.a],
-            [0, 0, 0, 0],
-        ));
+        instances.push(Instance::ui(self.position, self.size.into_fixed(), color));
     }
 
     fn handle(&mut self, _globals: &Globals, ctx: &mut Context<M>) {
