@@ -36,7 +36,10 @@ pub enum Message {
 pub struct State {
     pub counter: u32,
     pub view: View,
+
     pub background: Option<ui::render::texture::TextureHandle>,
+    pub icon_atlas: Option<ui::render::texture::Atlas>,
+    pub icons: Vec<ui::render::texture::TextureHandle>,
 }
 
 impl Default for State {
@@ -45,7 +48,104 @@ impl Default for State {
             counter: 0,
             view: View::Pipeline,
             background: None,
+            icon_atlas: None,
+            icons: Vec::new(),
         }
+    }
+}
+
+pub mod update {
+    use ui::graphics::Engine;
+
+    pub fn ensure_icons_loaded<'a>(
+        engine: &mut Engine<'a, super::Message>,
+        state: &mut super::State,
+    ) {
+        if state.icon_atlas.is_some() {
+            return;
+        }
+
+        let mut atlas = engine.create_atlas(1024, 1024);
+        let mut handles = Vec::new();
+
+        if let Ok(entries) = std::fs::read_dir("assets/open-iconic/png/") {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.ends_with("-8x.png"))
+                    .unwrap_or(false)
+                {
+                    continue;
+                }
+
+                if let Ok(reader) = image::ImageReader::open(&path)
+                    && let Ok(img) = reader.decode()
+                {
+                    let img = img.resize_exact(48, 48, image::imageops::FilterType::Triangle);
+                    let rgba = img.to_rgba8();
+                    let (w, h) = rgba.dimensions();
+                    println!(
+                        "Loaded icon '{}' with dimensions: {}x{}",
+                        path.display(),
+                        w,
+                        h
+                    );
+
+                    if let Some(handle) = engine.load_texture_into_atlas(&mut atlas, w, h, &rgba) {
+                        handles.push(handle);
+                    } else {
+                        eprintln!("Atlas is full, cannot add icon '{}'", path.display());
+                    }
+                } else {
+                    eprintln!("Couldn't load icon '{}'", path.display());
+                }
+            }
+        }
+
+        state.icon_atlas = Some(atlas);
+        state.icons = handles;
+    }
+
+    fn ensure_background_loaded<'a>(
+        engine: &mut Engine<'a, super::Message>,
+        state: &mut super::State,
+    ) {
+        if state.background.is_some() {
+            return;
+        }
+        if let Ok(reader) = image::ImageReader::open("assets/background.jpg")
+            && let Ok(img) = reader.decode()
+        {
+            let rgba = img.to_rgba8();
+            let (w, h) = rgba.dimensions();
+            println!("Loaded image with dimensions: {}x{}", w, h);
+
+            let handle = engine.load_texture_rgba8(w, h, rgba.as_raw());
+
+            state.background = Some(handle);
+        } else {
+            eprintln!("Couldn't load image!");
+        }
+    }
+
+    pub fn cycle_view<'a>(
+        engine: &mut Engine<'a, super::Message>,
+        state: &mut super::State,
+    ) -> bool {
+        state.view = state.view.clone().next();
+        if let super::View::Texture = state.view {
+            ensure_background_loaded(engine, state);
+            ensure_icons_loaded(engine, state);
+        }
+
+        true
+    }
+
+    pub fn increment_counter(state: &mut super::State) -> bool {
+        state.counter += 1;
+        true
     }
 }
 

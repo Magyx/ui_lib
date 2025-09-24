@@ -23,6 +23,62 @@ pub fn unpack_unorm2x16(p: u32) -> [f32; 2] {
     [(p & 0xFFFF) as f32 / 65535.0, (p >> 16) as f32 / 65535.0]
 }
 
+pub struct AtlasRect {
+    pub x: u32,
+    pub y: u32,
+    pub w: u32,
+    pub h: u32,
+}
+
+pub struct Atlas {
+    slot_index: usize,
+    generation: u32,
+    size_px: Size<u32>,
+    cursor_x: u32,
+    cursor_y: u32,
+    row_h: u32,
+}
+
+impl Atlas {
+    fn new(slot_index: usize, generation: u32, size_px: Size<u32>) -> Self {
+        Self {
+            slot_index,
+            generation,
+            size_px,
+            cursor_x: 0,
+            cursor_y: 0,
+            row_h: 0,
+        }
+    }
+
+    // TODO: alloc using LRU
+    fn alloc(&mut self, w: u32, h: u32) -> Option<AtlasRect> {
+        if w > self.size_px.width || h > self.size_px.height {
+            return None;
+        }
+        if self.cursor_x + w > self.size_px.width {
+            self.cursor_x = 0;
+            self.cursor_y += self.row_h;
+            self.row_h = 0;
+        }
+        if self.cursor_y + h > self.size_px.height {
+            return None;
+        }
+
+        let rect = AtlasRect {
+            x: self.cursor_x,
+            y: self.cursor_y,
+            w,
+            h,
+        };
+        self.cursor_x += w;
+        if h > self.row_h {
+            self.row_h = h;
+        }
+        Some(rect)
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub struct TextureHandle {
     pub index: u32,
@@ -32,12 +88,18 @@ pub struct TextureHandle {
     pub size_px: Size<u32>,
 }
 
+#[derive(Clone)]
+struct TexSlot {
+    tex: wgpu::Texture,
+    view: wgpu::TextureView,
+}
+
 pub struct TextureRegistry {
     layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     sampler: wgpu::Sampler,
 
-    views: Vec<Option<wgpu::TextureView>>,
+    views: Vec<Option<TexSlot>>,
     gens: Vec<u32>,
     gens_buffer: wgpu::Buffer,
 
@@ -131,7 +193,11 @@ impl TextureRegistry {
     fn update_bind_group(&mut self, device: &wgpu::Device) {
         let mut slice: Vec<&wgpu::TextureView> = Vec::with_capacity(self.views.len());
         for v in &self.views {
-            slice.push(v.as_ref().unwrap_or(&self.placeholder_view));
+            slice.push(
+                v.as_ref()
+                    .map(|s| &s.view)
+                    .unwrap_or(&self.placeholder_view),
+            );
         }
 
         self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -201,8 +267,9 @@ impl TextureRegistry {
                 depth_or_array_layers: 1,
             },
         );
+        let view = tex.create_view(&Default::default());
 
-        self.views[idx] = Some(tex.create_view(&Default::default()));
+        self.views[idx] = Some(TexSlot { tex, view });
 
         config.queue.write_buffer(
             &self.gens_buffer,
@@ -240,5 +307,113 @@ impl TextureRegistry {
         );
         self.update_bind_group(&config.device);
         true
+    }
+
+    pub fn create_atlas(&mut self, config: &Config, width: u32, height: u32) -> Atlas {
+        let idx = self
+            .free
+            .pop()
+            .expect("Texture slots exhausted; bump DEFAULT_MAX_TEXTURES");
+        let tex = config.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("UI Atlas"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&Default::default());
+        self.views[idx] = Some(TexSlot { tex, view });
+
+        config.queue.write_buffer(
+            &self.gens_buffer,
+            (std::mem::size_of::<u32>() * idx) as u64,
+            bytemuck::cast_slice(&[self.gens[idx]]),
+        );
+        self.update_bind_group(&config.device);
+
+        Atlas::new(idx, self.gens[idx], Size::new(width, height))
+    }
+
+    pub fn load_into_atlas(
+        &mut self,
+        config: &Config,
+        atlas: &mut Atlas,
+        w: u32,
+        h: u32,
+        pixels_rgba8: &[u8],
+    ) -> Option<TextureHandle> {
+        let rect = atlas.alloc(w, h)?;
+        let slot = self.views[atlas.slot_index]
+            .as_ref()
+            .expect("atlas slot missing");
+
+        config.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &slot.tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d {
+                    x: rect.x,
+                    y: rect.y,
+                    z: 0,
+                },
+                aspect: wgpu::TextureAspect::All,
+            },
+            pixels_rgba8,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * w),
+                rows_per_image: Some(h),
+            },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let scale = [
+            w as f32 / atlas.size_px.width as f32,
+            h as f32 / atlas.size_px.height as f32,
+        ];
+        let offs = [
+            rect.x as f32 / atlas.size_px.width as f32,
+            rect.y as f32 / atlas.size_px.height as f32,
+        ];
+
+        Some(TextureHandle {
+            index: atlas.slot_index as u32,
+            generation: atlas.generation,
+            scale_packed: pack_unorm2x16(scale),
+            offset_packed: pack_unorm2x16(offs),
+            size_px: Size::new(w, h),
+        })
+    }
+
+    pub fn destroy_atlas(&mut self, config: &Config, atlas: &mut Atlas) {
+        let idx = atlas.slot_index;
+
+        self.gens[idx] = self.gens[idx].wrapping_add(1);
+        config.queue.write_buffer(
+            &self.gens_buffer,
+            (std::mem::size_of::<u32>() * idx) as u64,
+            bytemuck::cast_slice(&[self.gens[idx]]),
+        );
+
+        self.views[idx] = None;
+        self.update_bind_group(&config.device);
+        self.free.push(idx);
+
+        atlas.size_px = Size::new(0, 0);
+        atlas.cursor_x = 0;
+        atlas.cursor_y = 0;
+        atlas.row_h = 0;
+        atlas.generation = self.gens[idx];
     }
 }

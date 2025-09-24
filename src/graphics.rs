@@ -6,7 +6,11 @@ use crate::{
     event::{Event, ToEvent},
     model::*,
     primitive::{Primitive, Vertex},
-    render::{pipeline::PipelineRegistry, renderer::Renderer, texture::TextureHandle},
+    render::{
+        pipeline::PipelineRegistry,
+        renderer::Renderer,
+        texture::{Atlas, TextureHandle},
+    },
     widget::Element,
 };
 
@@ -121,6 +125,28 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
     pub fn unload_texture(&mut self, handle: TextureHandle) -> bool {
         self.renderer.textures.unload(&self.config, handle)
+    }
+
+    pub fn create_atlas(&mut self, width: u32, height: u32) -> Atlas {
+        self.renderer
+            .textures
+            .create_atlas(&self.config, width, height)
+    }
+
+    pub fn load_texture_into_atlas(
+        &mut self,
+        atlas: &mut Atlas,
+        width: u32,
+        height: u32,
+        pixels: &[u8],
+    ) -> Option<TextureHandle> {
+        self.renderer
+            .textures
+            .load_into_atlas(&self.config, atlas, width, height, pixels)
+    }
+
+    pub fn destroy_atlas(&mut self, atlas: &mut Atlas) {
+        self.renderer.textures.destroy_atlas(&self.config, atlas)
     }
 
     pub fn poll<S, P, E: ToEvent<M, E> + std::fmt::Debug>(

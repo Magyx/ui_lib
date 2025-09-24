@@ -12,6 +12,8 @@ use ui::{
 mod common;
 use common::{Message, State, pipeline::PlanetPipeline, view};
 
+use crate::common::update;
+
 fn update<'a>(
     engine: &mut Engine<'a, Message>,
     event: &Event<Message, SctkEvent>,
@@ -21,36 +23,12 @@ fn update<'a>(
     match event {
         Event::Platform(SctkEvent::Closed) | Event::KeyboardInput { char: b'q' } => {
             loop_ctl.exit();
+            false
         }
-        Event::KeyboardInput { char: b'n' } => {
-            state.view = state.view.clone().next();
-            if let common::View::Texture = state.view
-                && state.background.is_none()
-            {
-                if let Ok(reader) = image::ImageReader::open("assets/background.jpg")
-                    && let Ok(img) = reader.decode()
-                {
-                    let rgba = img.to_rgba8();
-                    let (w, h) = rgba.dimensions();
-                    println!("Loaded image with dimensions: {}x{}", w, h);
-
-                    let handle = engine.load_texture_rgba8(w, h, rgba.as_raw());
-
-                    state.background = Some(handle);
-                } else {
-                    eprintln!("Couldn't load image!");
-                }
-            }
-            return true;
-        }
-        Event::Message(Message::ButtonPressed) => {
-            state.counter += 1;
-            return true;
-        }
-        _ => {}
+        Event::KeyboardInput { char: b'n' } => update::cycle_view(engine, state),
+        Event::Message(Message::ButtonPressed) => update::increment_counter(state),
+        _ => false,
     }
-
-    false
 }
 
 fn main() -> anyhow::Result<()> {

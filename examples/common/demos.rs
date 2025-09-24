@@ -296,6 +296,25 @@ pub mod texture {
     pub fn view(state: &State) -> Element<Message> {
         use Length::{Fixed, Grow};
 
+        let mut rows: Vec<Element<Message>> = Vec::new();
+        for chunk in state.icons.chunks(25) {
+            let mut cells = Vec::new();
+            for &h in chunk {
+                cells.push(
+                    Image::new(Size::new(Fixed(48), Fixed(48)), h)
+                        .tint(Color::WHITE)
+                        .einto(),
+                );
+            }
+            rows.push(
+                Row::new(cells)
+                    .spacing(8)
+                    .padding(Vec4::splat(8))
+                    .size(Size::new(Grow, Fixed(64)))
+                    .einto(),
+            );
+        }
+
         Container::new(vec![
             Image::new(Size::new(Grow, Grow), state.background.unwrap_or_default()).einto(),
             Column::new(vec![
@@ -315,8 +334,18 @@ pub mod texture {
             .color(Color::from_rgba(220, 240, 240, 1))
             .size(Size::new(Fixed(70), Fixed(80)))
             .einto(),
+            Container::new(vec![
+                Column::new(rows)
+                    .spacing(8)
+                    .padding(Vec4::splat(10))
+                    .color(Color::splat(0.8))
+                    .size(Size::new(Grow, Grow))
+                    .einto(),
+            ])
+            .padding(Vec4::splat(120))
+            .size(Size::new(Grow, Grow))
+            .einto(),
         ])
-        .color(Color::from_rgb(20, 20, 40))
         .padding(Vec4::splat(0))
         .size(Size::new(Grow, Grow))
         .einto()
