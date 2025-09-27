@@ -155,7 +155,7 @@ pub mod layout {
             .size(Size::new(Grow, Fixed(56)))
             .einto(),
 
-            /* 9) Test clampig */
+            /* 9) Test clamping */
             Row::new(vec![
                 Rectangle::new(Size::new(Length::Grow, Length::Fixed(24)), Color::GREEN)
                     .min(Size::new(120, 24))       // >= 120px wide, one line tall

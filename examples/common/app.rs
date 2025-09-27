@@ -86,7 +86,8 @@ pub mod update {
                     let img = img.resize_exact(48, 48, image::imageops::FilterType::Triangle);
                     let rgba = img.to_rgba8();
                     let (w, h) = rgba.dimensions();
-                    println!(
+                    #[cfg(feature = "env_logging")]
+                    tracing::info!(
                         "Loaded icon '{}' with dimensions: {}x{}",
                         path.display(),
                         w,
@@ -96,10 +97,12 @@ pub mod update {
                     if let Some(handle) = engine.load_texture_into_atlas(&mut atlas, w, h, &rgba) {
                         handles.push(handle);
                     } else {
-                        eprintln!("Atlas is full, cannot add icon '{}'", path.display());
+                        #[cfg(feature = "env_logging")]
+                        tracing::warn!("Atlas is full, cannot add icon '{}'", path.display());
                     }
                 } else {
-                    eprintln!("Couldn't load icon '{}'", path.display());
+                    #[cfg(feature = "env_logging")]
+                    tracing::warn!("Couldn't load icon '{}'", path.display());
                 }
             }
         }
@@ -120,13 +123,16 @@ pub mod update {
         {
             let rgba = img.to_rgba8();
             let (w, h) = rgba.dimensions();
-            println!("Loaded image with dimensions: {}x{}", w, h);
+
+            #[cfg(feature = "env_logging")]
+            tracing::info!("Loaded image with dimensions: {}x{}", w, h);
 
             let handle = engine.load_texture_rgba8(w, h, rgba.as_raw());
 
             state.background = Some(handle);
         } else {
-            eprintln!("Couldn't load image!");
+            #[cfg(feature = "env_logging")]
+            tracing::warn!("Couldn't load image!");
         }
     }
 

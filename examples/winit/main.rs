@@ -48,7 +48,10 @@ fn update<'a>(
 }
 
 fn main() {
-    env_logger::init();
+    #[cfg(feature = "env_logging")]
+    {
+        env_logger::init();
+    }
     let attrs = WindowAttributes::default().with_title("My Test GUI lib");
 
     _ = ui::winit::run_app_with::<Message, _, _, _, _>(

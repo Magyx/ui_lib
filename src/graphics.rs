@@ -298,14 +298,16 @@ impl<'a> Config<'a> {
             ..Default::default()
         });
 
-        let surface = instance.create_surface(target.clone()).unwrap();
+        let surface = instance
+            .create_surface(target.clone())
+            .expect("wgpu: failed to create surface (window/display handle mismatch?)");
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         }))
-        .unwrap();
+        .expect("wgpu: no suitable adapter found for the current surface");
 
         let is_metal = adapter.get_info().backend == wgpu::Backend::Metal;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
@@ -327,7 +329,7 @@ impl<'a> Config<'a> {
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
         }))
-        .unwrap();
+        .expect("wgpu: failed to request logical device/queue (feature set unsupported?)");
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps

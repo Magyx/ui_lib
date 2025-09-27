@@ -32,7 +32,10 @@ fn update<'a>(
 }
 
 fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    #[cfg(feature = "env_logging")]
+    {
+        env_logger::init();
+    }
 
     let opts = LayerOptions {
         layer: Layer::Top,
