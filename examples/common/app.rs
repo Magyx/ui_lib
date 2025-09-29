@@ -87,7 +87,7 @@ pub mod update {
                     let rgba = img.to_rgba8();
                     let (w, h) = rgba.dimensions();
                     #[cfg(feature = "env_logging")]
-                    tracing::info!(
+                    log::info!(
                         "Loaded icon '{}' with dimensions: {}x{}",
                         path.display(),
                         w,
@@ -98,11 +98,11 @@ pub mod update {
                         handles.push(handle);
                     } else {
                         #[cfg(feature = "env_logging")]
-                        tracing::warn!("Atlas is full, cannot add icon '{}'", path.display());
+                        log::warn!("Atlas is full, cannot add icon '{}'", path.display());
                     }
                 } else {
                     #[cfg(feature = "env_logging")]
-                    tracing::warn!("Couldn't load icon '{}'", path.display());
+                    log::warn!("Couldn't load icon '{}'", path.display());
                 }
             }
         }
@@ -125,14 +125,14 @@ pub mod update {
             let (w, h) = rgba.dimensions();
 
             #[cfg(feature = "env_logging")]
-            tracing::info!("Loaded image with dimensions: {}x{}", w, h);
+            log::info!("Loaded image with dimensions: {}x{}", w, h);
 
             let handle = engine.load_texture_rgba8(w, h, rgba.as_raw());
 
             state.background = Some(handle);
         } else {
             #[cfg(feature = "env_logging")]
-            tracing::warn!("Couldn't load image!");
+            log::warn!("Couldn't load image!");
         }
     }
 

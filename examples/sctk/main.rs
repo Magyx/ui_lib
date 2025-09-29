@@ -35,6 +35,7 @@ fn main() -> anyhow::Result<()> {
     #[cfg(feature = "env_logging")]
     {
         env_logger::init();
+        log::info!("Starting SCTK example");
     }
 
     let opts = LayerOptions {

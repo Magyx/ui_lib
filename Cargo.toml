@@ -15,6 +15,7 @@ wgpu = { version = "25.0.2", default-features = false, features = ["wgsl"] }
 
 # Env Logging dependencies
 env_logger = { version = "0.11.8", default-features = false, optional = true }
+log = { version = "0.4.20", default-features = false, optional = true }
 tracing = { version = "0.1.41", default-features = false, optional = true }
 
 # Winit dependencies
@@ -39,7 +40,7 @@ default = []
 vulkan = ["wgpu/vulkan"]
 metal = ["wgpu/metal"]
 
-env_logging = ["dep:env_logger", "dep:tracing"]
+env_logging = ["dep:env_logger", "dep:log", "dep:tracing"]
 winit = ["dep:winit"]
 sctk = [
   "dep:anyhow",
@@ -57,8 +58,8 @@ image = { version = "0.25.8", features = ["jpeg"] }
 
 [[example]]
 name = "winit"
-required-features = ["winit", "env_logging", "vulkan", "metal"]
+required-features = ["winit"]
 
 [[example]]
 name = "sctk"
-required-features = ["sctk", "env_logging", "vulkan", "metal"]
+required-features = ["sctk"]

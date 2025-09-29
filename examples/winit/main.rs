@@ -51,6 +51,7 @@ fn main() {
     #[cfg(feature = "env_logging")]
     {
         env_logger::init();
+        log::info!("Starting winit example");
     }
     let attrs = WindowAttributes::default().with_title("My Test GUI lib");
 
