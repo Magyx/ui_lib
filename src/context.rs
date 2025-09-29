@@ -1,4 +1,4 @@
-use crate::model::Position;
+use crate::{graphics::Globals, model::Position};
 
 pub type Id = u64;
 
@@ -66,4 +66,28 @@ impl<M> Context<M> {
         self.redraw_requested = false;
         r
     }
+}
+
+pub struct FitCtx<'a, M> {
+    pub globals: &'a Globals,
+    pub ui: &'a mut Context<M>,
+}
+
+pub struct GrowCtx<'a, M> {
+    pub globals: &'a Globals,
+    pub ui: &'a mut Context<M>,
+}
+
+pub struct PlaceCtx<'a, M> {
+    pub globals: &'a Globals,
+    pub ui: &'a mut Context<M>,
+}
+
+pub struct PaintCtx<'a> {
+    pub globals: &'a Globals,
+}
+
+pub struct EventCtx<'a, M> {
+    pub globals: &'a Globals,
+    pub ui: &'a mut Context<M>,
 }

@@ -48,7 +48,7 @@ impl<M> Widget<M> for Image {
         self.layout.expect(LAYOUT_ERROR)
     }
 
-    fn fit_size(&mut self) -> Layout {
+    fn fit_size(&mut self, _ctx: &mut FitCtx<M>) -> Layout {
         self.layout = Some(Layout {
             size: self.size,
             current_size: clamp_size(self.size.into_fixed(), self.min, self.max),
@@ -58,7 +58,7 @@ impl<M> Widget<M> for Image {
         self.layout.unwrap()
     }
 
-    fn grow_size(&mut self, max: Size<i32>) {
+    fn grow_size(&mut self, _ctx: &mut GrowCtx<M>, max: Size<i32>) {
         let w = match self.size.width {
             Length::Grow => max.width,
             Length::Fixed(x) => x,
@@ -77,12 +77,12 @@ impl<M> Widget<M> for Image {
         }
     }
 
-    fn place(&mut self, position: Position<i32>) -> Size<i32> {
+    fn place(&mut self, _ctx: &mut PlaceCtx<M>, position: Position<i32>) -> Size<i32> {
         self.position = position;
         self.size.into_fixed()
     }
 
-    fn draw(&self, instances: &mut Vec<Instance>) {
+    fn draw(&self, _ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         instances.push(Instance::ui_tex(
             self.position,
             self.size.into_fixed(),

@@ -72,14 +72,14 @@ impl<M: 'static> Widget<M> for Row<M> {
         self.layout.expect(LAYOUT_ERROR)
     }
 
-    fn fit_size(&mut self) -> Layout {
+    fn fit_size(&mut self, ctx: &mut FitCtx<M>) -> Layout {
         let width_padding = self.padding.x + self.padding.z;
         let height_padding = self.padding.y + self.padding.w;
 
         let mut min_width = (self.children.len() as i32 - 1) * self.spacing + width_padding;
         let mut min_height = 0;
         for child in self.children.iter_mut() {
-            let Layout { current_size, .. } = child.fit_size();
+            let Layout { current_size, .. } = child.fit_size(ctx);
             min_width += current_size.width;
             if min_height < current_size.height {
                 min_height = current_size.height;
@@ -108,7 +108,7 @@ impl<M: 'static> Widget<M> for Row<M> {
         self.layout.unwrap()
     }
 
-    fn grow_size(&mut self, max: Size<i32>) {
+    fn grow_size(&mut self, ctx: &mut GrowCtx<M>, max: Size<i32>) {
         if let Length::Grow = self.size.width {
             self.size.width = Length::Fixed(max.width);
         }
@@ -133,7 +133,7 @@ impl<M: 'static> Widget<M> for Row<M> {
         let equalized_sizes = equalize_sizes(&self.children, Width, Width, inner_width);
 
         for (i, current) in equalized_sizes {
-            self.children[i].grow_size(Size::new(current, inner_height));
+            self.children[i].grow_size(ctx, Size::new(current, inner_height));
         }
 
         if let Some(layout) = self.layout.as_mut() {
@@ -141,7 +141,7 @@ impl<M: 'static> Widget<M> for Row<M> {
         }
     }
 
-    fn place(&mut self, position: Position<i32>) -> Size<i32> {
+    fn place(&mut self, ctx: &mut PlaceCtx<M>, position: Position<i32>) -> Size<i32> {
         self.position = position;
 
         let mut cursor = Position::new(
@@ -149,27 +149,27 @@ impl<M: 'static> Widget<M> for Row<M> {
             self.position.y + self.padding.y,
         );
         for child in self.children.iter_mut() {
-            let child_size = child.place(cursor);
+            let child_size = child.place(ctx, cursor);
             cursor.x += child_size.width + self.spacing;
         }
 
         self.size.into_fixed()
     }
 
-    fn draw(&self, instances: &mut Vec<Instance>) {
+    fn draw(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         instances.push(Instance::ui(
             self.position,
             self.size.into_fixed(),
             self.color,
         ));
         for child in self.children.iter() {
-            child.draw(instances);
+            child.draw(ctx, instances);
         }
     }
 
-    fn handle(&mut self, globals: &Globals, ctx: &mut Context<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx<M>) {
         for child in self.children.iter_mut() {
-            child.handle(globals, ctx);
+            child.handle(ctx);
         }
     }
 }

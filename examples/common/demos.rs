@@ -258,8 +258,8 @@ pub mod pipeline {
             SimpleCanvas::new(
                 Size::new(Grow, Grow),
                 "planet",
-                Some(|_g, ctx| {
-                    ctx.request_redraw();
+                Some(|cx| {
+                    cx.ui.request_redraw();
                 }),
             )
             .einto(),

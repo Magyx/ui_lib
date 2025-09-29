@@ -1,18 +1,12 @@
-use crate::{
-    Position, Size,
-    context::{Context, Id},
-    graphics::Globals,
-    primitive::Instance,
-    render::pipeline::PipelineKey,
-    widget::{LAYOUT_ERROR, Layout, Length, Widget},
-};
+use super::*;
+use crate::render::pipeline::PipelineKey;
 
 pub struct SimpleCanvas<M> {
     layout: Option<Layout>,
 
     id: Id,
     key: &'static str,
-    with_handle: Option<fn(&Globals, &mut Context<M>)>,
+    with_handle: Option<fn(&mut EventCtx<M>)>,
     position: Position<i32>,
     size: Size<Length<i32>>,
 }
@@ -21,7 +15,7 @@ impl<M> SimpleCanvas<M> {
     pub fn new(
         size: Size<Length<i32>>,
         pipeline_key: &'static str,
-        with_handle: Option<fn(&Globals, &mut Context<M>)>,
+        with_handle: Option<fn(&mut EventCtx<M>)>,
     ) -> Self {
         Self {
             layout: None,
@@ -44,7 +38,7 @@ impl<M> Widget<M> for SimpleCanvas<M> {
         self.layout.expect(LAYOUT_ERROR)
     }
 
-    fn fit_size(&mut self) -> Layout {
+    fn fit_size(&mut self, _ctx: &mut FitCtx<M>) -> Layout {
         self.layout = Some(Layout {
             size: self.size,
             current_size: self.size.into_fixed(),
@@ -55,7 +49,7 @@ impl<M> Widget<M> for SimpleCanvas<M> {
         self.layout.unwrap()
     }
 
-    fn grow_size(&mut self, max: Size<i32>) {
+    fn grow_size(&mut self, _ctx: &mut GrowCtx<M>, max: Size<i32>) {
         let width = match self.size.width {
             Length::Grow => max.width,
             Length::Fixed(x) => x,
@@ -74,12 +68,12 @@ impl<M> Widget<M> for SimpleCanvas<M> {
         }
     }
 
-    fn place(&mut self, position: Position<i32>) -> Size<i32> {
+    fn place(&mut self, _ctx: &mut PlaceCtx<M>, position: Position<i32>) -> Size<i32> {
         self.position = position;
         self.size.into_fixed()
     }
 
-    fn draw(&self, instances: &mut Vec<Instance>) {
+    fn draw(&self, _ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         instances.push(Instance::new(
             PipelineKey::Other(self.key),
             self.position,
@@ -89,9 +83,9 @@ impl<M> Widget<M> for SimpleCanvas<M> {
         ));
     }
 
-    fn handle(&mut self, globals: &Globals, ctx: &mut Context<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx<M>) {
         if let Some(f) = self.with_handle {
-            f(globals, ctx);
+            f(ctx);
         }
     }
 }

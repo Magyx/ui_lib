@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Instant};
 
 use crate::{
     consts::*,
-    context::Context,
+    context::{Context, EventCtx, FitCtx, GrowCtx, PaintCtx, PlaceCtx},
     event::{Event, ToEvent},
     model::*,
     primitive::{Primitive, Vertex},
@@ -165,7 +165,11 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         let mut require_redraw = false;
 
         if let Some(root) = self.root.as_mut() {
-            root.handle(&self.globals, &mut self.ctx);
+            let mut event_cx = EventCtx {
+                globals: &self.globals,
+                ui: &mut self.ctx,
+            };
+            root.handle(&mut event_cx);
         } else {
             require_redraw = true;
         }
@@ -204,14 +208,44 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             self.globals.window_size[1] as i32,
         )
         .max(Size::new(1, 1));
-        let _ = root.fit_size();
-        root.grow_size(max);
-        root.place(Position::splat(0));
-        root.handle(&self.globals, &mut self.ctx);
+
+        {
+            let mut fit_cx = FitCtx {
+                globals: &self.globals,
+                ui: &mut self.ctx,
+            };
+            let _ = root.fit_size(&mut fit_cx);
+        }
+        {
+            let mut grow_cx = GrowCtx {
+                globals: &self.globals,
+                ui: &mut self.ctx,
+            };
+            root.grow_size(&mut grow_cx, max);
+        }
+        {
+            let mut place_cx = PlaceCtx {
+                globals: &self.globals,
+                ui: &mut self.ctx,
+            };
+            root.place(&mut place_cx, Position::splat(0));
+        }
+
+        let mut event_cx = EventCtx {
+            globals: &self.globals,
+            ui: &mut self.ctx,
+        };
+        root.handle(&mut event_cx);
+
         self.ctx.take_redraw();
 
         let mut instances = Vec::new();
-        root.draw(&mut instances);
+        {
+            let mut paint_cx = PaintCtx {
+                globals: &self.globals,
+            };
+            root.draw(&mut paint_cx, &mut instances);
+        }
 
         self.globals.frame = self.globals.frame.wrapping_add(1);
 

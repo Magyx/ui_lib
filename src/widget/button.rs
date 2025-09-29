@@ -85,7 +85,7 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         self.layout.expect(LAYOUT_ERROR)
     }
 
-    fn fit_size(&mut self) -> Layout {
+    fn fit_size(&mut self, _ctx: &mut FitCtx<M>) -> Layout {
         let current = clamp_size(self.size.into_fixed(), self.min, self.max);
         self.layout = Some(Layout {
             size: self.size,
@@ -96,7 +96,7 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         self.layout.unwrap()
     }
 
-    fn grow_size(&mut self, max: Size<i32>) {
+    fn grow_size(&mut self, _ctx: &mut GrowCtx<M>, max: Size<i32>) {
         let width = match self.size.width {
             Length::Grow => max.width,
             Length::Fixed(x) => x,
@@ -117,12 +117,12 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         }
     }
 
-    fn place(&mut self, position: Position<i32>) -> Size<i32> {
+    fn place(&mut self, _ctx: &mut PlaceCtx<M>, position: Position<i32>) -> Size<i32> {
         self.position = position;
         self.size.into_fixed()
     }
 
-    fn draw(&self, instances: &mut Vec<Instance>) {
+    fn draw(&self, _ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         let color = if self.pressed {
             self.pressed_color
         } else if self.hovered {
@@ -134,30 +134,30 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         instances.push(Instance::ui(self.position, self.size.into_fixed(), color));
     }
 
-    fn handle(&mut self, _globals: &Globals, ctx: &mut Context<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx<M>) {
         let was_hovered = self.hovered;
         let was_pressed = self.pressed;
 
-        let inside = self.contains(ctx.mouse_pos);
+        let inside = self.contains(ctx.ui.mouse_pos);
         self.hovered = inside;
         if inside {
-            ctx.hot_item = Some(self.id);
+            ctx.ui.hot_item = Some(self.id);
         }
 
-        if inside && ctx.mouse_pressed {
-            ctx.active_item = Some(self.id);
+        if inside && ctx.ui.mouse_pressed {
+            ctx.ui.active_item = Some(self.id);
         }
-        self.pressed = ctx.active_item == Some(self.id) && ctx.mouse_down;
+        self.pressed = ctx.ui.active_item == Some(self.id) && ctx.ui.mouse_down;
 
-        if ctx.mouse_released && ctx.active_item == Some(self.id) {
+        if ctx.ui.mouse_released && ctx.ui.active_item == Some(self.id) {
             if inside && let Some(m) = self.on_press.clone() {
-                ctx.emit(m);
+                ctx.ui.emit(m);
             }
-            ctx.active_item = None;
+            ctx.ui.active_item = None;
         }
 
         if self.hovered != was_hovered || self.pressed != was_pressed {
-            ctx.request_redraw();
+            ctx.ui.request_redraw();
         }
     }
 }

@@ -1,11 +1,7 @@
+#![allow(unused_variables)]
 use std::ops::{Deref, DerefMut};
 
-use crate::{
-    context::{Context, Id},
-    graphics::Globals,
-    model::*,
-    primitive::Instance,
-};
+use crate::{context::*, model::*, primitive::Instance};
 
 mod helpers;
 
@@ -59,16 +55,16 @@ pub trait Widget<M> {
     fn layout(&self) -> Layout;
 
     /* ----- layout ----- */
-    fn fit_size(&mut self) -> Layout;
-    fn grow_size(&mut self, max: Size<i32>);
-    fn place(&mut self, position: Position<i32>) -> Size<i32>;
+    fn fit_size(&mut self, ctx: &mut FitCtx<M>) -> Layout;
+    fn grow_size(&mut self, ctx: &mut GrowCtx<M>, max: Size<i32>);
+    fn place(&mut self, ctx: &mut PlaceCtx<M>, position: Position<i32>) -> Size<i32>;
 
     /* ----- paint ----- */
-    fn draw(&self, instances: &mut Vec<Instance>);
+    fn draw(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
 
     /* ----- interaction ----- */
     fn id(&self) -> Id;
-    fn handle(&mut self, _globals: &Globals, _ctx: &mut Context<M>) {}
+    fn handle(&mut self, ctx: &mut EventCtx<M>) {}
 
     fn einto(self) -> Element<M>
     where
