@@ -1,10 +1,7 @@
 use std::{
     collections::HashMap,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 use winit::{
@@ -12,7 +9,7 @@ use winit::{
     dpi::PhysicalSize,
     error::EventLoopError,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowAttributes},
 };
 
@@ -49,8 +46,18 @@ impl<M> ToEvent<M, winit::event::WindowEvent> for winit::event::WindowEvent {
     }
 }
 
-enum UserEvent {
-    Tick,
+fn frame_interval_from_monitor(window: &Window) -> Duration {
+    const NS_PER_S: u128 = 1_000_000_000;
+    const M_PER: u128 = 1_000;
+    const FALLBACK_NS_60HZ: u128 = NS_PER_S / 60;
+
+    let ns = window
+        .current_monitor()
+        .and_then(|m| m.refresh_rate_millihertz())
+        .map(|mhz| (NS_PER_S * M_PER) / (mhz as u128))
+        .unwrap_or(FALLBACK_NS_60HZ);
+
+    Duration::from_nanos(ns as u64)
 }
 
 pub struct WinitApp<'a, M, S, V, U>
@@ -67,6 +74,8 @@ where
     view: V,
     update: U,
     window_attrs: WindowAttributes,
+    next_frame: Instant,
+    frame_interval: Duration,
 }
 
 impl<'a, M, S, V, U> WinitApp<'a, M, S, V, U>
@@ -91,11 +100,13 @@ where
             view,
             update,
             window_attrs,
+            next_frame: Instant::now(),
+            frame_interval: Duration::from_millis(16),
         }
     }
 }
 
-impl<'a, M, S, V, U> ApplicationHandler<UserEvent> for WinitApp<'a, M, S, V, U>
+impl<'a, M, S, V, U> ApplicationHandler for WinitApp<'a, M, S, V, U>
 where
     M: 'static + std::fmt::Debug,
     V: Fn(&S) -> Element<M> + 'static,
@@ -119,19 +130,22 @@ where
                     );
                 }
             }
+
+            self.frame_interval = frame_interval_from_monitor(&window);
             self.engine = Some(engine);
             self.window = Some(window);
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: UserEvent) {
-        match event {
-            UserEvent::Tick => {
-                if let Some(window) = self.window.as_ref() {
-                    window.request_redraw();
-                }
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let now = Instant::now();
+        if now >= self.next_frame {
+            if let Some(w) = self.window.as_ref() {
+                w.request_redraw();
             }
+            self.next_frame = now + self.frame_interval;
         }
+        event_loop.set_control_flow(ControlFlow::WaitUntil(self.next_frame));
     }
 
     fn window_event(
@@ -143,11 +157,20 @@ where
         match event {
             WindowEvent::RedrawRequested => {
                 let engine = self.engine.as_mut().unwrap();
-                let should_redraw =
-                    engine.poll(&self.view, &mut self.update, &mut self.state, event_loop);
+                let should_redraw = engine.poll(&mut self.update, &mut self.state, event_loop);
                 engine.render_if_needed(should_redraw, &self.view, &mut self.state);
             }
             _ => {
+                match event {
+                    WindowEvent::ScaleFactorChanged { .. }
+                    | WindowEvent::Moved(..)
+                    | WindowEvent::Resized(..) => {
+                        if let Some(window) = self.window.as_ref() {
+                            self.frame_interval = frame_interval_from_monitor(window);
+                        }
+                    }
+                    _ => (),
+                }
                 let engine = self.engine.as_mut().unwrap();
                 engine.handle_platform_event(&event, &mut self.update, &mut self.state, event_loop);
             }
@@ -168,28 +191,10 @@ where
     U: FnMut(&mut Engine<'a, M>, &Event<M, WindowEvent>, &mut S, &ActiveEventLoop) -> bool
         + 'static,
 {
-    let event_loop = EventLoop::with_user_event().build()?;
-    let proxy = event_loop.create_proxy();
-    let running = Arc::new(AtomicBool::new(true));
-    let t_running = running.clone();
-
-    // TODO: make tarket fps configurable
-    let poll_thread = std::thread::spawn(move || {
-        let target = Duration::from_micros(16_666);
-        while t_running.load(Ordering::Relaxed) {
-            let _ = proxy.send_event(UserEvent::Tick);
-            std::thread::sleep(target);
-        }
-    });
-
+    let event_loop = EventLoop::new()?;
     let mut app =
         WinitApp::<'a, M, S, V, U>::new(state, view, update, window_attrs, extra_pipelines);
-    let result = event_loop.run_app(&mut app);
-
-    running.store(false, Ordering::Relaxed);
-    poll_thread.join().unwrap();
-
-    result
+    event_loop.run_app(&mut app)
 }
 
 pub fn run_app<'a, M, S, V, U>(

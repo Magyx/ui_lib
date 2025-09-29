@@ -151,7 +151,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
     pub fn poll<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
         &mut self,
-        view: &impl Fn(&S) -> Element<M>,
         update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
         state: &mut S,
         params: &P,
@@ -168,10 +167,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         if let Some(root) = self.root.as_mut() {
             root.handle(&self.globals, &mut self.ctx);
         } else {
-            self.root = Some(view(state));
-            if let Some(root) = self.root.as_mut() {
-                root.handle(&self.globals, &mut self.ctx);
-            }
+            require_redraw = true;
         }
 
         require_redraw |= self.ctx.take_redraw();

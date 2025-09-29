@@ -249,7 +249,7 @@ where
             st.needs_redraw = false;
             engine.render_if_needed(true, &view, &mut state);
         } else {
-            let require_redraw = engine.poll(&view, &mut update, &mut state, &loop_ctl);
+            let require_redraw = engine.poll(&mut update, &mut state, &loop_ctl);
             engine.render_if_needed(require_redraw, &view, &mut state);
         }
     }
