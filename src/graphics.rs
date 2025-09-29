@@ -176,8 +176,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             require_redraw |= update(self, &Event::Message(message), state, params);
         }
 
-        // TODO: add option to force redraw every frame
-        // require_redraw |= update(self, &Event::RedrawRequested, state, params);
+        require_redraw |= update(self, &Event::RedrawRequested, state, params);
 
         require_redraw
     }
@@ -290,7 +289,7 @@ impl<'a> Config<'a> {
     {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: crate::consts::default_backends(),
-            flags: wgpu::InstanceFlags::DEBUG, // TODO: make this configurable
+            flags: crate::consts::default_instance_flags(),
             ..Default::default()
         });
 

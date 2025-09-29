@@ -36,3 +36,30 @@ pub(crate) fn env_override_backends(current: wgpu::Backends) -> wgpu::Backends {
 pub(crate) fn default_backends() -> wgpu::Backends {
     env_override_backends(feature_backends())
 }
+
+pub(crate) fn default_instance_flags() -> wgpu::InstanceFlags {
+    let mut flags = wgpu::InstanceFlags::empty();
+
+    #[cfg(feature = "env_logging")]
+    {
+        flags.insert(wgpu::InstanceFlags::DEBUG);
+    }
+
+    if let Ok(v) = std::env::var("UI_WGPU_DEBUG") {
+        let on = matches!(v.to_ascii_lowercase().as_str(), "1" | "on" | "true" | "yes");
+        if on {
+            flags.insert(wgpu::InstanceFlags::DEBUG);
+        } else {
+            flags.remove(wgpu::InstanceFlags::DEBUG);
+        }
+    }
+
+    if let Ok(v) = std::env::var("UI_WGPU_VALIDATION") {
+        let on = matches!(v.to_ascii_lowercase().as_str(), "1" | "on" | "true" | "yes");
+        if on {
+            flags.insert(wgpu::InstanceFlags::VALIDATION);
+        }
+    }
+
+    flags
+}
