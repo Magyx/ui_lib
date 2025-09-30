@@ -131,3 +131,6 @@ pub use simple_canvas::SimpleCanvas;
 
 mod image;
 pub use image::Image;
+
+mod text;
+pub use text::Text;

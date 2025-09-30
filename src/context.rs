@@ -1,4 +1,8 @@
-use crate::{graphics::Globals, model::Position};
+use crate::{
+    graphics::{Config, Globals},
+    model::Position,
+    render::{text::TextSystem, texture::TextureRegistry},
+};
 
 pub type Id = u64;
 
@@ -71,20 +75,26 @@ impl<M> Context<M> {
 pub struct FitCtx<'a, M> {
     pub globals: &'a Globals,
     pub ui: &'a mut Context<M>,
+    pub text: &'a mut TextSystem,
 }
 
 pub struct GrowCtx<'a, M> {
     pub globals: &'a Globals,
     pub ui: &'a mut Context<M>,
+    pub text: &'a mut TextSystem,
 }
 
 pub struct PlaceCtx<'a, M> {
     pub globals: &'a Globals,
     pub ui: &'a mut Context<M>,
+    pub text: &'a mut TextSystem,
 }
 
 pub struct PaintCtx<'a> {
     pub globals: &'a Globals,
+    pub text: &'a mut TextSystem,
+    pub config: &'a Config<'a>,
+    pub texture: &'a mut TextureRegistry,
 }
 
 pub struct EventCtx<'a, M> {

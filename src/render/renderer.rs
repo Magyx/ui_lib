@@ -6,6 +6,7 @@ use crate::{
     primitive::{Instance, Primitive, QUAD_INDICES, QUAD_VERTICES},
     render::{
         pipeline::{PipelineKey, PipelineRegistry},
+        text::TextSystem,
         texture::TextureRegistry,
     },
 };
@@ -21,7 +22,9 @@ pub(crate) struct Renderer {
     index_buffer: wgpu::Buffer,
     number_of_indices: u32,
     instance_buffer: wgpu::Buffer,
+
     pub(crate) textures: TextureRegistry,
+    pub(crate) text: TextSystem,
 }
 
 impl Renderer {
@@ -56,6 +59,7 @@ impl Renderer {
             number_of_indices,
             instance_buffer,
             textures: TextureRegistry::new(config),
+            text: TextSystem::default(),
         }
     }
 

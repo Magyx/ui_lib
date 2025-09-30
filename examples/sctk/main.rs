@@ -25,7 +25,8 @@ fn update<'a>(
             loop_ctl.exit();
             false
         }
-        Event::KeyboardInput { char: b'n' } => update::cycle_view(engine, state),
+        Event::KeyboardInput { char: b'n' } => update::cycle_view(engine, state, true),
+        Event::KeyboardInput { char: b'p' } => update::cycle_view(engine, state, false),
         Event::Message(Message::ButtonPressed) => update::increment_counter(state),
         _ => false,
     }

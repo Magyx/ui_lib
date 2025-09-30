@@ -8,10 +8,11 @@ pub enum View {
     Interaction = 1,
     Pipeline = 2,
     Texture = 3,
+    Text = 4,
 }
 
 impl View {
-    const COUNT: u8 = 4;
+    const COUNT: u8 = 5;
 
     fn from_u8(v: u8) -> Self {
         match v {
@@ -19,12 +20,17 @@ impl View {
             1 => Self::Interaction,
             2 => Self::Pipeline,
             3 => Self::Texture,
+            4 => Self::Text,
             _ => unreachable!("value out of range"),
         }
     }
 
     pub fn next(self) -> Self {
         Self::from_u8((self as u8 + 1) % Self::COUNT)
+    }
+
+    fn prev(self) -> View {
+        Self::from_u8((self as u8 + Self::COUNT - 1) % Self::COUNT)
     }
 }
 
@@ -46,7 +52,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             counter: 0,
-            view: View::Pipeline,
+            view: View::Text,
             background: None,
             icon_atlas: None,
             icons: Vec::new(),
@@ -139,8 +145,13 @@ pub mod update {
     pub fn cycle_view<'a>(
         engine: &mut Engine<'a, super::Message>,
         state: &mut super::State,
+        dir: bool,
     ) -> bool {
-        state.view = state.view.clone().next();
+        if dir {
+            state.view = state.view.clone().next();
+        } else {
+            state.view = state.view.clone().prev();
+        }
         if let super::View::Texture = state.view {
             ensure_background_loaded(engine, state);
             ensure_icons_loaded(engine, state);
@@ -161,5 +172,6 @@ pub fn view(state: &State) -> Element<Message> {
         View::Interaction => demos::interaction::view(state),
         View::Pipeline => demos::pipeline::view(state),
         View::Texture => demos::texture::view(state),
+        View::Text => demos::text::view(state),
     }
 }

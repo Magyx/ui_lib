@@ -213,6 +213,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             let mut fit_cx = FitCtx {
                 globals: &self.globals,
                 ui: &mut self.ctx,
+                text: &mut self.renderer.text,
             };
             let _ = root.fit_size(&mut fit_cx);
         }
@@ -220,6 +221,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             let mut grow_cx = GrowCtx {
                 globals: &self.globals,
                 ui: &mut self.ctx,
+                text: &mut self.renderer.text,
             };
             root.grow_size(&mut grow_cx, max);
         }
@@ -227,6 +229,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             let mut place_cx = PlaceCtx {
                 globals: &self.globals,
                 ui: &mut self.ctx,
+                text: &mut self.renderer.text,
             };
             root.place(&mut place_cx, Position::splat(0));
         }
@@ -243,6 +246,9 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         {
             let mut paint_cx = PaintCtx {
                 globals: &self.globals,
+                text: &mut self.renderer.text,
+                config: &self.config,
+                texture: &mut self.renderer.textures,
             };
             root.draw(&mut paint_cx, &mut instances);
         }

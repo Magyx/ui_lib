@@ -36,12 +36,16 @@ fn update<'a>(
         Event::Platform(WindowEvent::KeyboardInput {
             event:
                 KeyEvent {
-                    physical_key: PhysicalKey::Code(KeyCode::KeyN),
+                    physical_key: PhysicalKey::Code(code),
                     state: ElementState::Pressed,
                     ..
                 },
             ..
-        }) => update::cycle_view(engine, state),
+        }) => match code {
+            KeyCode::KeyN => update::cycle_view(engine, state, true),
+            KeyCode::KeyP => update::cycle_view(engine, state, false),
+            _ => false,
+        },
         Event::Message(Message::ButtonPressed) => update::increment_counter(state),
         _ => false,
     }

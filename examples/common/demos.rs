@@ -332,3 +332,140 @@ pub mod texture {
         .einto()
     }
 }
+
+pub mod text {
+    use super::*;
+    use cosmic_text::Weight;
+    use ui::widget::Text;
+
+    pub fn view(_state: &State) -> Element<Message> {
+        use Length::{Fit, Fixed, Grow};
+
+        // Colors
+        let bg_app = Color::rgb(24, 26, 32);
+        let bg_panel = Color::rgb(34, 38, 46);
+        let bg_panel_alt = Color::rgb(40, 44, 54);
+        let fg_title = Color::rgb(235, 240, 255);
+        let fg_text = Color::rgb(210, 215, 230);
+        let accent = Color::rgb(88, 146, 255);
+
+        // --- Sidebar (fixed width) ---
+        let sidebar = Column::new(vec![
+            // Sidebar header
+            Container::new(vec![
+                Text::new("Project Nimbus", 20.0).color(fg_title).einto(),
+            ])
+            .padding(Vec4::new(16, 16, 16, 8))
+            .color(Color::TRANSPARENT)
+            .size(Size::new(Grow, Fixed(40)))
+            .einto(),
+            // Sidebar items
+            Column::new(vec![
+                Text::new("Overview", 16.0).color(fg_text).einto(),
+                Text::new("Assets", 16.0).color(fg_text).einto(),
+                Text::new("Settings", 16.0).color(fg_text).einto(),
+            ])
+            .spacing(8)
+            .padding(Vec4::new(16, 8, 16, 16))
+            .color(Color::TRANSPARENT)
+            .size(Size::new(Grow, Fit))
+            .einto(),
+        ])
+        .spacing(6)
+        .padding(Vec4::splat(8))
+        .color(bg_panel)
+        .size(Size::new(Fixed(220), Grow))
+        .einto();
+
+        // --- Top bar (fixed height) ---
+        let topbar = Row::new(vec![
+            Text::new("Dashboard", 22.0).color(fg_title).einto(),
+            // spacer
+            Rectangle::new(Size::new(Grow, Fixed(1)), Color::TRANSPARENT).einto(),
+            // a little “pill” on the right
+            Container::new(vec![Text::new("LIVE", 14.0).weight(Weight::BLACK).einto()])
+                .padding(Vec4::new(10, 6, 10, 6))
+                .color(accent)
+                .size(Size::new(Fit, Fit))
+                .einto(),
+        ])
+        .spacing(12)
+        .padding(Vec4::new(16, 10, 16, 10))
+        .color(bg_panel_alt)
+        .size(Size::new(Grow, Fixed(52)))
+        .einto();
+
+        // --- Main content ---
+        let hero_text = "This area demonstrates styled, multiline text using cosmic-text. \n\
+            The grey rectangle below acts as an image/preview placeholder. \n\
+            Resize the window to see wrapping and layout negotiation.";
+
+        let content = Column::new(vec![
+            // Title
+            Text::new("Welcome to the Showcase", 20.0)
+                .size(Size::new(Grow, Fit))
+                .color(fg_title)
+                .einto(),
+            // Body (multiline)
+            Text::new(hero_text, 16.0)
+                .size(Size::new(Grow, Fit))
+                .color(fg_text)
+                .einto(),
+            // Image/preview placeholder
+            Rectangle::new(Size::new(Grow, Fixed(240)), Color::rgb(72, 78, 90)).einto(),
+            // A couple of stat tiles
+            Row::new(vec![
+                Column::new(vec![
+                    Text::new("Builds", 16.0).color(fg_text).einto(),
+                    Text::new("128", 28.0).color(fg_title).einto(),
+                ])
+                .padding(Vec4::splat(12))
+                .color(bg_panel)
+                .size(Size::new(Grow, Fixed(88)))
+                .einto(),
+                Column::new(vec![
+                    Text::new("Warnings", 16.0).color(fg_text).einto(),
+                    Text::new("3", 28.0).color(Color::rgb(255, 206, 86)).einto(),
+                ])
+                .padding(Vec4::splat(12))
+                .color(bg_panel)
+                .size(Size::new(Grow, Fixed(88)))
+                .einto(),
+                Column::new(vec![
+                    Text::new("Errors", 16.0).color(fg_text).einto(),
+                    Text::new("0", 28.0).color(Color::rgb(76, 217, 100)).einto(),
+                ])
+                .padding(Vec4::splat(12))
+                .color(bg_panel)
+                .size(Size::new(Grow, Fixed(88)))
+                .einto(),
+            ])
+            .spacing(12)
+            .padding(Vec4::splat(0))
+            .color(Color::TRANSPARENT)
+            .size(Size::new(Grow, Fit))
+            .einto(),
+        ])
+        .spacing(12)
+        .padding(Vec4::new(16, 16, 16, 16))
+        .color(Color::TRANSPARENT)
+        .size(Size::new(Grow, Grow))
+        .einto();
+
+        // --- Page layout: sidebar | (topbar + content) ---
+        Row::new(vec![
+            sidebar,
+            Column::new(vec![topbar, content])
+                .spacing(12)
+                .padding(Vec4::splat(0))
+                .color(Color::TRANSPARENT)
+                .size(Size::new(Grow, Grow))
+                .einto(),
+        ])
+        .spacing(12)
+        .padding(Vec4::splat(12))
+        .color(bg_app)
+        .size(Size::new(Grow, Grow))
+        .einto()
+    }
+}
