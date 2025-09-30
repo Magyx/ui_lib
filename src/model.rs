@@ -69,57 +69,62 @@ define_vector!(Vec3, 3, x, y, z);
 define_vector!(Vec4, 4, x, y, z, w);
 define_vector!(Size, 2, width, height);
 define_vector!(Position, 2, x, y);
-define_vector!(Color, 4, r, g, b, a);
 
-impl Color<f32> {
-    pub const TRANSPARENT: Self = Self {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-        a: 0.0,
-    };
-    pub const WHITE: Self = Self {
-        r: 1.0,
-        g: 1.0,
-        b: 1.0,
-        a: 1.0,
-    };
-    pub const BLACK: Self = Self {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const RED: Self = Self {
-        r: 1.0,
-        g: 0.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const GREEN: Self = Self {
-        r: 0.0,
-        g: 1.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const BLUE: Self = Self {
-        r: 0.0,
-        g: 0.0,
-        b: 1.0,
-        a: 1.0,
-    };
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
+#[repr(C)]
+pub struct Color(pub u32);
 
-    pub fn from_rgb(r: u8, g: u8, b: u8) -> Self {
-        Self::new(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0)
+impl Color {
+    pub const TRANSPARENT: Self = Self::rgba(0, 0, 0, 0);
+    pub const WHITE: Self = Self::rgba(255, 255, 255, 255);
+    pub const BLACK: Self = Self::rgba(0, 0, 0, 255);
+    pub const RED: Self = Self::rgba(255, 0, 0, 255);
+    pub const GREEN: Self = Self::rgba(0, 255, 0, 255);
+    pub const BLUE: Self = Self::rgba(0, 0, 255, 255);
+
+    #[inline]
+    pub const fn splat(c: u8) -> Self {
+        Self::rgba(c, c, c, c)
     }
 
-    pub fn from_rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self::new(
-            r as f32 / 255.0,
-            g as f32 / 255.0,
-            b as f32 / 255.0,
-            a as f32 / 255.0,
-        )
+    #[inline]
+    pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
+        Self::rgba(r, g, b, 0xFF)
+    }
+
+    #[inline]
+    pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self((r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24))
+    }
+
+    #[inline]
+    pub fn as_rgba_tuple(self) -> (u8, u8, u8, u8) {
+        (self.r(), self.g(), self.b(), self.a())
+    }
+
+    #[inline]
+    pub fn as_rgba(self) -> [u8; 4] {
+        [self.r(), self.g(), self.b(), self.a()]
+    }
+
+    #[inline]
+    pub fn r(&self) -> u8 {
+        ((self.0 & 0x00_FF_00_00) >> 16) as u8
+    }
+
+    #[inline]
+    pub fn g(&self) -> u8 {
+        ((self.0 & 0x00_00_FF_00) >> 8) as u8
+    }
+
+    #[inline]
+    pub fn b(&self) -> u8 {
+        (self.0 & 0x00_00_00_FF) as u8
+    }
+
+    #[inline]
+    pub fn a(&self) -> u8 {
+        ((self.0 & 0xFF_00_00_00) >> 24) as u8
     }
 }
 

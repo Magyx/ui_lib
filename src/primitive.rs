@@ -36,12 +36,12 @@ impl Vertex {
 pub struct Primitive {
     pub position: [f32; 2],
     pub size: [f32; 2],
-    pub data1: [f32; 4],
+    pub data1: [u32; 4],
     pub data2: [u32; 4],
 }
 
 impl Primitive {
-    pub fn new(position: Position<i32>, size: Size<i32>, data1: [f32; 4], data2: [u32; 4]) -> Self {
+    pub fn new(position: Position<i32>, size: Size<i32>, data1: [u32; 4], data2: [u32; 4]) -> Self {
         Self {
             position: [position.x as f32, position.y as f32],
             size: [size.width as f32, size.height as f32],
@@ -70,7 +70,7 @@ impl Primitive {
                 wgpu::VertexAttribute {
                     offset: 16,
                     shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x4,
+                    format: wgpu::VertexFormat::Uint32x4,
                 },
                 wgpu::VertexAttribute {
                     offset: 32,
@@ -87,7 +87,7 @@ pub struct Instance {
     pub(crate) kind: PipelineKey,
     position: Position<i32>,
     size: Size<i32>,
-    data1: [f32; 4],
+    data1: [u32; 4],
     data2: [u32; 4],
 }
 
@@ -96,7 +96,7 @@ impl Instance {
         kind: PipelineKey,
         position: Position<i32>,
         size: Size<i32>,
-        data1: [f32; 4],
+        data1: [u32; 4],
         data2: [u32; 4],
     ) -> Self {
         Self {
@@ -108,12 +108,12 @@ impl Instance {
         }
     }
 
-    pub fn ui(position: Position<i32>, size: Size<i32>, color: Color<f32>) -> Self {
+    pub fn ui(position: Position<i32>, size: Size<i32>, color: Color) -> Self {
         Self {
             kind: PipelineKey::Ui,
             position,
             size,
-            data1: [color.r, color.g, color.b, color.a],
+            data1: [color.0, 0, 0, 0],
             data2: [0, 0, 0, 0],
         }
     }
@@ -121,14 +121,14 @@ impl Instance {
     pub fn ui_tex(
         position: Position<i32>,
         size: Size<i32>,
-        color: Color<f32>,
+        color: Color,
         handle: TextureHandle,
     ) -> Self {
         Self {
             kind: PipelineKey::Ui,
             position,
             size,
-            data1: [color.r, color.g, color.b, color.a],
+            data1: [color.0, 0, 0, 0],
             data2: [
                 handle.index + 1,
                 handle.generation,

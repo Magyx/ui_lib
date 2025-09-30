@@ -9,7 +9,7 @@ pub struct Row<M> {
     spacing: i32,
     position: Position<i32>,
     size: Size<Length<i32>>,
-    color: Color<f32>,
+    color: Color,
     padding: Vec4<i32>,
     min: Size<i32>,
     max: Size<i32>,
@@ -42,7 +42,7 @@ impl<M> Row<M> {
         self
     }
 
-    pub fn color(mut self, color: Color<f32>) -> Self {
+    pub fn color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }

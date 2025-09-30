@@ -10,7 +10,7 @@ pub struct Image {
     max: Size<i32>,
 
     handle: TextureHandle,
-    tint: Color<f32>,
+    tint: Color,
 }
 
 impl Image {
@@ -26,7 +26,7 @@ impl Image {
             tint: Color::WHITE,
         }
     }
-    pub fn tint(mut self, tint: Color<f32>) -> Self {
+    pub fn tint(mut self, tint: Color) -> Self {
         self.tint = tint;
         self
     }

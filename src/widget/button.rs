@@ -8,9 +8,9 @@ pub struct Button<M> {
     position: Position<i32>,
     size: Size<Length<i32>>,
 
-    normal_color: Color<f32>,
-    hover_color: Color<f32>,
-    pressed_color: Color<f32>,
+    normal_color: Color,
+    hover_color: Color,
+    pressed_color: Color,
 
     hovered: bool,
     pressed: bool,
@@ -22,7 +22,7 @@ pub struct Button<M> {
 }
 
 impl<M> Button<M> {
-    pub fn new(size: Size<Length<i32>>, color: Color<f32>) -> Self {
+    pub fn new(size: Size<Length<i32>>, color: Color) -> Self {
         Self {
             layout: None,
 
@@ -44,11 +44,11 @@ impl<M> Button<M> {
         }
     }
 
-    pub fn hover_color(mut self, c: Color<f32>) -> Self {
+    pub fn hover_color(mut self, c: Color) -> Self {
         self.hover_color = c;
         self
     }
-    pub fn pressed_color(mut self, c: Color<f32>) -> Self {
+    pub fn pressed_color(mut self, c: Color) -> Self {
         self.pressed_color = c;
         self
     }

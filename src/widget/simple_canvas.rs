@@ -78,7 +78,7 @@ impl<M> Widget<M> for SimpleCanvas<M> {
             PipelineKey::Other(self.key),
             self.position,
             self.size.into_fixed(),
-            [0.0, 0.0, 0.0, 0.0],
+            [0, 0, 0, 0],
             [0, 0, 0, 0],
         ));
     }

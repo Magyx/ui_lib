@@ -8,7 +8,7 @@ pub struct Container<M> {
     children: Vec<Element<M>>,
     position: Position<i32>,
     size: Size<Length<i32>>,
-    color: Color<f32>,
+    color: Color,
     padding: Vec4<i32>,
     min: Size<i32>,
     max: Size<i32>,
@@ -34,7 +34,7 @@ impl<M> Container<M> {
         self.size = size;
         self
     }
-    pub fn color(mut self, color: Color<f32>) -> Self {
+    pub fn color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }

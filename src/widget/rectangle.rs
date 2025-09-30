@@ -7,14 +7,14 @@ pub struct Rectangle {
     id: Id,
     position: Position<i32>,
     size: Size<Length<i32>>,
-    color: Color<f32>,
+    color: Color,
 
     min: Size<i32>,
     max: Size<i32>,
 }
 
 impl Rectangle {
-    pub fn new(size: Size<Length<i32>>, color: Color<f32>) -> Self {
+    pub fn new(size: Size<Length<i32>>, color: Color) -> Self {
         Self {
             layout: None,
 

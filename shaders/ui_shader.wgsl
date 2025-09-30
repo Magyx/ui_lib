@@ -2,7 +2,7 @@ struct VertexInput {
     // instance buffer
     @location(0) position: vec2<f32>,
     @location(1) size: vec2<f32>,
-    @location(2) color: vec4<f32>,
+    @location(2) color: vec4<u32>,
     @location(3) tex: vec4<u32>,
 
     // vertex buffer
@@ -32,12 +32,6 @@ var<push_constant> globals: Globals;
 @group(0) @binding(1) var samp: sampler;
 @group(0) @binding(2) var<storage, read> gens: array<u32>;
 
-fn unpack_unorm2x16(p: u32) -> vec2<f32> {
-    let x = f32(p & 0xFFFFu) / 65535.0;
-    let y = f32(p >> 16u) / 65535.0;
-    return vec2<f32>(x, y);
-}
-
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     let uv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
@@ -49,13 +43,13 @@ fn vs_main(in: VertexInput) -> VertexOutput {
         1.0 - (world_pos.y / globals.window_size.y) * 2.0
     );
 
-    let scale = unpack_unorm2x16(in.tex.z);
-    let offs = unpack_unorm2x16(in.tex.w);
+    let scale = unpack2x16unorm(in.tex.z);
+    let offs = unpack2x16unorm(in.tex.w);
     let uv_tex = uv * scale + offs;
 
     var out: VertexOutput;
     out.position = vec4<f32>(ndc, 0.0, 1.0);
-    out.color = in.color;
+    out.color = unpack4x8unorm(in.color[0]);
     out.uv_tex = uv_tex;
     out.slot_plus_one = in.tex.x;
     out.gen = in.tex.y;
