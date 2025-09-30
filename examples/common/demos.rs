@@ -336,7 +336,7 @@ pub mod texture {
 pub mod text {
     use super::*;
     use cosmic_text::Weight;
-    use ui::widget::Text;
+    use ui::widget::{Spacer, Text};
 
     pub fn view(_state: &State) -> Element<Message> {
         use Length::{Fit, Fixed, Grow};
@@ -380,8 +380,7 @@ pub mod text {
         // --- Top bar (fixed height) ---
         let topbar = Row::new(vec![
             Text::new("Dashboard", 22.0).color(fg_title).einto(),
-            // spacer
-            Rectangle::new(Size::new(Grow, Fixed(1)), Color::TRANSPARENT).einto(),
+            Spacer::new(Size::new(Grow, Fit)).einto(),
             // a little “pill” on the right
             Container::new(vec![Text::new("LIVE", 14.0).weight(Weight::BLACK).einto()])
                 .padding(Vec4::new(10, 6, 10, 6))

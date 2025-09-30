@@ -114,6 +114,9 @@ impl<M> DerefMut for Element<M> {
 mod rectangle;
 pub use rectangle::Rectangle;
 
+mod spacer;
+pub use spacer::Spacer;
+
 mod row;
 pub use row::Row;
 
