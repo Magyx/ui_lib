@@ -3,13 +3,6 @@ use crate::{
     widget::{Element, Length},
 };
 
-#[inline]
-pub(in crate::widget) fn clamp_size(mut s: Size<i32>, min: Size<i32>, max: Size<i32>) -> Size<i32> {
-    s.width = s.width.clamp(min.width, max.width);
-    s.height = s.height.clamp(min.height, max.height);
-    s
-}
-
 pub(in crate::widget) trait SizeField<T> {
     fn get<'a>(&self, size: &'a Size<T>) -> &'a T;
 }
@@ -49,23 +42,28 @@ pub(in crate::widget) fn equalize_sizes<M>(
 
     for (i, child) in children.iter().enumerate() {
         let layout = child.layout();
-        let (min, max, grows) = (
-            *axis.get(&layout.min),
-            *axis.get(&layout.max),
-            matches!(axis_length.get(&layout.size), Length::Grow),
-        );
 
-        let base = match *axis_length.get(&layout.size) {
-            Length::Fixed(x) => x.clamp(min, max),
-            Length::Fit => *axis.get(&layout.current_size).clamp(&min, &max),
-            Length::Grow => min,
+        let raw_min = *axis.get(&layout.min);
+        let raw_max = *axis.get(&layout.max);
+        let grows = matches!(axis_length.get(&layout.size), Length::Grow);
+
+        let (base, eff_min) = match *axis_length.get(&layout.size) {
+            Length::Fixed(x) => {
+                let b = x.clamp(raw_min, raw_max);
+                (b, b)
+            }
+            Length::Fit => {
+                let b = (*axis.get(&layout.current_size)).clamp(raw_min, raw_max);
+                (b, raw_min)
+            }
+            Length::Grow => (raw_min, raw_min),
         };
 
         allocs.push(Alloc {
             index: i,
             allocated: base,
-            min,
-            max,
+            min: eff_min,
+            max: raw_max,
             grows,
         });
 

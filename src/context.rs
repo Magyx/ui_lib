@@ -72,19 +72,7 @@ impl<M> Context<M> {
     }
 }
 
-pub struct FitCtx<'a, M> {
-    pub globals: &'a Globals,
-    pub ui: &'a mut Context<M>,
-    pub text: &'a mut TextSystem,
-}
-
-pub struct GrowCtx<'a, M> {
-    pub globals: &'a Globals,
-    pub ui: &'a mut Context<M>,
-    pub text: &'a mut TextSystem,
-}
-
-pub struct PlaceCtx<'a, M> {
+pub struct LayoutCtx<'a, M> {
     pub globals: &'a Globals,
     pub ui: &'a mut Context<M>,
     pub text: &'a mut TextSystem,

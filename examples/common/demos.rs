@@ -380,15 +380,14 @@ pub mod text {
         // --- Top bar (fixed height) ---
         let topbar = Row::new(vec![
             Text::new("Dashboard", 22.0).color(fg_title).einto(),
-            Spacer::new(Size::new(Grow, Fit)).einto(),
+            Spacer::new(Size::new(Grow, Grow)).einto(),
             // a little “pill” on the right
             Container::new(vec![Text::new("LIVE", 14.0).weight(Weight::BLACK).einto()])
                 .padding(Vec4::new(10, 6, 10, 6))
                 .color(accent)
-                .size(Size::new(Fit, Fit))
+                .size(Size::new(Fit, Grow))
                 .einto(),
         ])
-        .spacing(12)
         .padding(Vec4::new(16, 10, 16, 10))
         .color(bg_panel_alt)
         .size(Size::new(Grow, Fixed(52)))
@@ -398,6 +397,8 @@ pub mod text {
         let hero_text = "This area demonstrates styled, multiline text using cosmic-text. \n\
             The grey rectangle below acts as an image/preview placeholder. \n\
             Resize the window to see wrapping and layout negotiation.";
+        let long = "This is a very very very long line of text that should wrap \
+                when the container is narrower than the preferred single-line width.";
 
         let content = Column::new(vec![
             // Title
@@ -410,6 +411,18 @@ pub mod text {
                 .size(Size::new(Grow, Fit))
                 .color(fg_text)
                 .einto(),
+            // Body (fit checks)
+            Column::new(vec![
+                Text::new(long, 16.0).size(Size::new(Fit, Fit)).einto(),
+                Text::new(long, 16.0).size(Size::new(Grow, Fit)).einto(),
+                Text::new(long, 16.0)
+                    .size(Size::new(Grow, Grow))
+                    .max(Size::new(270, i32::MAX))
+                    .einto(),
+            ])
+            .spacing(12)
+            .padding(Vec4::new(0, 0, 0, 12))
+            .einto(),
             // Image/preview placeholder
             Rectangle::new(Size::new(Grow, Fixed(240)), Color::rgb(72, 78, 90)).einto(),
             // A couple of stat tiles
@@ -442,7 +455,7 @@ pub mod text {
             .spacing(12)
             .padding(Vec4::splat(0))
             .color(Color::TRANSPARENT)
-            .size(Size::new(Grow, Fit))
+            .size(Size::new(Grow, Grow))
             .einto(),
         ])
         .spacing(12)

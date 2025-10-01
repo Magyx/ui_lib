@@ -4,6 +4,8 @@ use cosmic_text::{Attrs, Buffer, Family, Metrics, Shaping, Style, Weight, Wrap};
 pub struct Text<'a> {
     layout: Option<Layout>,
     buffer: Option<Buffer>,
+    preferred_size: Option<Size<i32>>,
+    wrapped_size: Option<Size<i32>>,
 
     id: Id,
     text: &'a str,
@@ -21,6 +23,8 @@ impl<'a> Text<'a> {
         Self {
             layout: None,
             buffer: None,
+            preferred_size: None,
+            wrapped_size: None,
 
             id: crate::context::next_id(),
             text: content,
@@ -89,94 +93,135 @@ impl<'a, M> Widget<M> for Text<'a> {
         self.layout.expect(LAYOUT_ERROR)
     }
 
-    fn fit_size(&mut self, ctx: &mut FitCtx<M>) -> Layout {
-        let font_system = ctx.text.font_system_mut();
-
-        let metrics = Metrics::relative(self.font_size, self.line_height);
-        let mut buffer = Buffer::new(font_system, metrics);
-
-        buffer.set_wrap(font_system, Wrap::WordOrGlyph);
-        buffer.set_text(font_system, self.text, &self.atributes, Shaping::Advanced);
-        buffer.set_size(font_system, None, None);
-        buffer.shape_until_scroll(font_system, false);
-
-        let mut line_w: f32 = 0.0;
-        let mut line_h: f32 = 0.0;
-        for run in buffer.layout_runs() {
-            line_w = line_w.max(run.line_w);
-            line_h = line_h.max(run.line_height);
-        }
-        let base = Size::new(line_w.ceil() as i32, line_h.ceil() as i32);
-
-        let min = self.min;
-        let max = self.max;
-
-        let current = Size::new(
-            base.width.clamp(min.width, max.width),
-            base.height.clamp(min.height, max.height),
-        );
-
-        self.layout = Some(Layout {
-            size: self.size,
-            current_size: current,
-            min,
-            max,
-        });
-        self.buffer = Some(buffer);
-        self.layout.unwrap()
-    }
-
-    fn grow_size(&mut self, ctx: &mut GrowCtx<M>, parent: Size<i32>) {
-        let target_w = match self.size.width {
-            Length::Grow => parent.width,
-            Length::Fixed(w) => w,
-            Length::Fit => {
-                let base = self.layout.as_ref().unwrap().current_size.width;
-                base.min(parent.width)
-            }
-        };
-        let cap_h = match self.size.height {
-            Length::Grow => parent.height,
-            Length::Fixed(h) => h,
-            Length::Fit => i32::MAX,
-        };
-
+    fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
         let fs = ctx.text.font_system_mut();
-        let buffer = self.buffer.as_mut().expect("grow called before fit");
+
+        if self.buffer.is_none() {
+            let metrics = Metrics::relative(self.font_size, self.line_height);
+            self.buffer = Some(Buffer::new(fs, metrics));
+        }
+        let buffer = self.buffer.as_mut().unwrap();
 
         buffer.set_wrap(fs, Wrap::WordOrGlyph);
+        buffer.set_text(fs, self.text, &self.atributes, Shaping::Advanced);
+
+        // Preferred
+        buffer.set_size(fs, None, None);
+        buffer.shape_until_scroll(fs, false);
+
+        let mut pref_w = 0f32;
+        let mut line_h = 0f32;
+        for run in buffer.layout_runs() {
+            pref_w = pref_w.max(run.line_w);
+            line_h += run.line_height;
+        }
+        let pref_w = pref_w.ceil() as i32;
+        let line_h = line_h.ceil() as i32;
+        self.preferred_size = Some(Size::new(pref_w, line_h));
+
+        let min_w = self.min.width.max(1).min(self.max.width);
+        let current_w = pref_w.clamp(self.min.width, self.max.width);
+
+        let l = Layout {
+            size: self.size,
+            current_size: Size::new(
+                current_w,
+                self.layout.map(|l| l.current_size.height).unwrap_or(line_h),
+            ),
+            min: Size::new(min_w, self.min.height.min(self.max.height)),
+            max: self.max,
+        };
+        self.layout = Some(l);
+        l
+    }
+
+    fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, max_w: i32) {
+        let l = self.layout.as_ref().expect(LAYOUT_ERROR);
+        let fs = ctx.text.font_system_mut();
+        let buffer = self.buffer.as_mut().expect("fit_width must run first");
+        let pref = self
+            .preferred_size
+            .as_ref()
+            .expect("preferred_size missing");
+
+        let mut target_w = match self.size.width {
+            Length::Grow => max_w,
+            Length::Fixed(w) => w,
+            Length::Fit => pref.width,
+        };
+        target_w = target_w.max(l.min.width).min(self.max.width).min(max_w);
+
         buffer.set_size(fs, Some(target_w as f32), None);
         buffer.shape_until_scroll(fs, false);
 
-        let mut total_h: f32 = 0.0;
-        let mut content_w: f32 = 0.0;
+        let mut shaped_w = 0f32;
+        let mut total_h = 0f32;
         for run in buffer.layout_runs() {
+            shaped_w = shaped_w.max(run.line_w);
             total_h += run.line_height;
-            content_w = content_w.max(run.line_w);
         }
+        let shaped_w = shaped_w.ceil() as i32;
+        let natural_h = total_h.ceil() as i32;
 
-        let mut final_w = target_w.max(content_w.ceil() as i32);
-        let mut final_h = total_h.ceil() as i32;
+        let final_w = target_w
+            .max(shaped_w)
+            .max(l.min.width)
+            .min(self.max.width)
+            .min(max_w);
+        self.wrapped_size = Some(Size::new(final_w, natural_h));
 
-        let l = self.layout.as_ref().unwrap();
-        final_w = final_w.clamp(l.min.width, l.max.width);
-        final_h = final_h.clamp(l.min.height, l.max.height).min(cap_h);
-
-        self.size.width = Length::Fixed(final_w);
-        self.size.height = Length::Fixed(final_h);
         if let Some(m) = self.layout.as_mut() {
-            m.current_size = Size::new(final_w, final_h);
+            m.current_size.width = final_w;
         }
     }
 
-    fn place(&mut self, ctx: &mut PlaceCtx<M>, position: Position<i32>) -> Size<i32> {
+    fn fit_height(&mut self, _ctx: &mut LayoutCtx<M>) -> Layout {
+        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
+        let natural = self.wrapped_size.unwrap();
+
+        let min_h = self.min.height.min(self.max.height);
+        let current_h = natural.height.clamp(min_h, self.max.height);
+
+        l.min.height = min_h;
+        l.current_size.height = current_h;
+        *l
+    }
+
+    fn grow_height(&mut self, _ctx: &mut LayoutCtx<M>, max_h: i32) {
+        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
+        let natural_h = self
+            .wrapped_size
+            .map(|s| s.height)
+            .unwrap_or(l.current_size.height);
+
+        // Resolve by Length
+        let mut target_h = match self.size.height {
+            Length::Fixed(h) => h,
+            Length::Fit => natural_h,
+            Length::Grow => max_h,
+        };
+
+        target_h = target_h
+            .max(self.min.height)
+            .max(natural_h)
+            .min(self.max.height)
+            .min(max_h);
+
+        l.current_size.height = target_h;
+
+        self.size.height = Length::Fixed(target_h);
+        self.size.width = Length::Fixed(l.current_size.width);
+    }
+
+    fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32> {
         self.position = position;
-        self.size.into_fixed()
+        <Text as Widget<M>>::layout(self).current_size
     }
 
     fn draw(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         const BASE_COLOR: cosmic_text::Color = cosmic_text::Color::rgba(255, 255, 255, 255);
         let buffer = self.buffer.as_ref().expect("draw called before fit");
+        let size = <Text as Widget<M>>::layout(self).current_size;
         for run in buffer.layout_runs() {
             for glyph in run.glyphs {
                 let (Position { x: left, y: top }, Size { width, height }, cache_key) =

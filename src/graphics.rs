@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Instant};
 
 use crate::{
     consts::*,
-    context::{Context, EventCtx, FitCtx, GrowCtx, PaintCtx, PlaceCtx},
+    context::{Context, EventCtx, LayoutCtx, PaintCtx},
     event::{Event, ToEvent},
     model::*,
     primitive::{Primitive, Vertex},
@@ -18,10 +18,10 @@ use crate::{
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Globals {
     window_size: [f32; 2], // pixels
-    pub time: f32,         // seconds since start
-    pub delta_time: f32,   // seconds since last frame
     mouse_pos: [f32; 2],   // pixels
     mouse_buttons: u32,    // bit 0: left, bit 1: right (etc.)
+    pub time: f32,         // seconds since start
+    pub delta_time: f32,   // seconds since last frame
     pub frame: u32,        // frame counter
 }
 
@@ -210,47 +210,37 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         .max(Size::new(1, 1));
 
         {
-            let mut fit_cx = FitCtx {
+            let mut layout_ctx = LayoutCtx {
                 globals: &self.globals,
                 ui: &mut self.ctx,
                 text: &mut self.renderer.text,
             };
-            let _ = root.fit_size(&mut fit_cx);
-        }
-        {
-            let mut grow_cx = GrowCtx {
-                globals: &self.globals,
-                ui: &mut self.ctx,
-                text: &mut self.renderer.text,
-            };
-            root.grow_size(&mut grow_cx, max);
-        }
-        {
-            let mut place_cx = PlaceCtx {
-                globals: &self.globals,
-                ui: &mut self.ctx,
-                text: &mut self.renderer.text,
-            };
-            root.place(&mut place_cx, Position::splat(0));
+            _ = root.fit_width(&mut layout_ctx);
+            root.grow_width(&mut layout_ctx, max.width);
+
+            _ = root.fit_height(&mut layout_ctx);
+            root.grow_height(&mut layout_ctx, max.height);
+
+            root.place(&mut layout_ctx, Position::splat(0));
         }
 
-        let mut event_cx = EventCtx {
+        let mut event_ctx = EventCtx {
             globals: &self.globals,
             ui: &mut self.ctx,
         };
-        root.handle(&mut event_cx);
+        root.handle(&mut event_ctx);
 
         self.ctx.take_redraw();
 
         let mut instances = Vec::new();
         {
-            let mut paint_cx = PaintCtx {
+            let mut paint_ctx = PaintCtx {
                 globals: &self.globals,
                 text: &mut self.renderer.text,
                 config: &self.config,
                 texture: &mut self.renderer.textures,
             };
-            root.draw(&mut paint_cx, &mut instances);
+            root.draw(&mut paint_ctx, &mut instances);
         }
 
         self.globals.frame = self.globals.frame.wrapping_add(1);

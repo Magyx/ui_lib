@@ -5,7 +5,7 @@ use crate::{context::*, model::*, primitive::Instance};
 
 mod helpers;
 
-pub const LAYOUT_ERROR: &str = "Layout not set during fit_size!";
+pub const LAYOUT_ERROR: &str = "Layout not set during fit_width!";
 
 #[derive(Debug, Copy, Clone)]
 pub struct Layout {
@@ -51,13 +51,24 @@ impl<U> Size<Length<U>> {
     }
 }
 
+impl<U> Size<U> {
+    pub fn from_fixed(self) -> Size<Length<U>> {
+        Size {
+            width: Length::Fixed(self.width),
+            height: Length::Fixed(self.height),
+        }
+    }
+}
+
 pub trait Widget<M> {
     fn layout(&self) -> Layout;
 
     /* ----- layout ----- */
-    fn fit_size(&mut self, ctx: &mut FitCtx<M>) -> Layout;
-    fn grow_size(&mut self, ctx: &mut GrowCtx<M>, max: Size<i32>);
-    fn place(&mut self, ctx: &mut PlaceCtx<M>, position: Position<i32>) -> Size<i32>;
+    fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout;
+    fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, parent_width: i32);
+    fn fit_height(&mut self, ctx: &mut LayoutCtx<M>) -> Layout;
+    fn grow_height(&mut self, ctx: &mut LayoutCtx<M>, parent_height: i32);
+    fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32>;
 
     /* ----- paint ----- */
     fn draw(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);

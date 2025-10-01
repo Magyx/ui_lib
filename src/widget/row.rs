@@ -1,5 +1,5 @@
 use super::*;
-use crate::widget::helpers::{Width, clamp_size, equalize_sizes};
+use crate::widget::helpers::{Width, equalize_sizes};
 
 pub struct Row<M> {
     layout: Option<Layout>,
@@ -72,78 +72,125 @@ impl<M: 'static> Widget<M> for Row<M> {
         self.layout.expect(LAYOUT_ERROR)
     }
 
-    fn fit_size(&mut self, ctx: &mut FitCtx<M>) -> Layout {
+    fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
         let width_padding = self.padding.x + self.padding.z;
-        let height_padding = self.padding.y + self.padding.w;
 
-        let mut min_width = (self.children.len() as i32 - 1) * self.spacing + width_padding;
-        let mut min_height = 0;
+        let mut min_w = (self.children.len() as i32 - 1) * self.spacing + width_padding;
         for child in self.children.iter_mut() {
-            let Layout { current_size, .. } = child.fit_size(ctx);
-            min_width += current_size.width;
-            if min_height < current_size.height {
-                min_height = current_size.height;
-            }
+            let Layout { current_size, .. } = child.fit_width(ctx);
+            min_w += current_size.width;
         }
-        min_height += height_padding;
 
         if matches!(self.size.width, Length::Fit) {
-            self.size.width = Length::Fixed(min_width);
-        }
-        if matches!(self.size.height, Length::Fit) {
-            self.size.height = Length::Fixed(min_height);
+            self.size.width = Length::Fixed(min_w);
         }
 
-        let intrinsic_min = Size::new(min_width, min_height);
-        let min = Size::new(
-            intrinsic_min.width.max(self.min.width),
-            intrinsic_min.height.max(self.min.height),
-        );
-        self.layout = Some(Layout {
+        let resolved_w = self
+            .size
+            .into_fixed()
+            .width
+            .clamp(min_w.max(self.min.width), self.max.width);
+
+        let l = Layout {
             size: self.size,
-            current_size: clamp_size(self.size.into_fixed(), min, self.max),
-            min,
+            current_size: Size::new(resolved_w, 0),
+            min: Size::new(min_w.max(self.min.width), self.min.height),
             max: self.max,
-        });
-        self.layout.unwrap()
+        };
+        self.layout = Some(l);
+        l
     }
 
-    fn grow_size(&mut self, ctx: &mut GrowCtx<M>, max: Size<i32>) {
-        if let Length::Grow = self.size.width {
-            self.size.width = Length::Fixed(max.width);
-        }
-        if let Length::Grow = self.size.height {
-            self.size.height = Length::Fixed(max.height);
-        }
+    fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, parent_width: i32) {
+        let l = self.layout.expect(LAYOUT_ERROR);
 
-        let (min, max) = {
-            let layout = self.layout.expect(LAYOUT_ERROR);
-            (layout.min, layout.max)
-        };
-        let outer = clamp_size(self.size.into_fixed(), min, max);
-        self.size.width = Length::Fixed(outer.width);
-        self.size.height = Length::Fixed(outer.height);
+        let target_w = match self.size.width {
+            Length::Grow => parent_width,
+            Length::Fixed(w) => w,
+            Length::Fit => l.current_size.width,
+        }
+        .max(l.min.width)
+        .min(l.max.width)
+        .min(parent_width);
 
-        let inner_width = outer.width
+        self.size.width = Length::Fixed(target_w);
+
+        let inner_w = target_w
             - (self.children.len() as i32 - 1) * self.spacing
             - self.padding.x
             - self.padding.z;
-        let inner_height = outer.height - self.padding.y - self.padding.w;
 
-        let equalized_sizes = equalize_sizes(&self.children, Width, Width, inner_width);
-
-        for (i, current) in equalized_sizes {
-            self.children[i].grow_size(ctx, Size::new(current, inner_height));
+        let eq = equalize_sizes(&self.children, Width, Width, inner_w.max(0));
+        for (i, w) in eq {
+            self.children[i].grow_width(ctx, w);
         }
 
-        if let Some(layout) = self.layout.as_mut() {
-            layout.current_size = outer;
+        if let Some(lay) = self.layout.as_mut() {
+            lay.current_size.width = target_w;
         }
     }
 
-    fn place(&mut self, ctx: &mut PlaceCtx<M>, position: Position<i32>) -> Size<i32> {
-        self.position = position;
+    fn fit_height(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
+        let height_padding = self.padding.y + self.padding.w;
 
+        let mut max_child_h = 0;
+        for child in self.children.iter_mut() {
+            let Layout { current_size, .. } = child.fit_height(ctx);
+            max_child_h = max_child_h.max(current_size.height);
+        }
+        let min_h = max_child_h + height_padding;
+
+        if matches!(self.size.height, Length::Fit) {
+            self.size.height = Length::Fixed(min_h);
+        }
+
+        let prev = self.layout.expect(LAYOUT_ERROR);
+        let prev_w = prev.current_size.width;
+
+        let requested_h = match self.size.height {
+            Length::Fixed(h) => h,
+            _ => min_h,
+        };
+        let resolved_h = requested_h
+            .max(self.min.height.max(min_h))
+            .min(self.max.height);
+
+        let l = Layout {
+            size: self.size,
+            current_size: Size::new(prev_w, resolved_h),
+            min: Size::new(prev.min.width, self.min.height.max(min_h)),
+            max: self.max,
+        };
+        self.layout = Some(l);
+        l
+    }
+
+    fn grow_height(&mut self, ctx: &mut LayoutCtx<M>, parent_height: i32) {
+        let l = self.layout.expect(LAYOUT_ERROR);
+
+        let target_h = match self.size.height {
+            Length::Grow => parent_height,
+            Length::Fixed(h) => h,
+            Length::Fit => l.current_size.height,
+        }
+        .max(l.min.height)
+        .min(l.max.height)
+        .min(parent_height);
+
+        self.size.height = Length::Fixed(target_h);
+
+        let inner_h = (target_h - self.padding.y - self.padding.w).max(0);
+        for child in self.children.iter_mut() {
+            child.grow_height(ctx, inner_h);
+        }
+
+        if let Some(lay) = self.layout.as_mut() {
+            lay.current_size.height = target_h;
+        }
+    }
+
+    fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32> {
+        self.position = position;
         let mut cursor = Position::new(
             self.position.x + self.padding.x,
             self.position.y + self.padding.y,
@@ -152,14 +199,13 @@ impl<M: 'static> Widget<M> for Row<M> {
             let child_size = child.place(ctx, cursor);
             cursor.x += child_size.width + self.spacing;
         }
-
-        self.size.into_fixed()
+        self.layout().current_size
     }
 
     fn draw(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         instances.push(Instance::ui(
             self.position,
-            self.size.into_fixed(),
+            self.layout().current_size,
             self.color,
         ));
         for child in self.children.iter() {
