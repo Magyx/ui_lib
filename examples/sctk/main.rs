@@ -1,6 +1,7 @@
 use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer};
+use smol_str::ToSmolStr;
 use ui::{
-    event::Event,
+    event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::Engine,
     model::Size,
     pipeline_factories,
@@ -12,8 +13,6 @@ use ui::{
 mod common;
 use common::{Message, State, pipeline::PlanetPipeline, view};
 
-use crate::common::update;
-
 fn update<'a>(
     engine: &mut Engine<'a, Message>,
     event: &Event<Message, SctkEvent>,
@@ -21,14 +20,19 @@ fn update<'a>(
     loop_ctl: &SctkLoop,
 ) -> bool {
     match event {
-        Event::Platform(SctkEvent::Closed) | Event::KeyboardInput { char: b'q' } => {
+        Event::Platform(SctkEvent::Closed) => {
             loop_ctl.exit();
             false
         }
-        Event::KeyboardInput { char: b'n' } => update::cycle_view(engine, state, true),
-        Event::KeyboardInput { char: b'p' } => update::cycle_view(engine, state, false),
-        Event::Message(Message::ButtonPressed) => update::increment_counter(state),
-        _ => false,
+        Event::Key(KeyEvent {
+            state: KeyState::Pressed,
+            logical_key: k,
+            ..
+        }) if k == &LogicalKey::Escape || k == &LogicalKey::Character("q".to_smolstr()) => {
+            loop_ctl.exit();
+            false
+        }
+        _ => common::update(engine, event, state),
     }
 }
 
@@ -40,13 +44,13 @@ fn main() -> anyhow::Result<()> {
     }
 
     let opts = LayerOptions {
-        layer: Layer::Top,
-        size: Size::new(0, 100),
-        anchors: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
-        exclusive_zone: 100,
+        layer: Layer::Background,
+        size: Size::new(0, 0),
+        anchors: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+        exclusive_zone: -1,
         keyboard_interactivity: KeyboardInteractivity::OnDemand,
         namespace: Some("ui-example"),
-        output: Some(OutputSelector::Index(2)),
+        output: Some(OutputSelector::HighestScale),
     };
 
     ui::sctk::run_app_with::<Message, State, DefaultHandler, _, _, _>(

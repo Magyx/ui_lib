@@ -351,12 +351,13 @@ impl KeyboardHandler for SctkState {
         _serial: u32,
         event: KeyEvent,
     ) {
-        let ch = event
-            .utf8
-            .as_ref()
-            .and_then(|s| s.bytes().next())
-            .unwrap_or(0);
-        self.events.push(SctkEvent::Keyboard { ch });
+        self.events.push(SctkEvent::Key {
+            raw_code: event.raw_code,
+            keysym: event.keysym,
+            utf8: event.utf8.clone(),
+            pressed: true,
+            repeat: false,
+        });
     }
 
     fn release_key(
@@ -365,8 +366,15 @@ impl KeyboardHandler for SctkState {
         _qh: &QueueHandle<Self>,
         _keyboard: &WlKeyboard,
         _serial: u32,
-        _event: KeyEvent,
+        event: KeyEvent,
     ) {
+        self.events.push(SctkEvent::Key {
+            raw_code: event.raw_code,
+            keysym: event.keysym,
+            utf8: None,
+            pressed: false,
+            repeat: false,
+        });
     }
 
     fn repeat_key(
@@ -375,8 +383,15 @@ impl KeyboardHandler for SctkState {
         _qh: &QueueHandle<Self>,
         _keyboard: &WlKeyboard,
         _serial: u32,
-        _event: KeyEvent,
+        event: KeyEvent,
     ) {
+        self.events.push(SctkEvent::Key {
+            raw_code: event.raw_code,
+            keysym: event.keysym,
+            utf8: event.utf8.clone(),
+            pressed: true,
+            repeat: true,
+        });
     }
 
     fn update_modifiers(
@@ -385,10 +400,11 @@ impl KeyboardHandler for SctkState {
         _qh: &QueueHandle<Self>,
         _keyboard: &wayland_client::protocol::wl_keyboard::WlKeyboard,
         _serial: u32,
-        _modifiers: Modifiers,
+        modifiers: Modifiers,
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
+        self.events.push(SctkEvent::Modifiers(modifiers));
     }
 }
 

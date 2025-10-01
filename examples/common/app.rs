@@ -1,4 +1,8 @@
-use ui::widget::Element;
+use ui::{
+    event::{KeyEvent, KeyState, LogicalKey},
+    graphics::Engine,
+    widget::Element,
+};
 
 use super::demos;
 
@@ -22,6 +26,16 @@ impl View {
             3 => Self::Texture,
             4 => Self::Text,
             _ => unreachable!("value out of range"),
+        }
+    }
+
+    fn to_str(&self) -> &str {
+        match self {
+            View::Layout => "Layout",
+            View::Interaction => "Interaction",
+            View::Pipeline => "Pipeline",
+            View::Texture => "Texture",
+            View::Text => "Text",
         }
     }
 
@@ -60,7 +74,7 @@ impl Default for State {
     }
 }
 
-pub mod update {
+mod update {
     use ui::graphics::Engine;
 
     pub fn ensure_icons_loaded<'a>(
@@ -163,6 +177,26 @@ pub mod update {
     pub fn increment_counter(state: &mut super::State) -> bool {
         state.counter += 1;
         true
+    }
+}
+
+pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
+    engine: &mut Engine<'a, Message>,
+    event: &crate::Event<Message, E>,
+    state: &mut State,
+) -> bool {
+    match event {
+        crate::Event::Key(KeyEvent {
+            state: KeyState::Pressed,
+            logical_key: LogicalKey::Character(s),
+            ..
+        }) => match s.as_str() {
+            "n" => update::cycle_view(engine, state, true),
+            "p" => update::cycle_view(engine, state, false),
+            _ => false,
+        },
+        crate::Event::Message(Message::ButtonPressed) => update::increment_counter(state),
+        _ => false,
     }
 }
 

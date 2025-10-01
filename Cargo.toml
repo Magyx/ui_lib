@@ -16,6 +16,7 @@ cosmic-text = { version = "0.14.2", default-features = false, features = [
   "fontconfig",
   "swash",
 ] }
+smol_str = { version = "0.3.2", default-features = false }
 
 # Env Logging dependencies
 env_logger = { version = "0.11.8", default-features = false, optional = true }

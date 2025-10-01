@@ -1,16 +1,15 @@
-use ui::{event::Event, graphics::Engine, pipeline_factories, render::pipeline::Pipeline};
-use winit::{
-    event::{ElementState, KeyEvent, WindowEvent},
-    event_loop::ActiveEventLoop,
-    keyboard::{KeyCode, PhysicalKey},
-    window::WindowAttributes,
+use smol_str::ToSmolStr;
+use ui::{
+    event::{Event, KeyEvent, KeyState, LogicalKey},
+    graphics::Engine,
+    pipeline_factories,
+    render::pipeline::Pipeline,
 };
+use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::WindowAttributes};
 
 #[path = "../common/mod.rs"]
 mod common;
 use common::{Message, State, pipeline::PlanetPipeline, view};
-
-use crate::common::update;
 
 fn update<'a>(
     engine: &mut Engine<'a, Message>,
@@ -19,35 +18,19 @@ fn update<'a>(
     event_loop: &ActiveEventLoop,
 ) -> bool {
     match event {
-        Event::Platform(
-            WindowEvent::CloseRequested
-            | WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(KeyCode::Escape),
-                        ..
-                    },
-                ..
-            },
-        ) => {
+        Event::Platform(WindowEvent::CloseRequested) => {
             event_loop.exit();
             false
         }
-        Event::Platform(WindowEvent::KeyboardInput {
-            event:
-                KeyEvent {
-                    physical_key: PhysicalKey::Code(code),
-                    state: ElementState::Pressed,
-                    ..
-                },
+        Event::Key(KeyEvent {
+            state: KeyState::Pressed,
+            logical_key: k,
             ..
-        }) => match code {
-            KeyCode::KeyN => update::cycle_view(engine, state, true),
-            KeyCode::KeyP => update::cycle_view(engine, state, false),
-            _ => false,
-        },
-        Event::Message(Message::ButtonPressed) => update::increment_counter(state),
-        _ => false,
+        }) if k == &LogicalKey::Escape || k == &LogicalKey::Character("q".to_smolstr()) => {
+            event_loop.exit();
+            false
+        }
+        _ => common::update(engine, event, state),
     }
 }
 

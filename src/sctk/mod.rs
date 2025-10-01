@@ -17,7 +17,7 @@ use smithay_client_toolkit::{
 use wayland_client::{Proxy, protocol::wl_surface::WlSurface};
 
 use crate::{
-    event::{Event, ToEvent},
+    event::{Event, KeyEvent, KeyLocation, KeyState, Modifiers, PhysicalKey, ToEvent},
     graphics::Engine,
     model::{Position, Size},
     render::PipelineFactoryFn,
@@ -75,34 +75,28 @@ impl<'a> Default for LayerOptions<'a> {
     }
 }
 
-/// Loop control, analogous to winit's `ActiveEventLoop` (shared borrow in `update`).
-pub struct SctkLoop {
-    exit: Cell<bool>,
-}
-
-impl SctkLoop {
-    fn new() -> Self {
-        Self {
-            exit: Cell::new(false),
-        }
-    }
-    pub fn exit(&self) {
-        self.exit.set(true);
-    }
-    pub fn should_exit(&self) -> bool {
-        self.exit.get()
-    }
-}
-
 /// Platform event type for the SCTK backend.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SctkEvent {
     Redraw,
-    Resized { size: Size<u32> },
-    PointerMoved { pos: Position<f32> },
+    Resized {
+        size: Size<u32>,
+    },
+    PointerMoved {
+        pos: Position<f32>,
+    },
     PointerDown,
     PointerUp,
-    Keyboard { ch: u8 },
+
+    Key {
+        raw_code: u32,
+        keysym: smithay_client_toolkit::seat::keyboard::Keysym,
+        utf8: Option<String>,
+        pressed: bool,
+        repeat: bool,
+    },
+
+    Modifiers(smithay_client_toolkit::seat::keyboard::Modifiers),
     Closed,
     Message(Arc<Mutex<Option<Box<dyn Any + Send>>>>),
 }
@@ -121,8 +115,43 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
             SctkEvent::PointerMoved { pos } => Event::CursorMoved { position: *pos },
             SctkEvent::PointerDown => Event::MouseInput { mouse_down: true },
             SctkEvent::PointerUp => Event::MouseInput { mouse_down: false },
-            SctkEvent::Keyboard { ch } => Event::KeyboardInput { char: *ch },
+
+            SctkEvent::Key {
+                raw_code,
+                keysym,
+                utf8,
+                pressed,
+                repeat,
+            } => {
+                let state = if *pressed {
+                    KeyState::Pressed
+                } else {
+                    KeyState::Released
+                };
+                let logical_key = helpers::map_keysym_to_logical(*keysym, utf8.as_deref());
+                let physical_key = PhysicalKey::Code(*raw_code);
+
+                Event::Key(KeyEvent {
+                    state,
+                    repeat: *repeat,
+                    logical_key,
+                    physical_key,
+                    location: KeyLocation::Standard,
+                    modifiers: Modifiers::default(),
+                })
+            }
+
+            SctkEvent::Modifiers(m) => Event::ModifiersChanged(Modifiers {
+                shift: m.shift,
+                control: m.ctrl,
+                alt: m.alt,
+                super_: m.logo,
+                caps_lock: Some(m.caps_lock),
+                num_lock: Some(m.num_lock),
+            }),
+
             SctkEvent::Closed => Event::Platform(SctkEvent::Closed),
+
             SctkEvent::Message(slot) => {
                 if let Some(m) = slot.lock().unwrap().take() {
                     if let Ok(m) = m.downcast::<M>() {
@@ -135,6 +164,25 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
                 }
             }
         }
+    }
+}
+
+/// Loop control, analogous to winit's `ActiveEventLoop` (shared borrow in `update`).
+pub struct SctkLoop {
+    exit: Cell<bool>,
+}
+
+impl SctkLoop {
+    fn new() -> Self {
+        Self {
+            exit: Cell::new(false),
+        }
+    }
+    pub fn exit(&self) {
+        self.exit.set(true);
+    }
+    pub fn should_exit(&self) -> bool {
+        self.exit.get()
     }
 }
 
