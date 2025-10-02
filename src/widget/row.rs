@@ -116,7 +116,7 @@ impl<M: 'static> Widget<M> for Row<M> {
         self.size.width = Length::Fixed(target_w);
 
         let inner_w = target_w
-            - (self.children.len() as i32 - 1) * self.spacing
+            - (self.children.len() as i32 - 1).max(0) * self.spacing
             - self.padding.x
             - self.padding.z;
 
