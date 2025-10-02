@@ -67,9 +67,17 @@ impl<M: 'static> Widget<M> for Column<M> {
     fn id(&self) -> Id {
         self.id
     }
+    fn position(&self) -> &Position<i32> {
+        &self.position
+    }
+    fn layout(&self) -> &Layout {
+        self.layout.as_ref().expect(LAYOUT_ERROR)
+    }
 
-    fn layout(&self) -> Layout {
-        self.layout.expect(LAYOUT_ERROR)
+    fn for_each_child(&self, f: &mut dyn for<'a> FnMut(&'a dyn Widget<M>)) {
+        for child in &self.children {
+            f(child.as_ref());
+        }
     }
 
     fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
@@ -202,15 +210,12 @@ impl<M: 'static> Widget<M> for Column<M> {
         self.layout().current_size
     }
 
-    fn draw(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+    fn draw_self(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         instances.push(Instance::ui(
             self.position,
             self.layout().current_size,
             self.color,
         ));
-        for child in self.children.iter() {
-            child.draw(ctx, instances);
-        }
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {

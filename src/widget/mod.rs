@@ -7,6 +7,13 @@ mod helpers;
 
 pub const LAYOUT_ERROR: &str = "Layout not set during fit_width!";
 
+pub mod internal {
+    #[doc(hidden)]
+    pub struct PaintToken(());
+
+    pub(crate) const PAINT_TOKEN: PaintToken = PaintToken(());
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct Layout {
     pub size: Size<Length<i32>>,
@@ -61,7 +68,9 @@ impl<U> Size<U> {
 }
 
 pub trait Widget<M> {
-    fn layout(&self) -> Layout;
+    fn id(&self) -> Id;
+    fn position(&self) -> &Position<i32>;
+    fn layout(&self) -> &Layout;
 
     /* ----- layout ----- */
     fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout;
@@ -71,10 +80,47 @@ pub trait Widget<M> {
     fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32>;
 
     /* ----- paint ----- */
-    fn draw(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
+    fn draw_self(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
+
+    #[doc(hidden)]
+    fn for_each_child(&self, f: &mut dyn for<'a> FnMut(&'a dyn Widget<M>)) {
+        let _ = f;
+    }
+    #[doc(hidden)]
+    fn after_draw(
+        &self,
+        ctx: &mut PaintCtx,
+        instances: &mut Vec<Instance>,
+        t: &internal::PaintToken,
+    ) {
+        let pos = *self.position();
+        let size = self.layout().current_size - 1;
+        let opos = Position::new(pos.x + size.width, pos.y + size.height);
+
+        instances.push(Instance::ui(pos, Size::new(size.width, 1), Color::RED));
+        instances.push(Instance::ui(pos, Size::new(1, size.height), Color::RED));
+        instances.push(Instance::ui(opos, Size::new(-size.width, 1), Color::RED));
+        instances.push(Instance::ui(opos, Size::new(1, -size.height), Color::RED));
+    }
+    #[doc(hidden)]
+    fn __paint(
+        &self,
+        ctx: &mut PaintCtx,
+        instances: &mut Vec<Instance>,
+        t: &internal::PaintToken,
+        debug_on: bool,
+    ) {
+        self.draw_self(ctx, instances);
+
+        let mut each = |child: &dyn Widget<M>| child.__paint(ctx, instances, t, debug_on);
+        self.for_each_child(&mut each);
+
+        if debug_on {
+            self.after_draw(ctx, instances, t);
+        }
+    }
 
     /* ----- interaction ----- */
-    fn id(&self) -> Id;
     fn handle(&mut self, ctx: &mut EventCtx<M>) {}
 
     fn einto(self) -> Element<M>

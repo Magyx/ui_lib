@@ -178,6 +178,11 @@ mod update {
         state.counter += 1;
         true
     }
+
+    pub fn toggle_debug<'a>(engine: &mut Engine<'a, super::Message>) -> bool {
+        engine.toggle_debug();
+        true
+    }
 }
 
 pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
@@ -188,11 +193,15 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
     match event {
         crate::Event::Key(KeyEvent {
             state: KeyState::Pressed,
-            logical_key: LogicalKey::Character(s),
+            logical_key: k,
             ..
-        }) => match s.as_str() {
-            "n" => update::cycle_view(engine, state, true),
-            "p" => update::cycle_view(engine, state, false),
+        }) => match k {
+            LogicalKey::F(12) => update::toggle_debug(engine),
+            LogicalKey::Character(s) => match s.as_str() {
+                "n" => update::cycle_view(engine, state, true),
+                "p" => update::cycle_view(engine, state, false),
+                _ => false,
+            },
             _ => false,
         },
         crate::Event::Message(Message::ButtonPressed) => update::increment_counter(state),

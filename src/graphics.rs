@@ -11,7 +11,7 @@ use crate::{
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
     },
-    widget::Element,
+    widget::{Element, internal::PAINT_TOKEN},
 };
 
 #[repr(C)]
@@ -26,7 +26,8 @@ pub struct Globals {
 }
 
 pub struct Engine<'a, M> {
-    globals: Globals,
+    debug: bool,
+    pub globals: Globals,
     pub(crate) config: Config<'a>,
     ctx: Context<M>,
 
@@ -72,6 +73,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         let now = Instant::now();
 
         Self {
+            debug: false,
             globals: Globals {
                 window_size: [size.width as f32, size.height as f32],
                 time: 0.0,
@@ -101,6 +103,10 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             self.renderer.textures.layout(),
             &self.push_constant_ranges,
         );
+    }
+
+    pub fn toggle_debug(&mut self) {
+        self.debug = !self.debug;
     }
 
     pub fn register_pipeline(
@@ -228,8 +234,9 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             globals: &self.globals,
             ui: &mut self.ctx,
         };
-        root.handle(&mut event_ctx);
 
+        // TODO: split handle into prepare and other steps so we don't need to force a take_redraw
+        root.handle(&mut event_ctx);
         self.ctx.take_redraw();
 
         let mut instances = Vec::new();
@@ -240,7 +247,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 config: &self.config,
                 texture: &mut self.renderer.textures,
             };
-            root.draw(&mut paint_ctx, &mut instances);
+            root.__paint(&mut paint_ctx, &mut instances, &PAINT_TOKEN, self.debug);
         }
 
         self.globals.frame = self.globals.frame.wrapping_add(1);

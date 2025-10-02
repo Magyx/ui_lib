@@ -44,8 +44,11 @@ impl<M> Widget<M> for Image {
     fn id(&self) -> Id {
         self.id
     }
-    fn layout(&self) -> Layout {
-        self.layout.expect(LAYOUT_ERROR)
+    fn position(&self) -> &Position<i32> {
+        &self.position
+    }
+    fn layout(&self) -> &Layout {
+        self.layout.as_ref().expect(LAYOUT_ERROR)
     }
 
     fn fit_width(&mut self, _ctx: &mut LayoutCtx<M>) -> Layout {
@@ -128,7 +131,7 @@ impl<M> Widget<M> for Image {
         <image::Image as Widget<M>>::layout(self).current_size
     }
 
-    fn draw(&self, _ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+    fn draw_self(&self, _ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         instances.push(Instance::ui_tex(
             self.position,
             <image::Image as Widget<M>>::layout(self).current_size,

@@ -88,9 +88,11 @@ impl<'a, M> Widget<M> for Text<'a> {
     fn id(&self) -> Id {
         self.id
     }
-
-    fn layout(&self) -> Layout {
-        self.layout.expect(LAYOUT_ERROR)
+    fn position(&self) -> &Position<i32> {
+        &self.position
+    }
+    fn layout(&self) -> &Layout {
+        self.layout.as_ref().expect(LAYOUT_ERROR)
     }
 
     fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
@@ -135,7 +137,7 @@ impl<'a, M> Widget<M> for Text<'a> {
         l
     }
 
-    fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, max_w: i32) {
+    fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, parent_width: i32) {
         let l = self.layout.as_ref().expect(LAYOUT_ERROR);
         let fs = ctx.text.font_system_mut();
         let buffer = self.buffer.as_mut().expect("fit_width must run first");
@@ -144,12 +146,14 @@ impl<'a, M> Widget<M> for Text<'a> {
             .as_ref()
             .expect("preferred_size missing");
 
-        let mut target_w = match self.size.width {
-            Length::Grow => max_w,
-            Length::Fixed(w) => w,
-            Length::Fit => pref.width,
+        let parent_cap = parent_width.min(self.max.width);
+        let lower_bound = l.min.width.min(parent_cap);
+
+        let target_w = match self.size.width {
+            Length::Fixed(w) => w.min(parent_cap).max(lower_bound),
+            Length::Fit => pref.width.min(parent_cap).max(lower_bound),
+            Length::Grow => parent_cap.max(lower_bound),
         };
-        target_w = target_w.max(l.min.width).min(self.max.width).min(max_w);
 
         buffer.set_size(fs, Some(target_w as f32), None);
         buffer.shape_until_scroll(fs, false);
@@ -167,7 +171,7 @@ impl<'a, M> Widget<M> for Text<'a> {
             .max(shaped_w)
             .max(l.min.width)
             .min(self.max.width)
-            .min(max_w);
+            .min(parent_width);
         self.wrapped_size = Some(Size::new(final_w, natural_h));
 
         if let Some(m) = self.layout.as_mut() {
@@ -187,7 +191,7 @@ impl<'a, M> Widget<M> for Text<'a> {
         *l
     }
 
-    fn grow_height(&mut self, _ctx: &mut LayoutCtx<M>, max_h: i32) {
+    fn grow_height(&mut self, _ctx: &mut LayoutCtx<M>, parent_height: i32) {
         let l = self.layout.as_mut().expect(LAYOUT_ERROR);
         let natural_h = self
             .wrapped_size
@@ -198,14 +202,14 @@ impl<'a, M> Widget<M> for Text<'a> {
         let mut target_h = match self.size.height {
             Length::Fixed(h) => h,
             Length::Fit => natural_h,
-            Length::Grow => max_h,
+            Length::Grow => parent_height,
         };
 
         target_h = target_h
             .max(self.min.height)
             .max(natural_h)
             .min(self.max.height)
-            .min(max_h);
+            .min(parent_height);
 
         l.current_size.height = target_h;
 
@@ -218,7 +222,7 @@ impl<'a, M> Widget<M> for Text<'a> {
         <Text as Widget<M>>::layout(self).current_size
     }
 
-    fn draw(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+    fn draw_self(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         const BASE_COLOR: cosmic_text::Color = cosmic_text::Color::rgba(255, 255, 255, 255);
         let buffer = self.buffer.as_ref().expect("draw called before fit");
         let size = <Text as Widget<M>>::layout(self).current_size;
