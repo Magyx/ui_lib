@@ -61,6 +61,92 @@ macro_rules! define_vector {
                 self.as_slice_mut()
             }
         }
+
+                impl<T> core::ops::Add for $name<T>
+        where
+            T: core::ops::Add<Output = T>,
+        {
+            type Output = Self;
+            fn add(self, rhs: Self) -> Self::Output {
+                Self { $( $field: self.$field + rhs.$field ),+ }
+            }
+        }
+
+        impl<T> core::ops::Sub for $name<T>
+        where
+            T: core::ops::Sub<Output = T>,
+        {
+            type Output = Self;
+            fn sub(self, rhs: Self) -> Self::Output {
+                Self { $( $field: self.$field - rhs.$field ),+ }
+            }
+        }
+
+        impl<T> core::ops::AddAssign for $name<T>
+        where
+            T: core::ops::AddAssign,
+        {
+            fn add_assign(&mut self, rhs: Self) {
+                $( self.$field += rhs.$field; )+
+            }
+        }
+
+        impl<T> core::ops::SubAssign for $name<T>
+        where
+            T: core::ops::SubAssign,
+        {
+            fn sub_assign(&mut self, rhs: Self) {
+                $( self.$field -= rhs.$field; )+
+            }
+        }
+
+        impl<T> core::ops::Neg for $name<T>
+        where
+            T: core::ops::Neg<Output = T>,
+        {
+            type Output = Self;
+            fn neg(self) -> Self::Output {
+                Self { $( $field: -self.$field ),+ }
+            }
+        }
+
+        impl<T> core::ops::Add<T> for $name<T>
+        where
+            T: core::ops::Add<Output = T> + Copy,
+        {
+            type Output = Self;
+            fn add(self, rhs: T) -> Self::Output {
+                Self { $( $field: self.$field + rhs ),+ }
+            }
+        }
+
+        impl<T> core::ops::Sub<T> for $name<T>
+        where
+            T: core::ops::Sub<Output = T> + Copy,
+        {
+            type Output = Self;
+            fn sub(self, rhs: T) -> Self::Output {
+                Self { $( $field: self.$field - rhs ),+ }
+            }
+        }
+
+        impl<T> core::ops::AddAssign<T> for $name<T>
+        where
+            T: core::ops::AddAssign + Copy,
+        {
+            fn add_assign(&mut self, rhs: T) {
+                $( self.$field += rhs; )+
+            }
+        }
+
+        impl<T> core::ops::SubAssign<T> for $name<T>
+        where
+            T: core::ops::SubAssign + Copy,
+        {
+            fn sub_assign(&mut self, rhs: T) {
+                $( self.$field -= rhs; )+
+            }
+        }
     };
 }
 
@@ -69,6 +155,80 @@ define_vector!(Vec3, 3, x, y, z);
 define_vector!(Vec4, 4, x, y, z, w);
 define_vector!(Size, 2, width, height);
 define_vector!(Position, 2, x, y);
+
+impl<T> From<(T, T)> for Size<T> {
+    fn from((width, height): (T, T)) -> Self {
+        Self { width, height }
+    }
+}
+
+impl<T> Size<T> {
+    pub fn max(self, other: Size<T>) -> Size<T>
+    where
+        T: Ord,
+    {
+        Size {
+            width: self.width.max(other.width),
+            height: self.height.max(other.height),
+        }
+    }
+
+    pub fn min(self, other: Size<T>) -> Size<T>
+    where
+        T: Ord,
+    {
+        Size {
+            width: self.width.min(other.width),
+            height: self.height.min(other.height),
+        }
+    }
+}
+
+impl<T> std::ops::Add<Size<T>> for Position<T>
+where
+    T: core::ops::Add<T, Output = T> + Copy,
+{
+    type Output = Position<T>;
+    fn add(self, rhs: Size<T>) -> Position<T> {
+        Self {
+            x: self.x + rhs.width,
+            y: self.y + rhs.height,
+        }
+    }
+}
+
+impl<T> std::ops::Sub<Size<T>> for Position<T>
+where
+    T: core::ops::Sub<T, Output = T> + Copy,
+{
+    type Output = Position<T>;
+    fn sub(self, rhs: Size<T>) -> Position<T> {
+        Self {
+            x: self.x - rhs.width,
+            y: self.y - rhs.height,
+        }
+    }
+}
+
+impl<T> std::ops::AddAssign<Size<T>> for Position<T>
+where
+    T: core::ops::AddAssign<T> + Copy,
+{
+    fn add_assign(&mut self, rhs: Size<T>) {
+        self.x += rhs.width;
+        self.y += rhs.height;
+    }
+}
+
+impl<T> std::ops::SubAssign<Size<T>> for Position<T>
+where
+    T: core::ops::SubAssign<T> + Copy,
+{
+    fn sub_assign(&mut self, rhs: Size<T>) {
+        self.x -= rhs.width;
+        self.y -= rhs.height;
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 #[repr(C)]
@@ -125,33 +285,5 @@ impl Color {
     #[inline]
     pub fn a(&self) -> u8 {
         ((self.0 & 0xFF_00_00_00) >> 24) as u8
-    }
-}
-
-impl<T> From<(T, T)> for Size<T> {
-    fn from((width, height): (T, T)) -> Self {
-        Self { width, height }
-    }
-}
-
-impl<T> Size<T> {
-    pub fn max(self, other: Size<T>) -> Size<T>
-    where
-        T: Ord,
-    {
-        Size {
-            width: self.width.max(other.width),
-            height: self.height.max(other.height),
-        }
-    }
-
-    pub fn min(self, other: Size<T>) -> Size<T>
-    where
-        T: Ord,
-    {
-        Size {
-            width: self.width.min(other.width),
-            height: self.height.min(other.height),
-        }
     }
 }
