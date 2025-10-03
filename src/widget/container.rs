@@ -78,10 +78,6 @@ impl<M: 'static> Widget<M> for Container<M> {
         }
         min_w += width_padding;
 
-        if matches!(self.size.width, Length::Fit) {
-            self.size.width = Length::Fixed(min_w);
-        }
-
         let resolved_w = self
             .size
             .into_fixed()
@@ -99,7 +95,7 @@ impl<M: 'static> Widget<M> for Container<M> {
     }
 
     fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, parent_width: i32) {
-        let l = self.layout.expect(LAYOUT_ERROR);
+        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
 
         let target_w = match self.size.width {
             Length::Grow => parent_width,
@@ -117,9 +113,7 @@ impl<M: 'static> Widget<M> for Container<M> {
             child.grow_width(ctx, inner_w);
         }
 
-        if let Some(lay) = self.layout.as_mut() {
-            lay.current_size.width = target_w;
-        }
+        l.current_size.width = target_w;
     }
 
     fn fit_height(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
@@ -136,7 +130,7 @@ impl<M: 'static> Widget<M> for Container<M> {
             self.size.height = Length::Fixed(min_h);
         }
 
-        let prev = self.layout.expect(LAYOUT_ERROR);
+        let prev = self.layout.as_ref().expect(LAYOUT_ERROR);
         let prev_w = prev.current_size.width;
 
         let requested_h = match self.size.height {
@@ -158,7 +152,7 @@ impl<M: 'static> Widget<M> for Container<M> {
     }
 
     fn grow_height(&mut self, ctx: &mut LayoutCtx<M>, parent_height: i32) {
-        let l = self.layout.expect(LAYOUT_ERROR);
+        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
 
         let target_h = match self.size.height {
             Length::Grow => parent_height,
@@ -176,9 +170,7 @@ impl<M: 'static> Widget<M> for Container<M> {
             child.grow_height(ctx, inner_h);
         }
 
-        if let Some(lay) = self.layout.as_mut() {
-            lay.current_size.height = target_h;
-        }
+        l.current_size.height = target_h;
     }
 
     fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32> {

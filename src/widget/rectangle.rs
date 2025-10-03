@@ -67,7 +67,7 @@ impl<M> Widget<M> for Rectangle {
     }
 
     fn grow_width(&mut self, _ctx: &mut LayoutCtx<M>, parent_width: i32) {
-        let l = self.layout.as_ref().expect(LAYOUT_ERROR);
+        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
 
         let target_w = match self.size.width {
             Length::Grow => parent_width,
@@ -80,9 +80,7 @@ impl<M> Widget<M> for Rectangle {
             .min(self.max.width)
             .min(parent_width);
 
-        if let Some(m) = self.layout.as_mut() {
-            m.current_size.width = final_w;
-        }
+        l.current_size.width = final_w;
         self.size.width = Length::Fixed(final_w);
     }
 
@@ -106,7 +104,7 @@ impl<M> Widget<M> for Rectangle {
     }
 
     fn grow_height(&mut self, _ctx: &mut LayoutCtx<M>, parent_height: i32) {
-        let l = self.layout.as_ref().expect(LAYOUT_ERROR);
+        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
         let target_h = match self.size.height {
             Length::Grow => parent_height,
             Length::Fixed(h) => h,
@@ -118,9 +116,7 @@ impl<M> Widget<M> for Rectangle {
             .min(self.max.height)
             .min(parent_height);
 
-        if let Some(m) = self.layout.as_mut() {
-            m.current_size.height = final_h;
-        }
+        l.current_size.height = final_h;
         self.size.height = Length::Fixed(final_h);
     }
 

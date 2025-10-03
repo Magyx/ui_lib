@@ -12,6 +12,7 @@ pub struct Text<'a> {
     font_size: f32,
     line_height: f32,
     atributes: Attrs<'a>,
+    wrap: Wrap,
     position: Position<i32>,
     size: Size<Length<i32>>,
     min: Size<i32>,
@@ -31,6 +32,7 @@ impl<'a> Text<'a> {
             font_size,
             line_height: 1.2,
             atributes: Attrs::new(),
+            wrap: Wrap::Word,
             position: Position::splat(0),
             size: Size::splat(Length::Fit),
             min: Size::splat(0),
@@ -68,6 +70,11 @@ impl<'a> Text<'a> {
         self
     }
 
+    pub fn wrap(mut self, wrap: Wrap) -> Self {
+        self.wrap = wrap;
+        self
+    }
+
     pub fn size(mut self, size: Size<Length<i32>>) -> Self {
         self.size = size;
         self
@@ -83,7 +90,6 @@ impl<'a> Text<'a> {
     }
 }
 
-// TODO: fix wrapping issue
 impl<'a, M> Widget<M> for Text<'a> {
     fn id(&self) -> Id {
         self.id
@@ -104,8 +110,8 @@ impl<'a, M> Widget<M> for Text<'a> {
         }
         let buffer = self.buffer.as_mut().unwrap();
 
-        buffer.set_wrap(fs, Wrap::WordOrGlyph);
-        buffer.set_text(fs, self.text, &self.atributes, Shaping::Advanced);
+        buffer.set_wrap(fs, self.wrap);
+        buffer.set_text(fs, self.text, &self.atributes, Shaping::Basic);
 
         // Preferred
         buffer.set_size(fs, None, None);
@@ -126,10 +132,7 @@ impl<'a, M> Widget<M> for Text<'a> {
 
         let l = Layout {
             size: self.size,
-            current_size: Size::new(
-                current_w,
-                self.layout.map(|l| l.current_size.height).unwrap_or(line_h),
-            ),
+            current_size: Size::new(current_w, line_h),
             min: Size::new(min_w, self.min.height.min(self.max.height)),
             max: self.max,
         };
@@ -138,7 +141,7 @@ impl<'a, M> Widget<M> for Text<'a> {
     }
 
     fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, parent_width: i32) {
-        let l = self.layout.as_ref().expect(LAYOUT_ERROR);
+        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
         let fs = ctx.text.font_system_mut();
         let buffer = self.buffer.as_mut().expect("fit_width must run first");
         let pref = self
@@ -174,21 +177,24 @@ impl<'a, M> Widget<M> for Text<'a> {
             .min(parent_width);
         self.wrapped_size = Some(Size::new(final_w, natural_h));
 
-        if let Some(m) = self.layout.as_mut() {
-            m.current_size.width = final_w;
-        }
+        l.current_size.width = final_w;
     }
 
     fn fit_height(&mut self, _ctx: &mut LayoutCtx<M>) -> Layout {
-        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
-        let natural = self.wrapped_size.unwrap();
+        let l = self.layout.as_ref().expect(LAYOUT_ERROR);
+        let natural = self.wrapped_size.as_ref().unwrap();
 
         let min_h = self.min.height.min(self.max.height);
         let current_h = natural.height.clamp(min_h, self.max.height);
 
-        l.min.height = min_h;
-        l.current_size.height = current_h;
-        *l
+        let l = Layout {
+            size: l.size,
+            current_size: Size::new(l.current_size.width, current_h),
+            min: Size::new(l.min.width, min_h),
+            max: l.max,
+        };
+        self.layout = Some(l);
+        l
     }
 
     fn grow_height(&mut self, _ctx: &mut LayoutCtx<M>, parent_height: i32) {

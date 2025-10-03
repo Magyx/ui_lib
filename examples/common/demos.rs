@@ -413,15 +413,17 @@ pub mod text {
                 .einto(),
             // Body (fit checks)
             Column::new(vec![
-                Text::new(long, 16.0).size(Size::new(Fit, Fit)).einto(),
+                Row::new(vec![
+                    Text::new(long, 16.0).size(Size::new(Grow, Fit)).einto(),
+                    Text::new(long, 16.0).size(Size::new(Grow, Fit)).einto(),
+                ])
+                .size(Size::new(Grow, Fit))
+                .spacing(12)
+                .einto(),
                 Text::new(long, 16.0).size(Size::new(Grow, Fit)).einto(),
-                Text::new(long, 16.0)
-                    .size(Size::new(Grow, Grow))
-                    .max(Size::new(270, i32::MAX))
-                    .einto(),
             ])
+            .size(Size::new(Grow, Fit))
             .spacing(12)
-            .padding(Vec4::new(0, 0, 0, 12))
             .einto(),
             // Image/preview placeholder
             Rectangle::new(Size::new(Grow, Fixed(240)), Color::rgb(72, 78, 90)).einto(),
@@ -459,9 +461,9 @@ pub mod text {
             .einto(),
         ])
         .spacing(12)
-        .padding(Vec4::new(16, 16, 16, 16))
+        .padding(Vec4::splat(16))
         .color(Color::TRANSPARENT)
-        .size(Size::new(Grow, Grow))
+        .size(Size::splat(Grow))
         .einto();
 
         // --- Page layout: sidebar | (topbar + content) ---
@@ -469,7 +471,6 @@ pub mod text {
             sidebar,
             Column::new(vec![topbar, content])
                 .spacing(12)
-                .padding(Vec4::splat(0))
                 .color(Color::TRANSPARENT)
                 .size(Size::new(Grow, Grow))
                 .einto(),

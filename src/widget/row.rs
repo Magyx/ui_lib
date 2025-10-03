@@ -82,15 +82,12 @@ impl<M: 'static> Widget<M> for Row<M> {
 
     fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
         let width_padding = self.padding.x + self.padding.z;
+        let spacing = (self.children.len() as i32 - 1).max(0) * self.spacing;
 
-        let mut min_w = (self.children.len() as i32 - 1) * self.spacing + width_padding;
+        let mut min_w = spacing + width_padding;
         for child in self.children.iter_mut() {
-            let Layout { current_size, .. } = child.fit_width(ctx);
-            min_w += current_size.width;
-        }
-
-        if matches!(self.size.width, Length::Fit) {
-            self.size.width = Length::Fixed(min_w);
+            let Layout { min, .. } = child.fit_width(ctx);
+            min_w += min.width;
         }
 
         let resolved_w = self
@@ -110,7 +107,7 @@ impl<M: 'static> Widget<M> for Row<M> {
     }
 
     fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, parent_width: i32) {
-        let l = self.layout.expect(LAYOUT_ERROR);
+        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
 
         let target_w = match self.size.width {
             Length::Grow => parent_width,
@@ -133,26 +130,20 @@ impl<M: 'static> Widget<M> for Row<M> {
             self.children[i].grow_width(ctx, w);
         }
 
-        if let Some(lay) = self.layout.as_mut() {
-            lay.current_size.width = target_w;
-        }
+        l.current_size.width = target_w;
     }
 
     fn fit_height(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
         let height_padding = self.padding.y + self.padding.w;
 
-        let mut max_child_h = 0;
+        let mut min_child_h = 0;
         for child in self.children.iter_mut() {
             let Layout { current_size, .. } = child.fit_height(ctx);
-            max_child_h = max_child_h.max(current_size.height);
+            min_child_h = min_child_h.max(current_size.height);
         }
-        let min_h = max_child_h + height_padding;
+        let min_h = min_child_h.saturating_add(height_padding);
 
-        if matches!(self.size.height, Length::Fit) {
-            self.size.height = Length::Fixed(min_h);
-        }
-
-        let prev = self.layout.expect(LAYOUT_ERROR);
+        let prev = self.layout.as_ref().expect(LAYOUT_ERROR);
         let prev_w = prev.current_size.width;
 
         let requested_h = match self.size.height {
@@ -174,7 +165,7 @@ impl<M: 'static> Widget<M> for Row<M> {
     }
 
     fn grow_height(&mut self, ctx: &mut LayoutCtx<M>, parent_height: i32) {
-        let l = self.layout.expect(LAYOUT_ERROR);
+        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
 
         let target_h = match self.size.height {
             Length::Grow => parent_height,
@@ -192,9 +183,7 @@ impl<M: 'static> Widget<M> for Row<M> {
             child.grow_height(ctx, inner_h);
         }
 
-        if let Some(lay) = self.layout.as_mut() {
-            lay.current_size.height = target_h;
-        }
+        l.current_size.height = target_h;
     }
 
     fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32> {
