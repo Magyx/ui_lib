@@ -51,7 +51,10 @@ impl<M> Widget<M> for Rectangle {
 
     fn fit_width(&mut self, _ctx: &mut LayoutCtx<M>) -> Layout {
         let base_w = match self.size.width {
-            Length::Fixed(w) => w,
+            Length::Fixed(w) => {
+                self.min.width = w;
+                w
+            }
             _ => 0,
         };
         let cur_w = base_w.clamp(self.min.width, self.max.width);

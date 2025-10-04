@@ -85,8 +85,8 @@ impl<M: 'static> Widget<M> for Column<M> {
 
         let mut min_child_w = 0;
         for child in self.children.iter_mut() {
-            let Layout { min, .. } = child.fit_width(ctx);
-            min_child_w = min_child_w.max(min.width);
+            let Layout { current_size, .. } = child.fit_width(ctx);
+            min_child_w = min_child_w.max(current_size.width);
         }
         let min_w = min_child_w.saturating_add(width_padding);
 
