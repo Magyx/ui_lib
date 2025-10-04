@@ -186,11 +186,13 @@ impl<M: 'static> Widget<M> for Container<M> {
     }
 
     fn draw_self(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        instances.push(Instance::ui(
-            self.position,
-            self.layout().current_size,
-            self.color,
-        ));
+        if self.color.a() > 0 {
+            instances.push(Instance::ui(
+                self.position,
+                self.layout().current_size,
+                self.color,
+            ));
+        }
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
