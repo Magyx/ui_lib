@@ -118,8 +118,6 @@ impl<M: 'static> Widget<M> for Column<M> {
         .min(l.max.width)
         .min(parent_width);
 
-        self.size.width = Length::Fixed(target_w);
-
         let inner_w = (target_w - self.padding.x - self.padding.z).max(0);
         for child in self.children.iter_mut() {
             child.grow_width(ctx, inner_w);
@@ -169,8 +167,6 @@ impl<M: 'static> Widget<M> for Column<M> {
         .max(l.min.height)
         .min(l.max.height)
         .min(parent_height);
-
-        self.size.height = Length::Fixed(target_h);
 
         let inner_h = target_h
             - (self.children.len() as i32 - 1).max(0) * self.spacing

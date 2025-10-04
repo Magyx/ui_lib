@@ -250,7 +250,7 @@ pub mod pipeline {
     use ui::widget::SimpleCanvas;
 
     pub fn view(state: &State) -> Element<Message> {
-        use Length::{Fit, Fixed, Grow};
+        use Length::{Fit, Grow};
 
         Container::new(vec![
             SimpleCanvas::new(

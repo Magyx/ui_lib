@@ -69,7 +69,7 @@ impl Default for State {
     fn default() -> Self {
         Self {
             counter: 0,
-            view: View::Text,
+            view: View::Layout,
             fps: VecDeque::with_capacity(5),
             background: None,
             icon_atlas: None,

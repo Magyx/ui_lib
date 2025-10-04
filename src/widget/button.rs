@@ -118,7 +118,6 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
             .min(parent_width);
 
         l.current_size.width = final_w;
-        self.size.width = Length::Fixed(final_w);
     }
 
     fn fit_height(&mut self, _ctx: &mut LayoutCtx<M>) -> Layout {
@@ -154,7 +153,6 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
             .min(parent_height);
 
         l.current_size.height = final_h;
-        self.size.height = Length::Fixed(final_h);
     }
 
     fn place(&mut self, _ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32> {

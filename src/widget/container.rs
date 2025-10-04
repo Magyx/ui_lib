@@ -106,8 +106,6 @@ impl<M: 'static> Widget<M> for Container<M> {
         .min(l.max.width)
         .min(parent_width);
 
-        self.size.width = Length::Fixed(target_w);
-
         let inner_w = (target_w - self.padding.x - self.padding.z).max(0);
         for child in self.children.iter_mut() {
             child.grow_width(ctx, inner_w);
@@ -125,10 +123,6 @@ impl<M: 'static> Widget<M> for Container<M> {
             max_child_h = max_child_h.max(current_size.height);
         }
         let min_h = max_child_h + height_padding;
-
-        if matches!(self.size.height, Length::Fit) {
-            self.size.height = Length::Fixed(min_h);
-        }
 
         let prev = self.layout.as_ref().expect(LAYOUT_ERROR);
         let prev_w = prev.current_size.width;
@@ -162,8 +156,6 @@ impl<M: 'static> Widget<M> for Container<M> {
         .max(l.min.height)
         .min(l.max.height)
         .min(parent_height);
-
-        self.size.height = Length::Fixed(target_h);
 
         let inner_h = (target_h - self.padding.y - self.padding.w).max(0);
         for child in self.children.iter_mut() {

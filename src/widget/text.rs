@@ -220,9 +220,6 @@ impl<'a, M> Widget<M> for Text<'a> {
             .min(parent_height);
 
         l.current_size.height = target_h;
-
-        self.size.height = Length::Fixed(target_h);
-        self.size.width = Length::Fixed(l.current_size.width);
     }
 
     fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32> {
