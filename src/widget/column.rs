@@ -173,7 +173,7 @@ impl<M: 'static> Widget<M> for Column<M> {
         self.size.height = Length::Fixed(target_h);
 
         let inner_h = target_h
-            - (self.children.len() as i32 - 2).max(0) * self.spacing
+            - (self.children.len() as i32 - 1).max(0) * self.spacing
             - self.padding.y
             - self.padding.w;
 
