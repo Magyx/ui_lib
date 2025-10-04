@@ -17,10 +17,10 @@ struct VertexOutput {
 
 struct Globals {
     window_size: vec2<f32>,
-    time: f32,
-    delta_time: f32,
     mouse_pos: vec2<f32>,
     mouse_buttons: u32,
+    time: f32,
+    delta_time: f32,
     frame: u32,
 };
 var<push_constant> globals : Globals;
