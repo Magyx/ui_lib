@@ -1,7 +1,7 @@
 use super::{Message, State};
 use ui::{
     model::*,
-    widget::{Button, Column, Container, Element, Length, Rectangle, Row, Widget},
+    widget::{Button, Column, Container, Element, Length, Rectangle, Row, Spacer, Text, Widget},
 };
 
 fn small_block(r: u8, g: u8, b: u8) -> Element<Message> {
@@ -246,10 +246,11 @@ pub mod interaction {
 pub mod pipeline {
 
     use super::*;
+    use cosmic_text::Weight;
     use ui::widget::SimpleCanvas;
 
-    pub fn view(_state: &State) -> Element<Message> {
-        use Length::{Fixed, Grow};
+    pub fn view(state: &State) -> Element<Message> {
+        use Length::{Fit, Fixed, Grow};
 
         Container::new(vec![
             SimpleCanvas::new(
@@ -260,14 +261,21 @@ pub mod pipeline {
                 }),
             )
             .einto(),
-            Column::new(vec![
-                Rectangle::new(Size::new(Fixed(70), Fixed(20)), Color::rgb(100, 0, 100)).einto(),
-                Rectangle::new(Size::new(Fixed(40), Fixed(30)), Color::rgb(140, 0, 140)).einto(),
+            Row::new(vec![
+                Spacer::new(Size::new(Grow, Fit)).einto(),
+                Text::new(
+                    format!(
+                        "{:.0}",
+                        state.fps.iter().sum::<f32>() / state.fps.len().max(1) as f32
+                    ),
+                    16.0,
+                )
+                .color(Color::RED)
+                .weight(Weight::SEMIBOLD)
+                .einto(),
             ])
-            .spacing(10)
             .padding(Vec4::splat(10))
-            .color(Color::rgba(220, 240, 240, 1))
-            .size(Size::new(Fixed(70), Fixed(80)))
+            .size(Size::new(Grow, Fit))
             .einto(),
         ])
         .color(Color::rgb(20, 20, 40))
@@ -336,7 +344,6 @@ pub mod texture {
 pub mod text {
     use super::*;
     use cosmic_text::Weight;
-    use ui::widget::{Spacer, Text};
 
     pub fn view(_state: &State) -> Element<Message> {
         use Length::{Fit, Fixed, Grow};

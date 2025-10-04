@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use ui::{
     event::{KeyEvent, KeyState, LogicalKey},
     graphics::Engine,
@@ -56,6 +58,7 @@ pub enum Message {
 pub struct State {
     pub counter: u32,
     pub view: View,
+    pub fps: VecDeque<f32>,
 
     pub background: Option<ui::render::texture::TextureHandle>,
     pub icon_atlas: Option<ui::render::texture::Atlas>,
@@ -67,6 +70,7 @@ impl Default for State {
         Self {
             counter: 0,
             view: View::Text,
+            fps: VecDeque::with_capacity(5),
             background: None,
             icon_atlas: None,
             icons: Vec::new(),
@@ -191,6 +195,13 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
     state: &mut State,
 ) -> bool {
     match event {
+        crate::Event::RedrawRequested => {
+            if state.fps.len() == 5 {
+                state.fps.pop_front();
+            }
+            state.fps.push_back(1.0 / engine.globals.delta_time);
+            false
+        }
         crate::Event::Key(KeyEvent {
             state: KeyState::Pressed,
             logical_key: k,

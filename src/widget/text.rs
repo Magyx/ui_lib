@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::*;
 use cosmic_text::{Attrs, Buffer, Family, Metrics, Shaping, Style, Weight, Wrap};
 
@@ -8,7 +10,7 @@ pub struct Text<'a> {
     wrapped_size: Option<Size<i32>>,
 
     id: Id,
-    text: &'a str,
+    text: Cow<'static, str>,
     font_size: f32,
     line_height: f32,
     atributes: Attrs<'a>,
@@ -20,7 +22,7 @@ pub struct Text<'a> {
 }
 
 impl<'a> Text<'a> {
-    pub fn new(content: &'a str, font_size: f32) -> Self {
+    pub fn new<S: Into<Cow<'static, str>>>(content: S, font_size: f32) -> Self {
         Self {
             layout: None,
             buffer: None,
@@ -28,7 +30,7 @@ impl<'a> Text<'a> {
             wrapped_size: None,
 
             id: crate::context::next_id(),
-            text: content,
+            text: content.into(),
             font_size,
             line_height: 1.2,
             atributes: Attrs::new(),
@@ -111,7 +113,7 @@ impl<'a, M> Widget<M> for Text<'a> {
         let buffer = self.buffer.as_mut().unwrap();
 
         buffer.set_wrap(fs, self.wrap);
-        buffer.set_text(fs, self.text, &self.atributes, Shaping::Basic);
+        buffer.set_text(fs, &self.text, &self.atributes, Shaping::Basic);
 
         // Preferred
         buffer.set_size(fs, None, None);
