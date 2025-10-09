@@ -1,6 +1,7 @@
 use std::{
     any::Any,
     cell::Cell,
+    collections::HashMap,
     fmt::Debug,
     ptr::NonNull,
     sync::{Arc, Mutex, mpsc},
@@ -18,7 +19,7 @@ use wayland_client::{Proxy, protocol::wl_surface::WlSurface};
 
 use crate::{
     event::{Event, KeyEvent, KeyLocation, KeyState, Modifiers, PhysicalKey, ToEvent},
-    graphics::Engine,
+    graphics::{Engine, TargetId},
     model::{Position, Size},
     render::PipelineFactoryFn,
     widget::Element,
@@ -32,6 +33,16 @@ mod msg;
 mod state;
 
 // === Public API ================================================================================
+
+#[derive(Clone, Debug)]
+pub enum OutputSet<'a> {
+    /// Use single-output selector
+    One(OutputSelector<'a>),
+    /// Mirror the surface to every compositor output
+    All,
+    /// Explicit list
+    List(Vec<OutputSelector<'a>>),
+}
 
 #[derive(Clone, Debug)]
 pub enum OutputSelector<'a> {
@@ -58,7 +69,7 @@ pub struct LayerOptions<'a> {
     pub keyboard_interactivity: KeyboardInteractivity,
     /// Namespace, useful for compositor rules.
     pub namespace: Option<&'a str>,
-    pub output: Option<OutputSelector<'a>>,
+    pub output: Option<OutputSet<'a>>,
 }
 
 impl<'a> Default for LayerOptions<'a> {
@@ -80,15 +91,22 @@ impl<'a> Default for LayerOptions<'a> {
 pub enum SctkEvent {
     Redraw,
     Resized {
+        surface: SurfaceId,
         size: Size<u32>,
     },
     PointerMoved {
+        surface: SurfaceId,
         pos: Position<f32>,
     },
-    PointerDown,
-    PointerUp,
+    PointerDown {
+        surface: SurfaceId,
+    },
+    PointerUp {
+        surface: SurfaceId,
+    },
 
     Key {
+        surface: SurfaceId,
         raw_code: u32,
         keysym: smithay_client_toolkit::seat::keyboard::Keysym,
         utf8: Option<String>,
@@ -96,7 +114,7 @@ pub enum SctkEvent {
         repeat: bool,
     },
 
-    Modifiers(smithay_client_toolkit::seat::keyboard::Modifiers),
+    Modifiers(SurfaceId, smithay_client_toolkit::seat::keyboard::Modifiers),
     Closed,
     Message(Arc<Mutex<Option<Box<dyn Any + Send>>>>),
 }
@@ -111,10 +129,10 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
     fn to_event(&self) -> Event<M, SctkEvent> {
         match self {
             SctkEvent::Redraw => Event::RedrawRequested,
-            SctkEvent::Resized { size } => Event::Resized { size: *size },
-            SctkEvent::PointerMoved { pos } => Event::CursorMoved { position: *pos },
-            SctkEvent::PointerDown => Event::MouseInput { mouse_down: true },
-            SctkEvent::PointerUp => Event::MouseInput { mouse_down: false },
+            SctkEvent::Resized { size, .. } => Event::Resized { size: *size },
+            SctkEvent::PointerMoved { pos, .. } => Event::CursorMoved { position: *pos },
+            SctkEvent::PointerDown { .. } => Event::MouseInput { mouse_down: true },
+            SctkEvent::PointerUp { .. } => Event::MouseInput { mouse_down: false },
 
             SctkEvent::Key {
                 raw_code,
@@ -122,6 +140,7 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
                 utf8,
                 pressed,
                 repeat,
+                ..
             } => {
                 let state = if *pressed {
                     KeyState::Pressed
@@ -141,7 +160,7 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
                 })
             }
 
-            SctkEvent::Modifiers(m) => Event::ModifiersChanged(Modifiers {
+            SctkEvent::Modifiers(_, m) => Event::ModifiersChanged(Modifiers {
                 shift: m.shift,
                 control: m.ctrl,
                 alt: m.alt,
@@ -167,7 +186,9 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
     }
 }
 
-/// Loop control, analogous to winit's `ActiveEventLoop` (shared borrow in `update`).
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct SurfaceId(u32);
+
 pub struct SctkLoop {
     exit: Cell<bool>,
 }
@@ -228,9 +249,10 @@ fn run_app_core<'a, M, S, V, U, H, F>(
     post_engine_init: F,
 ) -> anyhow::Result<()>
 where
-    M: 'static + std::fmt::Debug + Send,
-    V: Fn(&S) -> Element<M> + 'static,
-    U: FnMut(&mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    M: 'static + std::fmt::Debug + Clone + Send,
+    V: Fn(&TargetId, &S) -> Element<M> + 'static,
+    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
+        + 'static,
     H: handler::SctkHandler<M> + 'static,
     F: FnOnce(&mut Engine<'a, M>),
 {
@@ -264,12 +286,27 @@ where
         sctk_handler,
     )?;
 
-    // 4) Create engine
-    let window_target = Arc::new(UnsafeWaylandHandles::new(&conn, &st.wl_surface));
+    // 4) Create engine and attach surfaces
+    let mut sid_to_tid = HashMap::new();
     let mut engine = {
-        let size = st.size;
-        let mut engine = Engine::new(window_target, size);
+        let sid = st
+            .surfaces
+            .keys()
+            .next()
+            .expect("At least one surface required");
+        let target = Arc::new(UnsafeWaylandHandles::new(
+            &conn,
+            &st.surfaces[sid].wl_surface,
+        ));
+        let (tid, mut engine) = Engine::new(target, st.surfaces[sid].size);
         post_engine_init(&mut engine);
+        sid_to_tid.insert(*sid, tid);
+
+        for (&sid, rec) in st.surfaces.iter().skip(1) {
+            let target = Arc::new(UnsafeWaylandHandles::new(&conn, &rec.wl_surface));
+            let tid = engine.attach_target(target, rec.size);
+            sid_to_tid.insert(sid, tid);
+        }
         engine
     };
 
@@ -280,26 +317,67 @@ where
         event_queue.blocking_dispatch(&mut st)?;
 
         for ev in st.take_events() {
-            engine.handle_platform_event(&ev, &mut update, &mut state, &loop_ctl);
+            match &ev {
+                SctkEvent::Resized { surface, .. }
+                | SctkEvent::PointerMoved { surface, .. }
+                | SctkEvent::PointerDown { surface }
+                | SctkEvent::PointerUp { surface }
+                | SctkEvent::Key { surface, .. }
+                | SctkEvent::Modifiers(surface, ..) => {
+                    if let Some(tid) = sid_to_tid.get(surface).copied() {
+                        engine.handle_platform_event(
+                            &tid,
+                            &ev,
+                            &mut |eng, e, s, ctl| update(tid, eng, e, s, ctl),
+                            &mut state,
+                            &loop_ctl,
+                        );
+                    }
+                }
+                other => {
+                    for &tid in sid_to_tid.values() {
+                        engine.handle_platform_event(
+                            &tid,
+                            other,
+                            &mut |engine, event, state, loop_ctl| {
+                                update(tid, engine, event, state, loop_ctl)
+                            },
+                            &mut state,
+                            &loop_ctl,
+                        );
+                    }
+                }
+            }
         }
 
         while let Ok(m) = rx.try_recv() {
-            engine.handle_platform_event(
-                &SctkEvent::message(m),
-                &mut update,
-                &mut state,
-                &loop_ctl,
-            );
+            for &tid in sid_to_tid.values() {
+                engine.handle_platform_event(
+                    &tid,
+                    &SctkEvent::message(m.clone()),
+                    &mut |engine, event, state, loop_ctl| {
+                        update(tid, engine, event, state, loop_ctl)
+                    },
+                    &mut state,
+                    &loop_ctl,
+                );
+            }
         }
 
-        if st.needs_redraw {
-            // only happens once, on configure
-            st.needs_redraw = false;
-            engine.render_if_needed(true, &view, &mut state);
-        } else {
-            let require_redraw = engine.poll(&mut update, &mut state, &loop_ctl);
-            engine.render_if_needed(require_redraw, &view, &mut state);
+        for (_, &tid) in sid_to_tid.iter() {
+            let need = if st.needs_redraw {
+                true
+            } else {
+                engine.poll(
+                    &tid,
+                    &mut |eng, e, s, ctl| update(tid, eng, e, s, ctl),
+                    &mut state,
+                    &loop_ctl,
+                )
+            };
+            engine.render_if_needed(&tid, need, &view, &mut state);
         }
+        st.needs_redraw = false;
     }
 
     Ok(())
@@ -312,10 +390,11 @@ pub fn run_app<'a, M, S, H, V, U>(
     opts: LayerOptions<'_>,
 ) -> anyhow::Result<()>
 where
-    M: 'static + std::fmt::Debug + Send,
+    M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
-    V: Fn(&S) -> Element<M> + 'static,
-    U: FnMut(&mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    V: Fn(&TargetId, &S) -> Element<M> + 'static,
+    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
+        + 'static,
 {
     run_app_core::<M, S, V, U, H, _>(state, view, update, opts, |_| {})
 }
@@ -328,10 +407,11 @@ pub fn run_app_with<'a, M, S, H, V, U, I>(
     extra_pipelines: I,
 ) -> anyhow::Result<()>
 where
-    M: 'static + std::fmt::Debug + Send,
+    M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
-    V: Fn(&S) -> Element<M> + 'static,
-    U: FnMut(&mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    V: Fn(&TargetId, &S) -> Element<M> + 'static,
+    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
+        + 'static,
     I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
 {
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();

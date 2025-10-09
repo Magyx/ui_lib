@@ -2,11 +2,11 @@ use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, La
 use smol_str::ToSmolStr;
 use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
-    graphics::Engine,
+    graphics::{Engine, TargetId},
     model::Size,
     pipeline_factories,
     render::pipeline::Pipeline,
-    sctk::{DefaultHandler, LayerOptions, OutputSelector, SctkEvent, SctkLoop},
+    sctk::{DefaultHandler, LayerOptions, SctkEvent, SctkLoop},
 };
 
 #[path = "../common/mod.rs"]
@@ -14,6 +14,7 @@ mod common;
 use common::{Message, State, pipeline::PlanetPipeline, view};
 
 fn update<'a>(
+    target: TargetId,
     engine: &mut Engine<'a, Message>,
     event: &Event<Message, SctkEvent>,
     state: &mut State,
@@ -32,7 +33,7 @@ fn update<'a>(
             loop_ctl.exit();
             false
         }
-        _ => common::update(engine, event, state),
+        _ => common::update(target, engine, event, state),
     }
 }
 
@@ -50,7 +51,7 @@ fn main() -> anyhow::Result<()> {
         exclusive_zone: -1,
         keyboard_interactivity: KeyboardInteractivity::OnDemand,
         namespace: Some("ui-example"),
-        output: Some(OutputSelector::HighestScale),
+        output: Some(ui::sctk::OutputSet::All),
     };
 
     ui::sctk::run_app_with::<Message, State, DefaultHandler, _, _, _>(

@@ -1,7 +1,7 @@
 use smithay_client_toolkit::{output::OutputState, seat::keyboard::Keysym};
 use smol_str::ToSmolStr;
 
-use crate::event::LogicalKey;
+use crate::{event::LogicalKey, sctk::OutputSet};
 
 use super::OutputSelector;
 
@@ -36,6 +36,20 @@ pub(super) fn pick_output<'a>(
         HighestScale => outputs
             .outputs()
             .max_by_key(|o| outputs.info(o).map(|i| i.scale_factor).unwrap_or(1)),
+    }
+}
+
+pub(super) fn pick_outputs<'a>(
+    outputs: &OutputState,
+    sel: &OutputSet<'a>,
+) -> Vec<wayland_client::protocol::wl_output::WlOutput> {
+    match sel {
+        OutputSet::All => outputs.outputs().collect(),
+        OutputSet::List(list) => list
+            .iter()
+            .filter_map(|s| pick_output(outputs, s))
+            .collect(),
+        OutputSet::One(s) => pick_output(outputs, s).into_iter().collect(),
     }
 }
 

@@ -4,7 +4,8 @@ pub mod text;
 pub mod texture;
 
 pub type PipelineFactoryFn = fn(
-    &crate::graphics::Config,
+    &crate::graphics::Gpu,
+    &wgpu::TextureFormat,
     &[wgpu::VertexBufferLayout],
     &wgpu::BindGroupLayout,
     &[wgpu::PushConstantRange],

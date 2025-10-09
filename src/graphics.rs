@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use crate::{
     consts::*,
@@ -14,6 +14,19 @@ use crate::{
     widget::{Element, internal::PAINT_TOKEN},
 };
 
+#[derive(Default)]
+struct TargetIdAlloc {
+    next: u32,
+}
+
+impl TargetIdAlloc {
+    fn alloc(&mut self) -> TargetId {
+        let id = TargetId(self.next);
+        self.next = self.next.checked_add(1).expect("TargetId overflow");
+        id
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Globals {
@@ -25,297 +38,43 @@ pub struct Globals {
     pub frame: u32,        // frame counter
 }
 
-pub struct Engine<'a, M> {
-    debug: bool,
+pub struct Gpu {
+    pub instance: wgpu::Instance,
+    pub adapter: wgpu::Adapter,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+}
+
+pub struct Target<'a, M> {
+    pub surface: wgpu::Surface<'a>,
+    pub config: wgpu::SurfaceConfiguration,
+    pub size: Size<u32>,
+    pub scale: i32,
     pub globals: Globals,
-    pub(crate) config: Config<'a>,
     ctx: Context<M>,
 
     start_time: Instant,
     last_frame_time: Instant,
-
-    pub(crate) push_constant_ranges: Vec<wgpu::PushConstantRange>,
-    pipeline_registry: PipelineRegistry,
-    renderer: Renderer,
-
     root: Option<Element<M>>,
 }
 
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub struct TargetId(u32);
+
+pub struct Engine<'a, M> {
+    debug: bool,
+
+    gpu: Arc<Gpu>,
+    target_alloc: TargetIdAlloc,
+    primary_target: Option<TargetId>,
+    targets: HashMap<TargetId, Target<'a, M>>,
+    pub(crate) push_constant_ranges: Vec<wgpu::PushConstantRange>,
+    pipeline_registry: PipelineRegistry,
+    renderer: Renderer,
+}
+
 impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
-    pub fn new<T>(target: Arc<T>, size: Size<u32>) -> Engine<'a, M>
-    where
-        T: wgpu::rwh::HasWindowHandle
-            + wgpu::rwh::HasDisplayHandle
-            + Sized
-            + std::marker::Sync
-            + std::marker::Send
-            + 'a,
-    {
-        let size = size.max(Size::new(1, 1));
-        let config = Config::new(target, &size);
-        let ctx = Context::new();
-
-        let push_constant_ranges = vec![wgpu::PushConstantRange {
-            stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            range: 0..std::mem::size_of::<Globals>() as u32,
-        }];
-
-        let renderer = Renderer::new(&config);
-
-        let mut pipeline_registry = PipelineRegistry::new();
-        pipeline_registry.register_default_pipelines(
-            &config,
-            &[Vertex::desc(), Primitive::desc()],
-            renderer.textures.layout(),
-            &push_constant_ranges,
-        );
-
-        let now = Instant::now();
-
-        Self {
-            debug: false,
-            globals: Globals {
-                window_size: [size.width as f32, size.height as f32],
-                time: 0.0,
-                delta_time: 0.0,
-                mouse_pos: [0.0, 0.0],
-                mouse_buttons: 0,
-                frame: 0,
-            },
-            config,
-            ctx,
-
-            start_time: now,
-            last_frame_time: now,
-
-            push_constant_ranges,
-            pipeline_registry,
-            renderer,
-
-            root: None,
-        }
-    }
-
-    pub fn reload_all(&mut self) {
-        self.pipeline_registry.reload(
-            &self.config,
-            &[Vertex::desc(), Primitive::desc()],
-            self.renderer.textures.layout(),
-            &self.push_constant_ranges,
-        );
-    }
-
-    pub fn toggle_debug(&mut self) {
-        self.debug = !self.debug;
-    }
-
-    pub fn register_pipeline(
-        &mut self,
-        key: crate::render::pipeline::PipelineKey,
-        pipeline_factory: crate::render::PipelineFactoryFn,
-    ) {
-        let pipeline = pipeline_factory(
-            &self.config,
-            &[Vertex::desc(), Primitive::desc()],
-            self.renderer.textures.layout(),
-            &self.push_constant_ranges,
-        );
-        self.pipeline_registry.register_pipeline(key, pipeline);
-    }
-
-    pub fn load_texture_rgba8(&mut self, width: u32, height: u32, pixels: &[u8]) -> TextureHandle {
-        self.renderer
-            .textures
-            .load_rgba8(&self.config, width, height, pixels)
-    }
-
-    pub fn unload_texture(&mut self, handle: TextureHandle) -> bool {
-        self.renderer.textures.unload(&self.config, handle)
-    }
-
-    pub fn create_atlas(&mut self, width: u32, height: u32) -> Atlas {
-        self.renderer
-            .textures
-            .create_atlas(&self.config, width, height)
-    }
-
-    pub fn load_texture_into_atlas(
-        &mut self,
-        atlas: &mut Atlas,
-        width: u32,
-        height: u32,
-        pixels: &[u8],
-    ) -> Option<TextureHandle> {
-        self.renderer
-            .textures
-            .load_into_atlas(&self.config, atlas, width, height, pixels)
-    }
-
-    pub fn destroy_atlas(&mut self, atlas: &mut Atlas) {
-        self.renderer.textures.destroy_atlas(&self.config, atlas)
-    }
-
-    pub fn poll<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
-        &mut self,
-        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
-        state: &mut S,
-        params: &P,
-    ) -> bool {
-        let now = std::time::Instant::now();
-        let total = now.duration_since(self.start_time);
-        let dt = now.duration_since(self.last_frame_time);
-        self.last_frame_time = now;
-        self.globals.time = total.as_secs_f32();
-        self.globals.delta_time = dt.as_secs_f32();
-
-        let mut require_redraw = false;
-
-        if let Some(root) = self.root.as_mut() {
-            let mut event_cx = EventCtx {
-                globals: &self.globals,
-                ui: &mut self.ctx,
-            };
-            root.handle(&mut event_cx);
-        } else {
-            require_redraw = true;
-        }
-
-        require_redraw |= self.ctx.take_redraw();
-
-        for message in self.ctx.take() {
-            require_redraw |= update(self, &Event::Message(message), state, params);
-        }
-
-        require_redraw |= update(self, &Event::RedrawRequested, state, params);
-
-        require_redraw
-    }
-
-    pub fn render_if_needed<S>(
-        &mut self,
-        need: bool,
-        view: &impl Fn(&S) -> Element<M>,
-        state: &mut S,
-    ) {
-        if !need {
-            return;
-        }
-
-        // TODO: this should eventually be removed, as it is not accurate way to have id's
-        // maybe move to a depth based id system where id is passed from context instead of
-        // generated in each widget
-        crate::context::reset_ids_for_frame();
-
-        self.root = Some(view(state));
-        let root = self.root.as_mut().expect("root built");
-
-        let max = Size::new(
-            self.globals.window_size[0] as i32,
-            self.globals.window_size[1] as i32,
-        )
-        .max(Size::new(1, 1));
-
-        {
-            let mut layout_ctx = LayoutCtx {
-                globals: &self.globals,
-                ui: &mut self.ctx,
-                text: &mut self.renderer.text,
-            };
-            _ = root.fit_width(&mut layout_ctx);
-            root.grow_width(&mut layout_ctx, max.width);
-
-            _ = root.fit_height(&mut layout_ctx);
-            root.grow_height(&mut layout_ctx, max.height);
-
-            root.place(&mut layout_ctx, Position::splat(0));
-        }
-
-        let mut event_ctx = EventCtx {
-            globals: &self.globals,
-            ui: &mut self.ctx,
-        };
-
-        // TODO: split handle into prepare and other steps so we don't need to force a take_redraw
-        root.handle(&mut event_ctx);
-        self.ctx.take_redraw();
-
-        let mut instances = Vec::new();
-        {
-            let mut paint_ctx = PaintCtx {
-                globals: &self.globals,
-                text: &mut self.renderer.text,
-                config: &self.config,
-                texture: &mut self.renderer.textures,
-            };
-            root.__paint(&mut paint_ctx, &mut instances, &PAINT_TOKEN, self.debug);
-        }
-
-        self.globals.frame = self.globals.frame.wrapping_add(1);
-
-        let _ = self.renderer.render(
-            &self.config,
-            &self.pipeline_registry,
-            &self.globals,
-            &instances,
-        );
-    }
-
-    pub fn handle_platform_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
-        &mut self,
-        event: &E,
-        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
-        state: &mut S,
-        params: &P,
-    ) {
-        let event = event.to_event();
-        let prev_mouse_down = self.ctx.mouse_down;
-
-        match event {
-            Event::Resized { size } => {
-                if size.width > 0 && size.height > 0 {
-                    self.config.config.width = size.width;
-                    self.config.config.height = size.height;
-                    self.globals.window_size = [size.width as f32, size.height as f32];
-                    self.config
-                        .surface
-                        .configure(&self.config.device, &self.config.config);
-                }
-                self.ctx.request_redraw();
-            }
-            Event::CursorMoved { position } => {
-                self.ctx.mouse_pos = position;
-                self.globals.mouse_pos = [position.x, position.y];
-            }
-            Event::MouseInput { mouse_down } => {
-                self.ctx.mouse_down = mouse_down;
-                self.ctx.mouse_pressed = !prev_mouse_down && mouse_down;
-                self.ctx.mouse_released = prev_mouse_down && !mouse_down;
-
-                if mouse_down {
-                    self.globals.mouse_buttons |= 1;
-                } else {
-                    self.globals.mouse_buttons &= !1;
-                }
-            }
-            _ => (),
-        }
-
-        if update(self, &event, state, params) {
-            self.ctx.request_redraw();
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Config<'a> {
-    pub(crate) surface: wgpu::Surface<'a>,
-    pub(crate) queue: wgpu::Queue,
-    pub device: wgpu::Device,
-    pub config: wgpu::SurfaceConfiguration,
-}
-
-impl<'a> Config<'a> {
-    fn new<T>(target: Arc<T>, size: &Size<u32>) -> Config<'a>
+    pub fn new<T>(target: Arc<T>, size: Size<u32>) -> (TargetId, Engine<'a, M>)
     where
         T: wgpu::rwh::HasWindowHandle
             + wgpu::rwh::HasDisplayHandle
@@ -330,13 +89,9 @@ impl<'a> Config<'a> {
             ..Default::default()
         });
 
-        let surface = instance
-            .create_surface(target.clone())
-            .expect("wgpu: failed to create surface (window/display handle mismatch?)");
-
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
-            compatible_surface: Some(&surface),
+            compatible_surface: None,
             force_fallback_adapter: false,
         }))
         .expect("wgpu: no suitable adapter found for the current surface");
@@ -363,7 +118,69 @@ impl<'a> Config<'a> {
         }))
         .expect("wgpu: failed to request logical device/queue (feature set unsupported?)");
 
-        let surface_caps = surface.get_capabilities(&adapter);
+        let gpu = Gpu {
+            instance,
+            adapter,
+            device,
+            queue,
+        };
+
+        let push_constant_ranges = vec![wgpu::PushConstantRange {
+            stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            range: 0..std::mem::size_of::<Globals>() as u32,
+        }];
+
+        let renderer = Renderer::new(&gpu.device);
+
+        let surface = Self::create_target(&gpu, target, size);
+
+        let mut pipeline_registry = PipelineRegistry::new();
+        pipeline_registry.register_default_pipelines(
+            &gpu,
+            &surface.config.format,
+            &[Vertex::desc(), Primitive::desc()],
+            renderer.textures.layout(),
+            &push_constant_ranges,
+        );
+
+        let mut target_id = TargetIdAlloc::default();
+        let first_target = target_id.alloc();
+        let mut surfaces = HashMap::with_capacity(1);
+        surfaces.insert(first_target, surface);
+
+        (
+            first_target,
+            Self {
+                debug: false,
+
+                gpu: Arc::new(gpu),
+                target_alloc: target_id,
+                primary_target: Some(first_target),
+                targets: surfaces,
+                push_constant_ranges,
+                pipeline_registry,
+                renderer,
+            },
+        )
+    }
+
+    fn create_target<T>(gpu: &Gpu, target: Arc<T>, size: Size<u32>) -> Target<'a, M>
+    where
+        T: wgpu::rwh::HasWindowHandle
+            + wgpu::rwh::HasDisplayHandle
+            + Sized
+            + std::marker::Sync
+            + std::marker::Send
+            + 'a,
+    {
+        let size = size.max(Size::new(1, 1));
+
+        let surface = gpu
+            .instance
+            .create_surface(target.clone())
+            .expect("wgpu: failed to create surface (window/display handle mismatch?)");
+
+        let surface_caps = surface.get_capabilities(&gpu.adapter);
         let surface_format = surface_caps
             .formats
             .iter()
@@ -381,13 +198,314 @@ impl<'a> Config<'a> {
             desired_maximum_frame_latency: 1,
         };
 
-        surface.configure(&device, &config);
+        surface.configure(&gpu.device, &config);
 
-        Self {
+        let now = Instant::now();
+
+        Target {
             surface,
-            queue,
-            device,
             config,
+            size,
+            scale: 1,
+            globals: Globals {
+                window_size: [size.width as f32, size.height as f32],
+                time: 0.0,
+                delta_time: 0.0,
+                mouse_pos: [0.0, 0.0],
+                mouse_buttons: 0,
+                frame: 0,
+            },
+            ctx: Context::new(),
+
+            start_time: now,
+            last_frame_time: now,
+
+            root: None,
+        }
+    }
+
+    #[inline]
+    fn primary_target_id(&self) -> Option<TargetId> {
+        self.primary_target
+    }
+
+    #[inline]
+    fn primary_target(&self) -> Option<&Target<'a, M>> {
+        self.primary_target_id()
+            .and_then(|id| self.targets.get(&id))
+    }
+
+    pub fn reload_all(&mut self) {
+        let fmt = if let Some(t) = self.primary_target() {
+            t.config.format
+        } else {
+            return;
+        };
+
+        self.pipeline_registry.reload(
+            &self.gpu,
+            &fmt,
+            &[Vertex::desc(), Primitive::desc()],
+            self.renderer.textures.layout(),
+            &self.push_constant_ranges,
+        );
+    }
+
+    pub fn toggle_debug(&mut self) {
+        self.debug = !self.debug;
+    }
+
+    pub fn globals(&self, tid: TargetId) -> Option<&Globals> {
+        self.targets.get(&tid).map(|t| &t.globals)
+    }
+
+    pub fn attach_target<T>(&mut self, target: Arc<T>, size: Size<u32>) -> TargetId
+    where
+        T: wgpu::rwh::HasWindowHandle
+            + wgpu::rwh::HasDisplayHandle
+            + Sized
+            + std::marker::Sync
+            + std::marker::Send
+            + 'a,
+    {
+        let id = self.target_alloc.alloc();
+        let surface = Self::create_target(&self.gpu, target, size);
+        self.targets.insert(id, surface);
+        if self.primary_target.is_none() {
+            self.primary_target = Some(id);
+        }
+        id
+    }
+
+    pub fn detach_target(&mut self, id: TargetId) {
+        if self.targets.remove(&id).is_some() && self.primary_target == Some(id) {
+            self.primary_target = self.targets.keys().next().copied();
+        }
+    }
+
+    pub fn register_pipeline(
+        &mut self,
+        key: crate::render::pipeline::PipelineKey,
+        pipeline_factory: crate::render::PipelineFactoryFn,
+    ) {
+        let fmt = if let Some(t) = self.primary_target() {
+            t.config.format
+        } else {
+            return; // TODO: we should definitely return a result here
+        };
+
+        let pipeline = pipeline_factory(
+            &self.gpu,
+            &fmt,
+            &[Vertex::desc(), Primitive::desc()],
+            self.renderer.textures.layout(),
+            &self.push_constant_ranges,
+        );
+        self.pipeline_registry.register_pipeline(key, pipeline);
+    }
+
+    pub fn load_texture_rgba8(&mut self, width: u32, height: u32, pixels: &[u8]) -> TextureHandle {
+        self.renderer
+            .textures
+            .load_rgba8(&self.gpu, width, height, pixels)
+    }
+
+    pub fn unload_texture(&mut self, handle: TextureHandle) -> bool {
+        self.renderer.textures.unload(&self.gpu, handle)
+    }
+
+    pub fn create_atlas(&mut self, width: u32, height: u32) -> Atlas {
+        self.renderer
+            .textures
+            .create_atlas(&self.gpu, width, height)
+    }
+
+    pub fn load_texture_into_atlas(
+        &mut self,
+        atlas: &mut Atlas,
+        width: u32,
+        height: u32,
+        pixels: &[u8],
+    ) -> Option<TextureHandle> {
+        self.renderer
+            .textures
+            .load_into_atlas(&self.gpu, atlas, width, height, pixels)
+    }
+
+    pub fn destroy_atlas(&mut self, atlas: &mut Atlas) {
+        self.renderer.textures.destroy_atlas(&self.gpu, atlas)
+    }
+
+    pub fn poll<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
+        &mut self,
+        tid: &TargetId,
+        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
+        state: &mut S,
+        params: &P,
+    ) -> bool {
+        let target = if let Some(t) = self.targets.get_mut(tid) {
+            t
+        } else {
+            return false;
+        };
+
+        let now = std::time::Instant::now();
+        let total = now.duration_since(target.start_time);
+        let dt = now.duration_since(target.last_frame_time);
+        target.last_frame_time = now;
+        target.globals.time = total.as_secs_f32();
+        target.globals.delta_time = dt.as_secs_f32();
+
+        let mut require_redraw = false;
+
+        if let Some(root) = target.root.as_mut() {
+            let mut event_cx = EventCtx {
+                globals: &target.globals,
+                ui: &mut target.ctx,
+            };
+            root.handle(&mut event_cx);
+        } else {
+            require_redraw = true;
+        }
+
+        require_redraw |= target.ctx.take_redraw();
+
+        for message in target.ctx.take() {
+            require_redraw |= update(self, &Event::Message(message), state, params);
+        }
+
+        require_redraw |= update(self, &Event::RedrawRequested, state, params);
+
+        require_redraw
+    }
+
+    pub fn render_if_needed<S>(
+        &mut self,
+        tid: &TargetId,
+        need: bool,
+        view: &impl Fn(&TargetId, &S) -> Element<M>,
+        state: &mut S,
+    ) {
+        let target = if let Some(t) = self.targets.get_mut(tid) {
+            t
+        } else {
+            return; // TODO: maybe return a result instead
+        };
+
+        if !need {
+            return;
+        }
+
+        // TODO: this should eventually be removed, as it is not accurate way to have id's
+        // maybe move to a depth based id system where id is passed from context instead of
+        // generated in each widget
+        crate::context::reset_ids_for_frame();
+
+        target.root = Some(view(tid, state));
+        let root = target.root.as_mut().expect("root built");
+
+        let max = Size::new(
+            target.globals.window_size[0] as i32,
+            target.globals.window_size[1] as i32,
+        )
+        .max(Size::new(1, 1));
+
+        {
+            let mut layout_ctx = LayoutCtx {
+                globals: &target.globals,
+                ui: &mut target.ctx,
+                text: &mut self.renderer.text,
+            };
+            _ = root.fit_width(&mut layout_ctx);
+            root.grow_width(&mut layout_ctx, max.width);
+
+            _ = root.fit_height(&mut layout_ctx);
+            root.grow_height(&mut layout_ctx, max.height);
+
+            root.place(&mut layout_ctx, Position::splat(0));
+        }
+
+        let mut event_ctx = EventCtx {
+            globals: &target.globals,
+            ui: &mut target.ctx,
+        };
+
+        // TODO: split handle into prepare and other steps so we don't need to force a take_redraw
+        root.handle(&mut event_ctx);
+        target.ctx.take_redraw();
+
+        let mut instances = Vec::new();
+        {
+            let mut paint_ctx = PaintCtx {
+                globals: &target.globals,
+                text: &mut self.renderer.text,
+                gpu: &self.gpu.clone(),
+                texture: &mut self.renderer.textures,
+            };
+            root.__paint(&mut paint_ctx, &mut instances, &PAINT_TOKEN, self.debug);
+        }
+
+        target.globals.frame = target.globals.frame.wrapping_add(1);
+
+        let _ = self.renderer.render(
+            &self.gpu,
+            target,
+            &self.pipeline_registry,
+            &target.globals,
+            &instances,
+        );
+    }
+
+    pub fn handle_platform_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
+        &mut self,
+        target_id: &TargetId,
+        event: &E,
+        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
+        state: &mut S,
+        params: &P,
+    ) {
+        let target = match self.targets.get_mut(target_id) {
+            Some(t) => t,
+            None => {
+                return; // TODO: maybe return a result instead
+            }
+        };
+
+        let event = event.to_event();
+        let prev_mouse_down = target.ctx.mouse_down;
+
+        match event {
+            Event::Resized { size } => {
+                if size.width > 0 && size.height > 0 {
+                    target.config.width = size.width;
+                    target.config.height = size.height;
+                    target.globals.window_size = [size.width as f32, size.height as f32];
+                    target.surface.configure(&self.gpu.device, &target.config);
+                }
+                target.ctx.request_redraw();
+            }
+            Event::CursorMoved { position } => {
+                target.ctx.mouse_pos = position;
+                target.globals.mouse_pos = [position.x, position.y];
+            }
+            Event::MouseInput { mouse_down } => {
+                target.ctx.mouse_down = mouse_down;
+                target.ctx.mouse_pressed = !prev_mouse_down && mouse_down;
+                target.ctx.mouse_released = prev_mouse_down && !mouse_down;
+
+                if mouse_down {
+                    target.globals.mouse_buttons |= 1;
+                } else {
+                    target.globals.mouse_buttons &= !1;
+                }
+            }
+            _ => (),
+        }
+
+        if update(self, &event, state, params)
+            && let Some(target) = self.targets.get_mut(target_id)
+        {
+            target.ctx.request_redraw();
         }
     }
 }

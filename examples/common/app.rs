@@ -1,9 +1,9 @@
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use ui::{
     event::{KeyEvent, KeyState, LogicalKey},
-    graphics::Engine,
-    widget::Element,
+    graphics::{Engine, TargetId},
+    widget::{Container, Element, Widget},
 };
 
 use super::demos;
@@ -55,31 +55,33 @@ pub enum Message {
     ButtonPressed,
 }
 
-pub struct State {
+pub struct Target {
     pub counter: u32,
     pub view: View,
     pub fps: VecDeque<f32>,
+}
+
+impl Default for Target {
+    fn default() -> Self {
+        Self {
+            counter: 0,
+            view: View::Layout,
+            fps: VecDeque::with_capacity(5),
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct State {
+    pub per_target: HashMap<TargetId, Target>,
 
     pub background: Option<ui::render::texture::TextureHandle>,
     pub icon_atlas: Option<ui::render::texture::Atlas>,
     pub icons: Vec<ui::render::texture::TextureHandle>,
 }
 
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            counter: 0,
-            view: View::Layout,
-            fps: VecDeque::with_capacity(5),
-            background: None,
-            icon_atlas: None,
-            icons: Vec::new(),
-        }
-    }
-}
-
 mod update {
-    use ui::graphics::Engine;
+    use ui::graphics::{Engine, TargetId};
 
     pub fn ensure_icons_loaded<'a>(
         engine: &mut Engine<'a, super::Message>,
@@ -161,16 +163,21 @@ mod update {
     }
 
     pub fn cycle_view<'a>(
+        tid: TargetId,
         engine: &mut Engine<'a, super::Message>,
         state: &mut super::State,
         dir: bool,
     ) -> bool {
+        let target = match state.per_target.get_mut(&tid) {
+            Some(t) => t,
+            None => return false,
+        };
         if dir {
-            state.view = state.view.clone().next();
+            target.view = target.view.clone().next();
         } else {
-            state.view = state.view.clone().prev();
+            target.view = target.view.clone().prev();
         }
-        if let super::View::Texture = state.view {
+        if let super::View::Texture = target.view {
             ensure_background_loaded(engine, state);
             ensure_icons_loaded(engine, state);
         }
@@ -178,8 +185,8 @@ mod update {
         true
     }
 
-    pub fn increment_counter(state: &mut super::State) -> bool {
-        state.counter += 1;
+    pub fn increment_counter(target: &mut super::Target) -> bool {
+        target.counter += 1;
         true
     }
 
@@ -190,16 +197,20 @@ mod update {
 }
 
 pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
+    tid: TargetId,
     engine: &mut Engine<'a, Message>,
     event: &crate::Event<Message, E>,
     state: &mut State,
 ) -> bool {
+    let target = state.per_target.entry(tid).or_default();
     match event {
         crate::Event::RedrawRequested => {
-            if state.fps.len() == 5 {
-                state.fps.pop_front();
+            if target.fps.len() == 5 {
+                target.fps.pop_front();
             }
-            state.fps.push_back(1.0 / engine.globals.delta_time);
+            target
+                .fps
+                .push_back(1.0 / engine.globals(tid).unwrap().delta_time);
             false
         }
         crate::Event::Key(KeyEvent {
@@ -209,22 +220,26 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
         }) => match k {
             LogicalKey::F(12) => update::toggle_debug(engine),
             LogicalKey::Character(s) => match s.as_str() {
-                "n" => update::cycle_view(engine, state, true),
-                "p" => update::cycle_view(engine, state, false),
+                "n" => update::cycle_view(tid, engine, state, true),
+                "p" => update::cycle_view(tid, engine, state, false),
                 _ => false,
             },
             _ => false,
         },
-        crate::Event::Message(Message::ButtonPressed) => update::increment_counter(state),
+        crate::Event::Message(Message::ButtonPressed) => update::increment_counter(target),
         _ => false,
     }
 }
 
-pub fn view(state: &State) -> Element<Message> {
-    match state.view {
+pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
+    let target = match state.per_target.get(tid) {
+        Some(t) => t,
+        None => return Container::new(vec![]).einto(),
+    };
+    match target.view {
         View::Layout => demos::layout::view(state),
-        View::Interaction => demos::interaction::view(state),
-        View::Pipeline => demos::pipeline::view(state),
+        View::Interaction => demos::interaction::view(tid, state),
+        View::Pipeline => demos::pipeline::view(tid, state),
         View::Texture => demos::texture::view(state),
         View::Text => demos::text::view(state),
     }

@@ -1,7 +1,7 @@
 use smol_str::ToSmolStr;
 use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
-    graphics::Engine,
+    graphics::{Engine, TargetId},
     pipeline_factories,
     render::pipeline::Pipeline,
 };
@@ -12,6 +12,7 @@ mod common;
 use common::{Message, State, pipeline::PlanetPipeline, view};
 
 fn update<'a>(
+    target: TargetId,
     engine: &mut Engine<'a, Message>,
     event: &Event<Message, WindowEvent>,
     state: &mut State,
@@ -30,7 +31,7 @@ fn update<'a>(
             event_loop.exit();
             false
         }
-        _ => common::update(engine, event, state),
+        _ => common::update(target, engine, event, state),
     }
 }
 

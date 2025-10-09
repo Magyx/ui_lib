@@ -1,5 +1,6 @@
 use super::{Message, State};
 use ui::{
+    graphics::TargetId,
     model::*,
     widget::{Button, Column, Container, Element, Length, Rectangle, Row, Spacer, Text, Widget},
 };
@@ -206,8 +207,12 @@ pub mod interaction {
 
     use super::*;
 
-    pub fn view(state: &State) -> Element<Message> {
+    pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
         use Length::{Fit, Fixed, Grow};
+        let target = match state.per_target.get(tid) {
+            Some(t) => t,
+            None => return Container::new(vec![]).einto(),
+        };
 
         Column::new(vec![
             /* 1) interactive button */
@@ -218,7 +223,7 @@ pub mod interaction {
                     .on_press(Message::ButtonPressed)
                     .einto(),
                 Row::new(
-                    (0..(state.counter % 6))
+                    (0..(target.counter % 6))
                         .map(|i| {
                             let c = (i * 30 + 40) as u8;
                             small_block(c, 30, 200u8.saturating_sub(c))
@@ -249,9 +254,13 @@ pub mod pipeline {
     use cosmic_text::Weight;
     use ui::widget::SimpleCanvas;
 
-    pub fn view(state: &State) -> Element<Message> {
+    pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
         use Length::{Fit, Grow};
 
+        let target = match state.per_target.get(tid) {
+            Some(t) => t,
+            None => return Container::new(vec![]).einto(),
+        };
         Container::new(vec![
             SimpleCanvas::new(
                 Size::new(Grow, Grow),
@@ -266,7 +275,7 @@ pub mod pipeline {
                 Text::new(
                     format!(
                         "{:.0}",
-                        state.fps.iter().sum::<f32>() / state.fps.len().max(1) as f32
+                        target.fps.iter().sum::<f32>() / target.fps.len().max(1) as f32
                     ),
                     16.0,
                 )

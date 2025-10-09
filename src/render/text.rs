@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use cosmic_text::{CacheKey, FontSystem, LayoutGlyph, SwashCache, SwashContent, SwashImage};
 
 use crate::{
-    graphics::Config,
+    graphics::Gpu,
     model::{Position, Size},
     render::texture::{Atlas, TextureHandle, TextureRegistry},
 };
@@ -114,28 +114,28 @@ impl TextSystem {
         ))
     }
 
-    fn create_atlas(&mut self, config: &Config, texture_reg: &mut TextureRegistry) -> bool {
+    fn create_atlas(&mut self, gpu: &Gpu, texture_reg: &mut TextureRegistry) -> bool {
         if self.pages.len() >= self.page_cap {
             return false;
         }
         let id = self.pages.back().map(|p| p.id + 1).unwrap_or(0);
-        let atlas = texture_reg.create_atlas(config, GLYPH_PAGE_SIZE, GLYPH_PAGE_SIZE);
+        let atlas = texture_reg.create_atlas(gpu, GLYPH_PAGE_SIZE, GLYPH_PAGE_SIZE);
         self.pages.push_back(Page { id, atlas });
         self.current_page = self.pages.len() - 1;
         true
     }
 
-    fn recycle_oldest(&mut self, config: &Config, texture_reg: &mut TextureRegistry) {
+    fn recycle_oldest(&mut self, gpu: &Gpu, texture_reg: &mut TextureRegistry) {
         if let Some(Page { id, mut atlas }) = self.pages.pop_front() {
-            texture_reg.destroy_atlas(config, &mut atlas);
+            texture_reg.destroy_atlas(gpu, &mut atlas);
             self.glyph_map.retain(|_, (_, page_id)| *page_id != id);
-            let _ = self.create_atlas(config, texture_reg);
+            let _ = self.create_atlas(gpu, texture_reg);
         }
     }
 
     pub fn upload_glyph(
         &mut self,
-        config: &Config,
+        gpu: &Gpu,
         texture_reg: &mut TextureRegistry,
         key: CacheKey,
         w: u32,
@@ -152,7 +152,7 @@ impl TextSystem {
             return Some(handle);
         }
 
-        if self.pages.is_empty() && !self.create_atlas(config, texture_reg) {
+        if self.pages.is_empty() && !self.create_atlas(gpu, texture_reg) {
             return Some(TextureHandle::default());
         }
 
@@ -163,13 +163,9 @@ impl TextSystem {
         let rgba = premul_rgba(img);
 
         // Try current page
-        if let Some(handle) = texture_reg.load_into_atlas(
-            config,
-            &mut self.pages[self.current_page].atlas,
-            w,
-            h,
-            &rgba,
-        ) {
+        if let Some(handle) =
+            texture_reg.load_into_atlas(gpu, &mut self.pages[self.current_page].atlas, w, h, &rgba)
+        {
             let id = self.pages[self.current_page].id;
             self.glyph_map.insert(key, (handle, id));
             return Some(handle);
@@ -181,7 +177,7 @@ impl TextSystem {
                 continue;
             }
             if let Some(handle) =
-                texture_reg.load_into_atlas(config, &mut self.pages[idx].atlas, w, h, &rgba)
+                texture_reg.load_into_atlas(gpu, &mut self.pages[idx].atlas, w, h, &rgba)
             {
                 let id = self.pages[idx].id;
                 self.glyph_map.insert(key, (handle, id));
@@ -190,16 +186,12 @@ impl TextSystem {
         }
 
         // Allocate or recycle, then place
-        if !self.create_atlas(config, texture_reg) {
-            self.recycle_oldest(config, texture_reg);
+        if !self.create_atlas(gpu, texture_reg) {
+            self.recycle_oldest(gpu, texture_reg);
         }
-        if let Some(handle) = texture_reg.load_into_atlas(
-            config,
-            &mut self.pages[self.current_page].atlas,
-            w,
-            h,
-            &rgba,
-        ) {
+        if let Some(handle) =
+            texture_reg.load_into_atlas(gpu, &mut self.pages[self.current_page].atlas, w, h, &rgba)
+        {
             let id = self.pages[self.current_page].id;
             self.glyph_map.insert(key, (handle, id));
             return Some(handle);

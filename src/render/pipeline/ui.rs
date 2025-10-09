@@ -1,5 +1,5 @@
 use crate::{
-    graphics::{Config, Globals},
+    graphics::{Globals, Gpu},
     render::pipeline::Pipeline,
 };
 use wgpu::RenderPipeline;
@@ -11,7 +11,8 @@ pub(super) struct UiPipeline {
 
 impl Pipeline for UiPipeline {
     fn new(
-        config: &Config,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
         buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
@@ -20,19 +21,26 @@ impl Pipeline for UiPipeline {
             render_pipeline: None,
             layout: None,
         };
-        pipeline.reload(config, buffers, texture_bgl, push_constant_ranges);
+        pipeline.reload(
+            gpu,
+            surface_format,
+            buffers,
+            texture_bgl,
+            push_constant_ranges,
+        );
 
         pipeline
     }
 
     fn reload(
         &mut self,
-        config: &Config,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
         buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
-        let shader_module = config
+        let shader_module = gpu
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("UI Shader"),
@@ -41,7 +49,7 @@ impl Pipeline for UiPipeline {
                 ),
             });
 
-        let layout = config
+        let layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("UI Render Pipeline Layout"),
@@ -50,7 +58,7 @@ impl Pipeline for UiPipeline {
             });
         self.layout = Some(layout);
 
-        self.render_pipeline = Some(config.device.create_render_pipeline(
+        self.render_pipeline = Some(gpu.device.create_render_pipeline(
             &wgpu::RenderPipelineDescriptor {
                 label: Some("UI Render Pipeline"),
                 layout: self.layout.as_ref(),
@@ -64,7 +72,7 @@ impl Pipeline for UiPipeline {
                     module: &shader_module,
                     entry_point: Some("fs_main"),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: config.config.format,
+                        format: *surface_format,
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent {
                                 src_factor: wgpu::BlendFactor::One,

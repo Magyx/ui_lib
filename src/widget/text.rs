@@ -255,7 +255,7 @@ impl<'a, M> Widget<M> for Text<'a> {
                 let handle =
                     match ctx
                         .text
-                        .upload_glyph(ctx.config, ctx.texture, cache_key, width, height)
+                        .upload_glyph(ctx.gpu, ctx.texture, cache_key, width, height)
                     {
                         Some(h) => h,
                         None => continue,

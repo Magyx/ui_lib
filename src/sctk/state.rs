@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
@@ -15,7 +17,7 @@ use smithay_client_toolkit::{
     },
 };
 use wayland_client::{
-    Connection, QueueHandle,
+    Connection, Proxy, QueueHandle,
     globals::GlobalList,
     protocol::{
         wl_keyboard::WlKeyboard, wl_output::WlOutput, wl_pointer::WlPointer, wl_seat::WlSeat,
@@ -25,10 +27,17 @@ use wayland_client::{
 
 use crate::{
     model::{Position, Size},
-    sctk::LayerOptions,
+    sctk::{LayerOptions, OutputSelector, OutputSet, SurfaceId},
 };
 
 use super::{SctkEvent, erased::SctkErased, helpers};
+
+pub struct SurfaceRec {
+    pub wl_surface: WlSurface,
+    _layer_surface: LayerSurface,
+    _output: WlOutput,
+    pub size: Size<u32>,
+}
 
 pub struct SctkState {
     // sctk state objects
@@ -39,18 +48,43 @@ pub struct SctkState {
     _layer_shell: LayerShell,
 
     // surface & role
-    pub wl_surface: WlSurface,
-    _layer_surface: LayerSurface,
+    pub surfaces: HashMap<SurfaceId, SurfaceRec>,
+    by_surface_id: HashMap<u32, SurfaceId>,
+    kbd_focus: Option<SurfaceId>,
 
     // event queue for the generic runner
     handler: Box<dyn SctkErased>,
     events: Vec<SctkEvent>,
-    pub size: Size<u32>,
     pub closed: bool,
     pub needs_redraw: bool,
 }
 
 impl SctkState {
+    fn make_surface(
+        out: &WlOutput,
+        compositor: &CompositorState,
+        qh: &QueueHandle<Self>,
+        opts: &LayerOptions<'_>,
+        layer_shell: &LayerShell,
+    ) -> (WlSurface, LayerSurface) {
+        let wl_surface = compositor.create_surface(qh);
+        let layer_surface = layer_shell.create_layer_surface(
+            qh,
+            wl_surface.clone(),
+            opts.layer,
+            opts.namespace,
+            Some(out),
+        );
+        layer_surface.set_anchor(opts.anchors);
+        layer_surface.set_size(opts.size.width, opts.size.height);
+        layer_surface.set_keyboard_interactivity(opts.keyboard_interactivity);
+        if opts.exclusive_zone != 0 {
+            layer_surface.set_exclusive_zone(opts.exclusive_zone);
+        }
+        layer_surface.commit();
+        (wl_surface, layer_surface)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         _globals: &GlobalList,
@@ -63,28 +97,29 @@ impl SctkState {
         registry: RegistryState,
         handler: Box<dyn SctkErased>,
     ) -> anyhow::Result<Self> {
-        let chosen_output = opts
-            .output
-            .as_ref()
-            .and_then(|sel| helpers::pick_output(&outputs, sel))
-            .or_else(|| outputs.outputs().nth(0));
-
-        let wl_surface = compositor.create_surface(qh);
-        let layer_surface = layer_shell.create_layer_surface(
-            qh,
-            wl_surface.clone(),
-            opts.layer,
-            opts.namespace,
-            chosen_output.as_ref(),
+        let chosen = helpers::pick_outputs(
+            &outputs,
+            opts.output
+                .as_ref()
+                .unwrap_or(&OutputSet::One(OutputSelector::First)),
         );
 
-        layer_surface.set_anchor(opts.anchors);
-        layer_surface.set_size(opts.size.width, opts.size.height);
-        layer_surface.set_keyboard_interactivity(opts.keyboard_interactivity);
-        if opts.exclusive_zone != 0 {
-            layer_surface.set_exclusive_zone(opts.exclusive_zone);
+        let mut surfaces = HashMap::new();
+        let mut by_surface_id = HashMap::new();
+        for out in chosen {
+            let (wl, layer) = Self::make_surface(&out, &compositor, qh, &opts, &layer_shell);
+            let sid = SurfaceId(wl.id().protocol_id());
+            by_surface_id.insert(layer.wl_surface().id().protocol_id(), sid);
+            surfaces.insert(
+                sid,
+                SurfaceRec {
+                    wl_surface: wl,
+                    _layer_surface: layer,
+                    _output: out,
+                    size: opts.size,
+                },
+            );
         }
-        layer_surface.commit();
 
         Ok(Self {
             registry,
@@ -93,12 +128,12 @@ impl SctkState {
             seats,
             _layer_shell: layer_shell,
 
-            wl_surface,
-            _layer_surface: layer_surface,
+            surfaces,
+            by_surface_id,
+            kbd_focus: None,
 
             handler,
             events: Vec::new(),
-            size: opts.size,
             closed: false,
             needs_redraw: true,
         })
@@ -140,6 +175,7 @@ impl ProvidesRegistryState for SctkState {
     }
 }
 
+// TODO: propagate new_output and output_destroyed when
 impl OutputHandler for SctkState {
     fn output_state(&mut self) -> &mut OutputState {
         &mut self.outputs
@@ -230,21 +266,28 @@ impl LayerShellHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _layer: &LayerSurface,
+        layer: &LayerSurface,
         configure: LayerSurfaceConfigure,
         _serial: u32,
     ) {
-        // sctk 0.20 gives a struct; 0 means "no constraint".
-        let (w, h) = configure.new_size;
-        let w = if w == 0 { self.size.width } else { w };
-        let h = if h == 0 { self.size.height } else { h };
-        if w != self.size.width || h != self.size.height {
-            self.size = Size::new(w, h);
-            self.events.push(SctkEvent::Resized { size: self.size });
+        let lid = layer.wl_surface().id().protocol_id();
+        if let Some(sid) = self.by_surface_id.get(&lid).copied()
+            && let Some(s) = self.surfaces.get_mut(&sid)
+        {
+            let (w, h) = configure.new_size;
+            let w = if w == 0 { s.size.width } else { w };
+            let h = if h == 0 { s.size.height } else { h };
+            if w != s.size.width || h != s.size.height {
+                s.size = Size::new(w, h);
+                self.events.push(SctkEvent::Resized {
+                    surface: sid,
+                    size: s.size,
+                });
+            }
         }
 
         // Publish our new state
-        self.wl_surface.commit();
+        layer.wl_surface().commit();
         self.needs_redraw = true;
     }
 }
@@ -254,6 +297,10 @@ impl SeatHandler for SctkState {
         &mut self.seats
     }
 
+    fn new_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {}
+
+    fn remove_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {}
+
     fn new_capability(
         &mut self,
         _conn: &Connection,
@@ -261,35 +308,23 @@ impl SeatHandler for SctkState {
         seat: WlSeat,
         cap: Capability,
     ) {
-        if cap == Capability::Pointer {
-            _ = self.seats.get_pointer(qh, &seat);
-        }
-        if cap == Capability::Keyboard {
-            _ = self.seats.get_keyboard(qh, &seat, None);
+        match cap {
+            Capability::Pointer => {
+                _ = self.seats.get_pointer(qh, &seat);
+            }
+            Capability::Keyboard => {
+                _ = self.seats.get_keyboard(qh, &seat, None);
+            }
+            _ => { /* Not supported atm */ }
         }
     }
+
     fn remove_capability(
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _seat: WlSeat,
         _cap: Capability,
-    ) {
-    }
-
-    fn new_seat(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _seat: wayland_client::protocol::wl_seat::WlSeat,
-    ) {
-    }
-
-    fn remove_seat(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _seat: wayland_client::protocol::wl_seat::WlSeat,
     ) {
     }
 }
@@ -303,17 +338,27 @@ impl PointerHandler for SctkState {
         events: &[PointerEvent],
     ) {
         for ev in events {
+            let sid = match self.by_surface_id.get(&ev.surface.id().protocol_id()) {
+                Some(&sid) => sid,
+                None => continue,
+            };
+
             match ev.kind {
                 PointerEventKind::Enter { .. } => {}
                 PointerEventKind::Leave { .. } => {}
                 PointerEventKind::Motion { .. } => {
                     let (x, y) = ev.position;
                     self.events.push(SctkEvent::PointerMoved {
+                        surface: sid,
                         pos: Position::new(x as f32, y as f32),
                     });
                 }
-                PointerEventKind::Press { .. } => self.events.push(SctkEvent::PointerDown),
-                PointerEventKind::Release { .. } => self.events.push(SctkEvent::PointerUp),
+                PointerEventKind::Press { .. } => {
+                    self.events.push(SctkEvent::PointerDown { surface: sid })
+                }
+                PointerEventKind::Release { .. } => {
+                    self.events.push(SctkEvent::PointerUp { surface: sid })
+                }
                 PointerEventKind::Axis { .. } => {}
             }
         }
@@ -326,11 +371,12 @@ impl KeyboardHandler for SctkState {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _keyboard: &WlKeyboard,
-        _surface: &WlSurface,
+        surface: &WlSurface,
         _serial: u32,
         _rawkeys: &[u32],
         _keysyms: &[Keysym],
     ) {
+        self.kbd_focus = Some(SurfaceId(surface.id().protocol_id()));
     }
 
     fn leave(
@@ -341,6 +387,7 @@ impl KeyboardHandler for SctkState {
         _surface: &WlSurface,
         _serial: u32,
     ) {
+        self.kbd_focus = None;
     }
 
     fn press_key(
@@ -351,13 +398,16 @@ impl KeyboardHandler for SctkState {
         _serial: u32,
         event: KeyEvent,
     ) {
-        self.events.push(SctkEvent::Key {
-            raw_code: event.raw_code,
-            keysym: event.keysym,
-            utf8: event.utf8.clone(),
-            pressed: true,
-            repeat: false,
-        });
+        if let Some(sid) = self.kbd_focus {
+            self.events.push(SctkEvent::Key {
+                surface: sid,
+                raw_code: event.raw_code,
+                keysym: event.keysym,
+                utf8: event.utf8.clone(),
+                pressed: true,
+                repeat: false,
+            });
+        }
     }
 
     fn release_key(
@@ -368,13 +418,16 @@ impl KeyboardHandler for SctkState {
         _serial: u32,
         event: KeyEvent,
     ) {
-        self.events.push(SctkEvent::Key {
-            raw_code: event.raw_code,
-            keysym: event.keysym,
-            utf8: None,
-            pressed: false,
-            repeat: false,
-        });
+        if let Some(sid) = self.kbd_focus {
+            self.events.push(SctkEvent::Key {
+                surface: sid,
+                raw_code: event.raw_code,
+                keysym: event.keysym,
+                utf8: None,
+                pressed: false,
+                repeat: false,
+            });
+        }
     }
 
     fn repeat_key(
@@ -385,13 +438,16 @@ impl KeyboardHandler for SctkState {
         _serial: u32,
         event: KeyEvent,
     ) {
-        self.events.push(SctkEvent::Key {
-            raw_code: event.raw_code,
-            keysym: event.keysym,
-            utf8: event.utf8.clone(),
-            pressed: true,
-            repeat: true,
-        });
+        if let Some(sid) = self.kbd_focus {
+            self.events.push(SctkEvent::Key {
+                surface: sid,
+                raw_code: event.raw_code,
+                keysym: event.keysym,
+                utf8: event.utf8.clone(),
+                pressed: true,
+                repeat: true,
+            });
+        }
     }
 
     fn update_modifiers(
@@ -404,7 +460,9 @@ impl KeyboardHandler for SctkState {
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
-        self.events.push(SctkEvent::Modifiers(modifiers));
+        if let Some(sid) = self.kbd_focus {
+            self.events.push(SctkEvent::Modifiers(sid, modifiers));
+        }
     }
 }
 

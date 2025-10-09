@@ -1,5 +1,5 @@
 use crate::{
-    graphics::{Config, Globals},
+    graphics::{Globals, Gpu},
     model::Position,
     render::{text::TextSystem, texture::TextureRegistry},
 };
@@ -81,7 +81,7 @@ pub struct LayoutCtx<'a, M> {
 pub struct PaintCtx<'a> {
     pub globals: &'a Globals,
     pub text: &'a mut TextSystem,
-    pub config: &'a Config<'a>,
+    pub gpu: &'a Gpu,
     pub texture: &'a mut TextureRegistry,
 }
 

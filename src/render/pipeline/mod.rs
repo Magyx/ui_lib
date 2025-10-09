@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::graphics::{Config, Globals};
+use crate::graphics::{Globals, Gpu};
 
 mod ui;
 
@@ -12,7 +12,8 @@ pub enum PipelineKey {
 
 pub trait Pipeline {
     fn new(
-        config: &Config,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
         buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
@@ -22,7 +23,8 @@ pub trait Pipeline {
 
     fn reload(
         &mut self,
-        config: &Config,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
         buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
@@ -49,7 +51,8 @@ impl PipelineRegistry {
 
     pub(crate) fn register_default_pipelines(
         &mut self,
-        config: &Config,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
         buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
@@ -57,7 +60,8 @@ impl PipelineRegistry {
         self.register_pipeline(
             PipelineKey::Ui,
             Box::new(ui::UiPipeline::new(
-                config,
+                gpu,
+                surface_format,
                 buffers,
                 texture_bgl,
                 push_constant_ranges,
@@ -71,13 +75,20 @@ impl PipelineRegistry {
 
     pub(crate) fn reload(
         &mut self,
-        config: &Config,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
         buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
         for pipeline in self.pipelines.values_mut() {
-            pipeline.reload(config, buffers, texture_bgl, push_constant_ranges);
+            pipeline.reload(
+                gpu,
+                surface_format,
+                buffers,
+                texture_bgl,
+                push_constant_ranges,
+            );
         }
     }
 

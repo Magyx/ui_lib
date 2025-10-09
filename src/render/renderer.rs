@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     consts::DEFAULT_MAX_INSTANCES,
-    graphics::{Config, Globals},
+    graphics::{Globals, Gpu, Target},
     primitive::{Instance, Primitive, QUAD_INDICES, QUAD_VERTICES},
     render::{
         pipeline::{PipelineKey, PipelineRegistry},
@@ -28,25 +28,21 @@ pub(crate) struct Renderer {
 }
 
 impl Renderer {
-    pub(crate) fn new(config: &Config) -> Self {
-        let vertex_buffer = config
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Pipeline Vertex Buffer"),
-                contents: bytemuck::cast_slice(QUAD_VERTICES),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+    pub(crate) fn new(device: &wgpu::Device) -> Self {
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Pipeline Vertex Buffer"),
+            contents: bytemuck::cast_slice(QUAD_VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
 
-        let index_buffer = config
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Pipeline Index Buffer"),
-                contents: bytemuck::cast_slice(QUAD_INDICES),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Pipeline Index Buffer"),
+            contents: bytemuck::cast_slice(QUAD_INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
         let number_of_indices = QUAD_INDICES.len() as u32;
 
-        let instance_buffer = config.device.create_buffer(&wgpu::wgt::BufferDescriptor {
+        let instance_buffer = device.create_buffer(&wgpu::wgt::BufferDescriptor {
             label: Some("Pipeline Instance Buffer"),
             size: std::mem::size_of::<Primitive>() as u64 * DEFAULT_MAX_INSTANCES,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
@@ -58,23 +54,24 @@ impl Renderer {
             index_buffer,
             number_of_indices,
             instance_buffer,
-            textures: TextureRegistry::new(config),
+            textures: TextureRegistry::new(device),
             text: TextSystem::default(),
         }
     }
 
-    pub fn render(
+    pub fn render<'a, M>(
         &self,
-        config: &Config,
+        gpu: &Gpu,
+        target: &Target<'a, M>,
         pipeline_registry: &PipelineRegistry,
         globals: &Globals,
         instances: &[Instance],
     ) -> Result<(), wgpu::SurfaceError> {
-        let output = match config.surface.get_current_texture() {
+        let output = match target.surface.get_current_texture() {
             Ok(o) => o,
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                config.surface.configure(&config.device, &config.config);
-                config.surface.get_current_texture()?
+                target.surface.configure(&gpu.device, &target.config);
+                target.surface.get_current_texture()?
             }
             Err(wgpu::SurfaceError::Timeout) => return Ok(()),
             Err(e) => return Err(e),
@@ -84,7 +81,7 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = config
+        let mut encoder = gpu
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
@@ -121,7 +118,7 @@ impl Renderer {
             });
         }
 
-        config.queue.write_buffer(
+        gpu.queue.write_buffer(
             &self.instance_buffer,
             0,
             bytemuck::cast_slice(primitives.as_slice()),
@@ -162,7 +159,7 @@ impl Renderer {
             }
         }
 
-        config.queue.submit(std::iter::once(encoder.finish()));
+        gpu.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
         Ok(())

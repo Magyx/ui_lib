@@ -1,4 +1,4 @@
-use crate::{consts::DEFAULT_MAX_TEXTURES, graphics::Config, model::Size};
+use crate::{consts::DEFAULT_MAX_TEXTURES, graphics::Gpu, model::Size};
 
 fn dummy_bind_group(device: &wgpu::Device) -> wgpu::BindGroup {
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -108,47 +108,45 @@ pub struct TextureRegistry {
 }
 
 impl TextureRegistry {
-    pub fn new(config: &Config) -> Self {
-        let layout = config
-            .device
-            .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("UI Texture Array BGL"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: std::num::NonZeroU32::new(DEFAULT_MAX_TEXTURES),
+    pub fn new(device: &wgpu::Device) -> Self {
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("UI Texture Array BGL"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
+                    count: std::num::NonZeroU32::new(DEFAULT_MAX_TEXTURES),
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            });
+                    count: None,
+                },
+            ],
+        });
 
-        let sampler = config.device.create_sampler(&wgpu::SamplerDescriptor {
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("UI Texture Sampler"),
             ..Default::default()
         });
 
-        let placeholder = config.device.create_texture(&wgpu::TextureDescriptor {
+        let placeholder = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("UI Placeholder Tex"),
             size: wgpu::Extent3d {
                 width: 1,
@@ -168,7 +166,7 @@ impl TextureRegistry {
         let views = vec![None; n];
         let gens = vec![0u32; n];
 
-        let gens_buffer = config.device.create_buffer(&wgpu::BufferDescriptor {
+        let gens_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("UI Texture Generations Buffer"),
             size: (std::mem::size_of::<u32>() * n) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -177,7 +175,7 @@ impl TextureRegistry {
 
         let mut reg = Self {
             layout,
-            bind_group: dummy_bind_group(&config.device),
+            bind_group: dummy_bind_group(device),
             sampler,
 
             views,
@@ -186,7 +184,7 @@ impl TextureRegistry {
             free: (0..n).rev().collect(),
             placeholder_view,
         };
-        reg.update_bind_group(&config.device);
+        reg.update_bind_group(device);
         reg
     }
 
@@ -229,7 +227,7 @@ impl TextureRegistry {
 
     pub fn load_rgba8(
         &mut self,
-        config: &Config,
+        gpu: &Gpu,
         width: u32,
         height: u32,
         pixels_rgba8: &[u8],
@@ -239,7 +237,7 @@ impl TextureRegistry {
             .pop()
             .expect("Texture slots exhausted; bump DEFAULT_MAX_TEXTURES");
 
-        let tex = config.device.create_texture(&wgpu::TextureDescriptor {
+        let tex = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("UI Image"),
             size: wgpu::Extent3d {
                 width,
@@ -253,7 +251,7 @@ impl TextureRegistry {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        config.queue.write_texture(
+        gpu.queue.write_texture(
             tex.as_image_copy(),
             pixels_rgba8,
             wgpu::TexelCopyBufferLayout {
@@ -271,12 +269,12 @@ impl TextureRegistry {
 
         self.views[idx] = Some(TexSlot { tex, view });
 
-        config.queue.write_buffer(
+        gpu.queue.write_buffer(
             &self.gens_buffer,
             (std::mem::size_of::<u32>() * idx) as u64,
             bytemuck::cast_slice(&[self.gens[idx]]),
         );
-        self.update_bind_group(&config.device);
+        self.update_bind_group(&gpu.device);
 
         TextureHandle {
             index: idx as u32,
@@ -287,7 +285,7 @@ impl TextureRegistry {
         }
     }
 
-    pub fn unload(&mut self, config: &Config, handle: TextureHandle) -> bool {
+    pub fn unload(&mut self, gpu: &Gpu, handle: TextureHandle) -> bool {
         let idx = handle.index as usize;
         if idx >= self.views.len() {
             return false;
@@ -300,21 +298,21 @@ impl TextureRegistry {
         self.gens[idx] = self.gens[idx].wrapping_add(1);
         self.free.push(idx);
 
-        config.queue.write_buffer(
+        gpu.queue.write_buffer(
             &self.gens_buffer,
             (std::mem::size_of::<u32>() * idx) as u64,
             bytemuck::cast_slice(&[self.gens[idx]]),
         );
-        self.update_bind_group(&config.device);
+        self.update_bind_group(&gpu.device);
         true
     }
 
-    pub fn create_atlas(&mut self, config: &Config, width: u32, height: u32) -> Atlas {
+    pub fn create_atlas(&mut self, gpu: &Gpu, width: u32, height: u32) -> Atlas {
         let idx = self
             .free
             .pop()
             .expect("Texture slots exhausted; bump DEFAULT_MAX_TEXTURES");
-        let tex = config.device.create_texture(&wgpu::TextureDescriptor {
+        let tex = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("UI Atlas"),
             size: wgpu::Extent3d {
                 width,
@@ -331,19 +329,19 @@ impl TextureRegistry {
         let view = tex.create_view(&Default::default());
         self.views[idx] = Some(TexSlot { tex, view });
 
-        config.queue.write_buffer(
+        gpu.queue.write_buffer(
             &self.gens_buffer,
             (std::mem::size_of::<u32>() * idx) as u64,
             bytemuck::cast_slice(&[self.gens[idx]]),
         );
-        self.update_bind_group(&config.device);
+        self.update_bind_group(&gpu.device);
 
         Atlas::new(idx, self.gens[idx], Size::new(width, height))
     }
 
     pub fn load_into_atlas(
         &mut self,
-        config: &Config,
+        gpu: &Gpu,
         atlas: &mut Atlas,
         w: u32,
         h: u32,
@@ -354,7 +352,7 @@ impl TextureRegistry {
             .as_ref()
             .expect("atlas slot missing");
 
-        config.queue.write_texture(
+        gpu.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: &slot.tex,
                 mip_level: 0,
@@ -396,18 +394,18 @@ impl TextureRegistry {
         })
     }
 
-    pub fn destroy_atlas(&mut self, config: &Config, atlas: &mut Atlas) {
+    pub fn destroy_atlas(&mut self, gpu: &Gpu, atlas: &mut Atlas) {
         let idx = atlas.slot_index;
 
         self.gens[idx] = self.gens[idx].wrapping_add(1);
-        config.queue.write_buffer(
+        gpu.queue.write_buffer(
             &self.gens_buffer,
             (std::mem::size_of::<u32>() * idx) as u64,
             bytemuck::cast_slice(&[self.gens[idx]]),
         );
 
         self.views[idx] = None;
-        self.update_bind_group(&config.device);
+        self.update_bind_group(&gpu.device);
         self.free.push(idx);
 
         atlas.size_px = Size::new(0, 0);

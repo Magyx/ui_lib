@@ -1,4 +1,4 @@
-use ui::graphics::{Config, Globals};
+use ui::graphics::{Globals, Gpu};
 use ui::render::pipeline::Pipeline;
 
 pub struct PlanetPipeline {
@@ -7,7 +7,8 @@ pub struct PlanetPipeline {
 
 impl Pipeline for PlanetPipeline {
     fn new(
-        config: &Config,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
         buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
@@ -15,25 +16,32 @@ impl Pipeline for PlanetPipeline {
         let mut p = Self {
             render_pipeline: None,
         };
-        p.reload(config, buffers, texture_bgl, push_constant_ranges);
+        p.reload(
+            gpu,
+            surface_format,
+            buffers,
+            texture_bgl,
+            push_constant_ranges,
+        );
         p
     }
 
     fn reload(
         &mut self,
-        config: &Config,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
         buffers: &[wgpu::VertexBufferLayout],
         _texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
-        let shader_module = config
+        let shader_module = gpu
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("Planet Shader"),
                 source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/planet.wgsl").into()),
             });
 
-        let layout = config
+        let layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Planet Layout"),
@@ -41,7 +49,7 @@ impl Pipeline for PlanetPipeline {
                 push_constant_ranges,
             });
 
-        self.render_pipeline = Some(config.device.create_render_pipeline(
+        self.render_pipeline = Some(gpu.device.create_render_pipeline(
             &wgpu::RenderPipelineDescriptor {
                 label: Some("Planet Render Pipeline"),
                 layout: Some(&layout),
@@ -55,7 +63,7 @@ impl Pipeline for PlanetPipeline {
                     module: &shader_module,
                     entry_point: Some("fs_main"),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: config.config.format,
+                        format: *surface_format,
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent {
                                 src_factor: wgpu::BlendFactor::One,
