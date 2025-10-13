@@ -277,8 +277,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         id
     }
 
-    pub fn detach_target(&mut self, id: TargetId) {
-        if self.targets.remove(&id).is_some() && self.primary_target == Some(id) {
+    pub fn detach_target(&mut self, tid: &TargetId) {
+        if self.targets.remove(tid).is_some() && self.primary_target == Some(*tid) {
             self.primary_target = self.targets.keys().next().copied();
         }
     }

@@ -27,31 +27,31 @@ use crate::{
 
 mod adapter;
 mod erased;
-mod handler;
+pub mod handler;
 mod helpers;
-mod msg;
-mod state;
+pub mod msg;
+pub mod state;
 
 // === Public API ================================================================================
 
 #[derive(Clone, Debug)]
-pub enum OutputSet<'a> {
+pub enum OutputSet {
     /// Use single-output selector
-    One(OutputSelector<'a>),
+    One(OutputSelector),
     /// Mirror the surface to every compositor output
     All,
     /// Explicit list
-    List(Vec<OutputSelector<'a>>),
+    List(Vec<OutputSelector>),
 }
 
 #[derive(Clone, Debug)]
-pub enum OutputSelector<'a> {
+pub enum OutputSelector {
     /// First output in SCTK’s list (current behavior)
     First,
     /// Nth output (0-based)
     Index(usize),
     /// Choose the output whose info.name/model/make starts with this string
-    NamePrefix(&'a str),
+    NamePrefix(String),
     /// Prefer laptop panel-ish names (eDP, LVDS), fall back to First
     InternalPrefer,
     /// Pick the output with the highest reported scale factor
@@ -60,7 +60,7 @@ pub enum OutputSelector<'a> {
 
 /// Options describing the layer-shell surface (instead of winit's WindowAttributes).
 #[derive(Clone, Debug)]
-pub struct LayerOptions<'a> {
+pub struct LayerOptions {
     pub layer: Layer,
     pub size: Size<u32>,
     pub anchors: Anchor,
@@ -68,11 +68,11 @@ pub struct LayerOptions<'a> {
     pub exclusive_zone: i32,
     pub keyboard_interactivity: KeyboardInteractivity,
     /// Namespace, useful for compositor rules.
-    pub namespace: Option<&'a str>,
-    pub output: Option<OutputSet<'a>>,
+    pub namespace: Option<String>,
+    pub output: Option<OutputSet>,
 }
 
-impl<'a> Default for LayerOptions<'a> {
+impl Default for LayerOptions {
     fn default() -> Self {
         Self {
             layer: Layer::Top,
@@ -80,7 +80,7 @@ impl<'a> Default for LayerOptions<'a> {
             anchors: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
             exclusive_zone: -1,
             keyboard_interactivity: KeyboardInteractivity::None,
-            namespace: Some("ui"),
+            namespace: Some("ui".to_string()),
             output: None,
         }
     }
@@ -245,7 +245,7 @@ fn run_app_core<'a, M, S, V, U, H, F>(
     mut state: S,
     view: V,
     mut update: U,
-    opts: LayerOptions<'_>,
+    opts: LayerOptions,
     post_engine_init: F,
 ) -> anyhow::Result<()>
 where
@@ -387,7 +387,7 @@ pub fn run_app<'a, M, S, H, V, U>(
     state: S,
     view: V,
     update: U,
-    opts: LayerOptions<'_>,
+    opts: LayerOptions,
 ) -> anyhow::Result<()>
 where
     M: 'static + std::fmt::Debug + Clone + Send,
@@ -403,7 +403,7 @@ pub fn run_app_with<'a, M, S, H, V, U, I>(
     state: S,
     view: V,
     update: U,
-    opts: LayerOptions<'_>,
+    opts: LayerOptions,
     extra_pipelines: I,
 ) -> anyhow::Result<()>
 where

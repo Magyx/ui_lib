@@ -5,9 +5,9 @@ use crate::{event::LogicalKey, sctk::OutputSet};
 
 use super::OutputSelector;
 
-pub(super) fn pick_output<'a>(
+pub(super) fn pick_output(
     outputs: &OutputState,
-    sel: &OutputSelector<'a>,
+    sel: &OutputSelector,
 ) -> Option<wayland_client::protocol::wl_output::WlOutput> {
     use OutputSelector::*;
 
@@ -39,9 +39,9 @@ pub(super) fn pick_output<'a>(
     }
 }
 
-pub(super) fn pick_outputs<'a>(
+pub(super) fn pick_outputs(
     outputs: &OutputState,
-    sel: &OutputSet<'a>,
+    sel: &OutputSet,
 ) -> Vec<wayland_client::protocol::wl_output::WlOutput> {
     match sel {
         OutputSet::All => outputs.outputs().collect(),

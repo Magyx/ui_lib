@@ -50,7 +50,7 @@ fn main() -> anyhow::Result<()> {
         anchors: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
         exclusive_zone: -1,
         keyboard_interactivity: KeyboardInteractivity::OnDemand,
-        namespace: Some("ui-example"),
+        namespace: Some("ui-example".to_string()),
         output: Some(ui::sctk::OutputSet::All),
     };
 

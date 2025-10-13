@@ -64,7 +64,7 @@ impl SctkState {
         out: &WlOutput,
         compositor: &CompositorState,
         qh: &QueueHandle<Self>,
-        opts: &LayerOptions<'_>,
+        opts: &LayerOptions,
         layer_shell: &LayerShell,
     ) -> (WlSurface, LayerSurface) {
         let wl_surface = compositor.create_surface(qh);
@@ -72,7 +72,7 @@ impl SctkState {
             qh,
             wl_surface.clone(),
             opts.layer,
-            opts.namespace,
+            opts.namespace.as_ref(),
             Some(out),
         );
         layer_surface.set_anchor(opts.anchors);
@@ -89,7 +89,7 @@ impl SctkState {
     pub(super) fn new(
         _globals: &GlobalList,
         qh: &QueueHandle<Self>,
-        opts: LayerOptions<'_>,
+        opts: LayerOptions,
         compositor: CompositorState,
         layer_shell: LayerShell,
         outputs: OutputState,
