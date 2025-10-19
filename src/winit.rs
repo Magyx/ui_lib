@@ -242,7 +242,7 @@ where
                     .expect("Failed to create window"),
             );
             let size = window.inner_size().into();
-            let (target, mut engine) = Engine::new(window.clone(), size);
+            let (target, mut engine) = Engine::new_for(window.clone(), size);
             if let Some(pipelines) = self.extra_pipelines.take() {
                 for (key, factory) in pipelines {
                     engine.register_pipeline(

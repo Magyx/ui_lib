@@ -298,7 +298,7 @@ where
             &conn,
             &st.surfaces[sid].wl_surface,
         ));
-        let (tid, mut engine) = Engine::new(target, st.surfaces[sid].size);
+        let (tid, mut engine) = Engine::new_for(target, st.surfaces[sid].size);
         post_engine_init(&mut engine);
         sid_to_tid.insert(*sid, tid);
 

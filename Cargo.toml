@@ -37,7 +37,6 @@ wayland-backend = { version = "0.3", features = [
   "client_system",
 ], optional = true }
 calloop = { version = "0.14", optional = true }
-calloop-wayland-source = { version = "0.4", optional = true }
 
 [features]
 default = []
@@ -53,7 +52,6 @@ sctk = [
   "dep:wayland-client",
   "dep:wayland-backend",
   "dep:calloop",
-  "dep:calloop-wayland-source",
 ]
 
 [dev-dependencies]

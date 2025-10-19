@@ -2442,7 +2442,6 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "calloop 0.14.3",
- "calloop-wayland-source 0.4.1",
  "cosmic-text",
  "env_logger",
  "image",

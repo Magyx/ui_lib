@@ -73,16 +73,8 @@ pub struct Engine<'a, M> {
     renderer: Renderer,
 }
 
-impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
-    pub fn new<T>(target: Arc<T>, size: Size<u32>) -> (TargetId, Engine<'a, M>)
-    where
-        T: wgpu::rwh::HasWindowHandle
-            + wgpu::rwh::HasDisplayHandle
-            + Sized
-            + std::marker::Sync
-            + std::marker::Send
-            + 'a,
-    {
+impl<'a, M> Default for Engine<'a, M> {
+    fn default() -> Self {
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: crate::consts::default_backends(),
             flags: crate::consts::default_instance_flags(),
@@ -131,40 +123,47 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         }];
 
         let renderer = Renderer::new(&gpu.device);
+        let pipeline_registry = PipelineRegistry::new();
 
-        let surface = Self::create_target(&gpu, target, size);
+        let target_alloc = TargetIdAlloc::default();
+        let targets = HashMap::with_capacity(1);
 
-        let mut pipeline_registry = PipelineRegistry::new();
-        pipeline_registry.register_default_pipelines(
-            &gpu,
-            &surface.config.format,
-            &[Vertex::desc(), Primitive::desc()],
-            renderer.textures.layout(),
-            &push_constant_ranges,
-        );
+        Self {
+            debug: false,
 
-        let mut target_id = TargetIdAlloc::default();
-        let first_target = target_id.alloc();
-        let mut surfaces = HashMap::with_capacity(1);
-        surfaces.insert(first_target, surface);
+            gpu: Arc::new(gpu),
+            target_alloc,
+            primary_target: None,
+            targets,
+            push_constant_ranges,
+            pipeline_registry,
+            renderer,
+        }
+    }
+}
 
-        (
-            first_target,
-            Self {
-                debug: false,
-
-                gpu: Arc::new(gpu),
-                target_alloc: target_id,
-                primary_target: Some(first_target),
-                targets: surfaces,
-                push_constant_ranges,
-                pipeline_registry,
-                renderer,
-            },
-        )
+impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    fn create_target<T>(gpu: &Gpu, target: Arc<T>, size: Size<u32>) -> Target<'a, M>
+    pub fn new_for<T>(target: Arc<T>, size: Size<u32>) -> (TargetId, Self)
+    where
+        T: wgpu::rwh::HasWindowHandle
+            + wgpu::rwh::HasDisplayHandle
+            + Sized
+            + std::marker::Sync
+            + std::marker::Send
+            + 'a,
+    {
+        let mut engine = Self::new();
+
+        let target = engine.create_target(target, size);
+
+        (target, engine)
+    }
+
+    fn create_target<T>(&mut self, target: Arc<T>, size: Size<u32>) -> TargetId
     where
         T: wgpu::rwh::HasWindowHandle
             + wgpu::rwh::HasDisplayHandle
@@ -175,12 +174,13 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
     {
         let size = size.max(Size::new(1, 1));
 
-        let surface = gpu
+        let surface = self
+            .gpu
             .instance
             .create_surface(target.clone())
             .expect("wgpu: failed to create surface (window/display handle mismatch?)");
 
-        let surface_caps = surface.get_capabilities(&gpu.adapter);
+        let surface_caps = surface.get_capabilities(&self.gpu.adapter);
         let surface_format = surface_caps
             .formats
             .iter()
@@ -198,11 +198,10 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             desired_maximum_frame_latency: 1,
         };
 
-        surface.configure(&gpu.device, &config);
+        surface.configure(&self.gpu.device, &config);
 
         let now = Instant::now();
-
-        Target {
+        let target = Target {
             surface,
             config,
             size,
@@ -221,7 +220,26 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             last_frame_time: now,
 
             root: None,
+        };
+
+        if !self.pipeline_registry.has_default_pipelines() {
+            self.pipeline_registry.register_default_pipelines(
+                &self.gpu,
+                &target.config.format,
+                &[Vertex::desc(), Primitive::desc()],
+                self.renderer.textures.layout(),
+                &self.push_constant_ranges,
+            );
         }
+
+        let tid = self.target_alloc.alloc();
+        self.targets.insert(tid, target);
+
+        if self.primary_target.is_none() {
+            self.primary_target = Some(tid);
+        }
+
+        tid
     }
 
     #[inline]
@@ -268,18 +286,16 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             + std::marker::Send
             + 'a,
     {
-        let id = self.target_alloc.alloc();
-        let surface = Self::create_target(&self.gpu, target, size);
-        self.targets.insert(id, surface);
-        if self.primary_target.is_none() {
-            self.primary_target = Some(id);
-        }
-        id
+        self.create_target(target, size)
     }
 
     pub fn detach_target(&mut self, tid: &TargetId) {
         if self.targets.remove(tid).is_some() && self.primary_target == Some(*tid) {
-            self.primary_target = self.targets.keys().next().copied();
+            if self.primary_target == Some(*tid) && !self.targets.is_empty() {
+                self.primary_target = self.targets.keys().next().copied();
+            } else {
+                _ = self.primary_target.take();
+            }
         }
     }
 

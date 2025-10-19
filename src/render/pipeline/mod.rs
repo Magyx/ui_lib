@@ -69,6 +69,12 @@ impl PipelineRegistry {
         );
     }
 
+    pub(crate) fn has_default_pipelines(&self) -> bool {
+        [PipelineKey::Ui]
+            .iter()
+            .all(|k| self.pipelines.contains_key(k))
+    }
+
     pub fn register_pipeline(&mut self, key: PipelineKey, pipeline: Box<dyn Pipeline>) {
         self.pipelines.insert(key, pipeline);
     }
