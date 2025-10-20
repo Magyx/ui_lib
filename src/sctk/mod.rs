@@ -1,12 +1,18 @@
 use std::{
     any::Any,
-    cell::Cell,
     collections::HashMap,
     fmt::Debug,
     ptr::NonNull,
-    sync::{Arc, Mutex, mpsc},
+    sync::{Arc, Mutex, atomic::AtomicBool, mpsc},
 };
 
+use crate::{
+    event::{Event, KeyEvent, KeyLocation, KeyState, Modifiers, PhysicalKey, ToEvent},
+    graphics::{Engine, TargetId},
+    model::{Position, Size},
+    render::PipelineFactoryFn,
+    widget::Element,
+};
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
@@ -17,15 +23,7 @@ use smithay_client_toolkit::{
 };
 use wayland_client::{Proxy, protocol::wl_surface::WlSurface};
 
-use crate::{
-    event::{Event, KeyEvent, KeyLocation, KeyState, Modifiers, PhysicalKey, ToEvent},
-    graphics::{Engine, TargetId},
-    model::{Position, Size},
-    render::PipelineFactoryFn,
-    widget::Element,
-};
-
-mod adapter;
+pub mod adapter;
 mod erased;
 pub mod handler;
 mod helpers;
@@ -189,21 +187,21 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct SurfaceId(u32);
 
+#[derive(Default)]
 pub struct SctkLoop {
-    exit: Cell<bool>,
+    exit: AtomicBool,
 }
 
 impl SctkLoop {
-    fn new() -> Self {
-        Self {
-            exit: Cell::new(false),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
+
     pub fn exit(&self) {
-        self.exit.set(true);
+        self.exit.store(true, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn should_exit(&self) -> bool {
-        self.exit.get()
+        self.exit.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 
@@ -269,13 +267,13 @@ where
     let layer_shell = LayerShell::bind(&globals, &qh)?;
 
     let (tx, rx) = mpsc::channel();
+    let handler_tx = tx.clone();
     let sctk_handler = adapter::erase::<H, M, _>(move |m| {
-        let _ = tx.send(m);
+        let _ = handler_tx.send(SctkEvent::message(m));
     });
 
     // 3) Concrete SCTK state
-    let mut st = state::SctkState::new(
-        &globals,
+    let mut st = state::SctkState::new_for(
         &qh,
         opts,
         compositor,
@@ -284,6 +282,7 @@ where
         seats,
         registry,
         sctk_handler,
+        tx,
     )?;
 
     // 4) Create engine and attach surfaces
@@ -310,13 +309,13 @@ where
         engine
     };
 
-    let loop_ctl = SctkLoop::new();
+    let loop_ctl = SctkLoop::default();
 
     // 5) Main loop
     while !loop_ctl.should_exit() && !st.closed {
         event_queue.blocking_dispatch(&mut st)?;
 
-        for ev in st.take_events() {
+        for ev in rx.try_iter() {
             match &ev {
                 SctkEvent::Resized { surface, .. }
                 | SctkEvent::PointerMoved { surface, .. }
@@ -347,20 +346,6 @@ where
                         );
                     }
                 }
-            }
-        }
-
-        while let Ok(m) = rx.try_recv() {
-            for &tid in sid_to_tid.values() {
-                engine.handle_platform_event(
-                    &tid,
-                    &SctkEvent::message(m.clone()),
-                    &mut |engine, event, state, loop_ctl| {
-                        update(tid, engine, event, state, loop_ctl)
-                    },
-                    &mut state,
-                    &loop_ctl,
-                );
             }
         }
 

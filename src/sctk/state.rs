@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::mpsc::Sender};
 
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
@@ -18,7 +18,6 @@ use smithay_client_toolkit::{
 };
 use wayland_client::{
     Connection, Proxy, QueueHandle,
-    globals::GlobalList,
     protocol::{
         wl_keyboard::WlKeyboard, wl_output::WlOutput, wl_pointer::WlPointer, wl_seat::WlSeat,
         wl_surface::WlSurface,
@@ -54,7 +53,7 @@ pub struct SctkState {
 
     // event queue for the generic runner
     handler: Box<dyn SctkErased>,
-    events: Vec<SctkEvent>,
+    event_tx: Sender<SctkEvent>,
     pub closed: bool,
     pub needs_redraw: bool,
 }
@@ -86,8 +85,35 @@ impl SctkState {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn new(
-        _globals: &GlobalList,
+    pub fn new(
+        compositor: CompositorState,
+        layer_shell: LayerShell,
+        outputs: OutputState,
+        seats: SeatState,
+        registry: RegistryState,
+        handler: Box<dyn SctkErased>,
+        event_tx: Sender<SctkEvent>,
+    ) -> Self {
+        Self {
+            registry,
+            _compositor: compositor,
+            outputs,
+            seats,
+            _layer_shell: layer_shell,
+
+            surfaces: HashMap::new(),
+            by_surface_id: HashMap::new(),
+            kbd_focus: None,
+
+            handler,
+            event_tx,
+            closed: false,
+            needs_redraw: true,
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_for(
         qh: &QueueHandle<Self>,
         opts: LayerOptions,
         compositor: CompositorState,
@@ -96,6 +122,7 @@ impl SctkState {
         seats: SeatState,
         registry: RegistryState,
         handler: Box<dyn SctkErased>,
+        event_tx: Sender<SctkEvent>,
     ) -> anyhow::Result<Self> {
         let chosen = helpers::pick_outputs(
             &outputs,
@@ -133,14 +160,14 @@ impl SctkState {
             kbd_focus: None,
 
             handler,
-            events: Vec::new(),
+            event_tx,
             closed: false,
             needs_redraw: true,
         })
     }
 
-    pub(super) fn take_events(&mut self) -> impl Iterator<Item = SctkEvent> + '_ {
-        self.events.drain(..)
+    pub fn emit_event(&self, ev: SctkEvent) {
+        let _ = self.event_tx.send(ev);
     }
 }
 
@@ -258,7 +285,7 @@ impl CompositorHandler for SctkState {
 
 impl LayerShellHandler for SctkState {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
-        self.events.push(SctkEvent::Closed);
+        self.emit_event(SctkEvent::Closed);
         self.closed = true;
     }
 
@@ -271,22 +298,28 @@ impl LayerShellHandler for SctkState {
         _serial: u32,
     ) {
         let lid = layer.wl_surface().id().protocol_id();
-        if let Some(sid) = self.by_surface_id.get(&lid).copied()
-            && let Some(s) = self.surfaces.get_mut(&sid)
-        {
-            let (w, h) = configure.new_size;
-            let w = if w == 0 { s.size.width } else { w };
-            let h = if h == 0 { s.size.height } else { h };
-            if w != s.size.width || h != s.size.height {
-                s.size = Size::new(w, h);
-                self.events.push(SctkEvent::Resized {
-                    surface: sid,
-                    size: s.size,
-                });
+        if let Some(sid) = self.by_surface_id.get(&lid).copied() {
+            let maybe_size = {
+                if let Some(s) = self.surfaces.get_mut(&sid) {
+                    let (nw, nh) = configure.new_size;
+                    let w = if nw == 0 { s.size.width } else { nw };
+                    let h = if nh == 0 { s.size.height } else { nh };
+                    if w != s.size.width || h != s.size.height {
+                        s.size = Size::new(w, h);
+                        Some(s.size)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+
+            if let Some(size) = maybe_size {
+                self.emit_event(SctkEvent::Resized { surface: sid, size });
             }
         }
 
-        // Publish our new state
         layer.wl_surface().commit();
         self.needs_redraw = true;
     }
@@ -348,16 +381,16 @@ impl PointerHandler for SctkState {
                 PointerEventKind::Leave { .. } => {}
                 PointerEventKind::Motion { .. } => {
                     let (x, y) = ev.position;
-                    self.events.push(SctkEvent::PointerMoved {
+                    self.emit_event(SctkEvent::PointerMoved {
                         surface: sid,
                         pos: Position::new(x as f32, y as f32),
                     });
                 }
                 PointerEventKind::Press { .. } => {
-                    self.events.push(SctkEvent::PointerDown { surface: sid })
+                    self.emit_event(SctkEvent::PointerDown { surface: sid })
                 }
                 PointerEventKind::Release { .. } => {
-                    self.events.push(SctkEvent::PointerUp { surface: sid })
+                    self.emit_event(SctkEvent::PointerUp { surface: sid })
                 }
                 PointerEventKind::Axis { .. } => {}
             }
@@ -399,7 +432,7 @@ impl KeyboardHandler for SctkState {
         event: KeyEvent,
     ) {
         if let Some(sid) = self.kbd_focus {
-            self.events.push(SctkEvent::Key {
+            self.emit_event(SctkEvent::Key {
                 surface: sid,
                 raw_code: event.raw_code,
                 keysym: event.keysym,
@@ -419,7 +452,7 @@ impl KeyboardHandler for SctkState {
         event: KeyEvent,
     ) {
         if let Some(sid) = self.kbd_focus {
-            self.events.push(SctkEvent::Key {
+            self.emit_event(SctkEvent::Key {
                 surface: sid,
                 raw_code: event.raw_code,
                 keysym: event.keysym,
@@ -439,7 +472,7 @@ impl KeyboardHandler for SctkState {
         event: KeyEvent,
     ) {
         if let Some(sid) = self.kbd_focus {
-            self.events.push(SctkEvent::Key {
+            self.emit_event(SctkEvent::Key {
                 surface: sid,
                 raw_code: event.raw_code,
                 keysym: event.keysym,
@@ -461,7 +494,7 @@ impl KeyboardHandler for SctkState {
         _layout: u32,
     ) {
         if let Some(sid) = self.kbd_focus {
-            self.events.push(SctkEvent::Modifiers(sid, modifiers));
+            self.emit_event(SctkEvent::Modifiers(sid, modifiers));
         }
     }
 }
