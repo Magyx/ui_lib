@@ -423,10 +423,14 @@ pub mod text {
                 .color(fg_title)
                 .einto(),
             // Body (multiline)
-            Text::new(hero_text, 16.0)
-                .size(Size::new(Grow, Fit))
-                .color(fg_text)
-                .einto(),
+            Row::new(vec![
+                Text::new(hero_text, 16.0)
+                    .size(Size::new(Grow, Fit))
+                    .color(fg_text)
+                    .einto(),
+            ])
+            .size(Size::new(Grow, Fit))
+            .einto(),
             // Body (fit checks)
             Column::new(vec![
                 Row::new(vec![
@@ -436,7 +440,11 @@ pub mod text {
                 .size(Size::new(Grow, Fit))
                 .spacing(12)
                 .einto(),
-                Text::new(long, 16.0).size(Size::new(Grow, Fit)).einto(),
+                Row::new(vec![
+                    Text::new(long, 16.0).size(Size::new(Grow, Fit)).einto(),
+                ])
+                .size(Size::new(Grow, Fit))
+                .einto(),
             ])
             .size(Size::new(Grow, Fit))
             .spacing(12)
