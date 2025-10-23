@@ -56,6 +56,33 @@ pub trait SctkHandler<M> {
         Emit::none()
     }
 
+    // Session Lock
+    fn locked(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        session_lock: smithay_client_toolkit::session_lock::SessionLock,
+    ) -> Emit<M> {
+        Emit::none()
+    }
+
+    fn finished(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        session_lock: smithay_client_toolkit::session_lock::SessionLock,
+    ) -> Emit<M> {
+        Emit::none()
+    }
+
+    fn configure(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: smithay_client_toolkit::session_lock::SessionLockSurface,
+        configure: smithay_client_toolkit::session_lock::SessionLockSurfaceConfigure,
+        serial: u32,
+    ) -> Emit<M> {
+        Emit::none()
+    }
+
     // Keyboard
     fn key(
         seat_id: u32,

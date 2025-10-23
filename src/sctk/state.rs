@@ -1,19 +1,26 @@
-use std::{collections::HashMap, sync::mpsc::Sender};
+use std::collections::HashMap;
 
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
-    delegate_registry, delegate_seat,
+    delegate_registry, delegate_seat, delegate_session_lock, delegate_xdg_shell,
+    delegate_xdg_window,
     output::{OutputHandler, OutputState},
+    reexports::calloop::channel as loop_channel,
     registry::{ProvidesRegistryState, RegistryState},
     seat::{
         Capability, SeatHandler, SeatState,
         keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
         pointer::{PointerEvent, PointerEventKind, PointerHandler},
     },
+    session_lock::{SessionLock, SessionLockHandler, SessionLockState, SessionLockSurface},
     shell::{
         WaylandSurface,
         wlr_layer::{LayerShell, LayerShellHandler, LayerSurface, LayerSurfaceConfigure},
+        xdg::{
+            XdgShell,
+            window::{Window, WindowHandler},
+        },
     },
 };
 use wayland_client::{
@@ -26,14 +33,20 @@ use wayland_client::{
 
 use crate::{
     model::{Position, Size},
-    sctk::{LayerOptions, OutputSelector, OutputSet, SurfaceId},
+    sctk::{LayerOptions, OutputSelector, OutputSet, SurfaceId, XdgOptions},
 };
 
 use super::{SctkEvent, erased::SctkErased, helpers};
 
+enum SurfaceRole {
+    Layer(LayerSurface),
+    Xdg(Window),
+    Lock(SessionLockSurface),
+}
+
 pub struct SurfaceRec {
     pub wl_surface: WlSurface,
-    _layer_surface: LayerSurface,
+    role: SurfaceRole,
     _output: WlOutput,
     pub size: Size<u32>,
 }
@@ -44,7 +57,9 @@ pub struct SctkState {
     _compositor: CompositorState,
     outputs: OutputState,
     seats: SeatState,
-    _layer_shell: LayerShell,
+    _layer_shell: Option<LayerShell>,
+    _xdg_shell: Option<XdgShell>,
+    session_lock: SessionLockState,
 
     // surface & role
     pub surfaces: HashMap<SurfaceId, SurfaceRec>,
@@ -53,12 +68,44 @@ pub struct SctkState {
 
     // event queue for the generic runner
     handler: Box<dyn SctkErased>,
-    event_tx: Sender<SctkEvent>,
+    event_tx: loop_channel::Sender<SctkEvent>,
     pub closed: bool,
     pub needs_redraw: bool,
 }
 
 impl SctkState {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        compositor: CompositorState,
+        layer_shell: Option<LayerShell>,
+        xdg_shell: Option<XdgShell>,
+        outputs: OutputState,
+        seats: SeatState,
+        registry: RegistryState,
+        session_lock: SessionLockState,
+        handler: Box<dyn SctkErased>,
+        event_tx: loop_channel::Sender<SctkEvent>,
+    ) -> Self {
+        Self {
+            registry,
+            _compositor: compositor,
+            outputs,
+            seats,
+            _layer_shell: layer_shell,
+            _xdg_shell: xdg_shell,
+            session_lock,
+
+            surfaces: HashMap::new(),
+            by_surface_id: HashMap::new(),
+            kbd_focus: None,
+
+            handler,
+            event_tx,
+            closed: false,
+            needs_redraw: true,
+        }
+    }
+
     fn make_surface(
         out: &WlOutput,
         compositor: &CompositorState,
@@ -85,35 +132,7 @@ impl SctkState {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        compositor: CompositorState,
-        layer_shell: LayerShell,
-        outputs: OutputState,
-        seats: SeatState,
-        registry: RegistryState,
-        handler: Box<dyn SctkErased>,
-        event_tx: Sender<SctkEvent>,
-    ) -> Self {
-        Self {
-            registry,
-            _compositor: compositor,
-            outputs,
-            seats,
-            _layer_shell: layer_shell,
-
-            surfaces: HashMap::new(),
-            by_surface_id: HashMap::new(),
-            kbd_focus: None,
-
-            handler,
-            event_tx,
-            closed: false,
-            needs_redraw: true,
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_for(
+    pub fn new_for_layer(
         qh: &QueueHandle<Self>,
         opts: LayerOptions,
         compositor: CompositorState,
@@ -121,8 +140,9 @@ impl SctkState {
         outputs: OutputState,
         seats: SeatState,
         registry: RegistryState,
+        session_lock: SessionLockState,
         handler: Box<dyn SctkErased>,
-        event_tx: Sender<SctkEvent>,
+        event_tx: loop_channel::Sender<SctkEvent>,
     ) -> anyhow::Result<Self> {
         let chosen = helpers::pick_outputs(
             &outputs,
@@ -141,7 +161,7 @@ impl SctkState {
                 sid,
                 SurfaceRec {
                     wl_surface: wl,
-                    _layer_surface: layer,
+                    role: SurfaceRole::Layer(layer),
                     _output: out,
                     size: opts.size,
                 },
@@ -153,7 +173,9 @@ impl SctkState {
             _compositor: compositor,
             outputs,
             seats,
-            _layer_shell: layer_shell,
+            _layer_shell: Some(layer_shell),
+            _xdg_shell: None,
+            session_lock,
 
             surfaces,
             by_surface_id,
@@ -166,8 +188,179 @@ impl SctkState {
         })
     }
 
-    pub fn emit_event(&self, ev: SctkEvent) {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_for_window(
+        qh: &QueueHandle<Self>,
+        opts: XdgOptions,
+        compositor: CompositorState,
+        xdg_shell: XdgShell,
+        outputs: OutputState,
+        seats: SeatState,
+        registry: RegistryState,
+        session_lock: SessionLockState,
+        handler: Box<dyn SctkErased>,
+        event_tx: loop_channel::Sender<SctkEvent>,
+    ) -> anyhow::Result<Self> {
+        let wl_surface = compositor.create_surface(qh);
+        let window = xdg_shell.create_window(wl_surface, opts.decorations, qh);
+
+        window.set_title(&opts.title);
+        if let Some(app_id) = &opts.app_id {
+            window.set_app_id(app_id);
+        }
+
+        window.set_min_size(None);
+        window.set_max_size(None);
+
+        let mut surfaces = HashMap::with_capacity(1);
+        let mut by_surface_id = HashMap::with_capacity(1);
+        let sid = SurfaceId(window.wl_surface().id().protocol_id());
+        by_surface_id.insert(window.wl_surface().id().protocol_id(), sid);
+        surfaces.insert(
+            sid,
+            SurfaceRec {
+                wl_surface: window.wl_surface().clone(),
+                role: SurfaceRole::Xdg(window),
+                _output: super::helpers::pick_output(
+                    &outputs,
+                    &opts.output.unwrap_or(super::OutputSelector::First),
+                )
+                .unwrap_or_else(|| outputs.outputs().next().expect("no outputs")),
+                size: opts.size,
+            },
+        );
+
+        Ok(Self {
+            registry,
+            _compositor: compositor,
+            outputs,
+            seats,
+            _layer_shell: None,
+            _xdg_shell: Some(xdg_shell),
+            session_lock,
+
+            surfaces,
+            by_surface_id,
+            kbd_focus: None,
+            handler,
+            event_tx,
+            closed: false,
+            needs_redraw: true,
+        })
+    }
+
+    fn emit_event(&self, ev: SctkEvent) {
         let _ = self.event_tx.send(ev);
+    }
+
+    fn remove_surface_by_wl(&mut self, wl_surface: &WlSurface) {
+        let key = wl_surface.id().protocol_id();
+        self.remove_surface_by_surface_id(SurfaceId(key));
+    }
+
+    pub fn remove_surface_by_surface_id(&mut self, sid: SurfaceId) {
+        if let Some(sid) = self.by_surface_id.remove(&sid.0) {
+            self.surfaces.remove(&sid);
+            if self.kbd_focus == Some(sid) {
+                self.kbd_focus = None;
+            }
+        }
+    }
+
+    pub fn spawn_layer_surfaces(
+        &mut self,
+        qh: &QueueHandle<Self>,
+        opts: LayerOptions,
+    ) -> Vec<(SurfaceId, Size<u32>)> {
+        let layer_shell = self._layer_shell.as_ref().expect("Layer shell not bound");
+        let chosen = super::helpers::pick_outputs(
+            &self.outputs,
+            opts.output
+                .as_ref()
+                .unwrap_or(&OutputSet::One(OutputSelector::First)),
+        );
+
+        let mut out = Vec::new();
+        for outp in chosen {
+            let (wl, layer) = Self::make_surface(&outp, &self._compositor, qh, &opts, layer_shell);
+            let sid = SurfaceId(wl.id().protocol_id());
+            self.by_surface_id
+                .insert(layer.wl_surface().id().protocol_id(), sid);
+            self.surfaces.insert(
+                sid,
+                SurfaceRec {
+                    wl_surface: wl,
+                    role: SurfaceRole::Layer(layer),
+                    _output: outp,
+                    size: opts.size,
+                },
+            );
+            out.push((sid, opts.size));
+        }
+        out
+    }
+
+    pub fn spawn_window(
+        &mut self,
+        qh: &QueueHandle<Self>,
+        mut opts: XdgOptions,
+    ) -> (SurfaceId, Size<u32>) {
+        let xdg = self._xdg_shell.as_ref().expect("XDG shell not bound");
+        let wl_surface = self._compositor.create_surface(qh);
+        let window = xdg.create_window(wl_surface.clone(), opts.decorations, qh);
+        window.set_title(&opts.title);
+        if let Some(app_id) = &opts.app_id {
+            window.set_app_id(app_id);
+        }
+        window.set_min_size(None);
+        window.set_max_size(None);
+
+        let sid = SurfaceId(window.wl_surface().id().protocol_id());
+        self.by_surface_id
+            .insert(window.wl_surface().id().protocol_id(), sid);
+        let output = super::helpers::pick_output(
+            &self.outputs,
+            &opts.output.take().unwrap_or(OutputSelector::First),
+        )
+        .unwrap_or_else(|| self.outputs.outputs().next().expect("no outputs"));
+        self.surfaces.insert(
+            sid,
+            SurfaceRec {
+                wl_surface: window.wl_surface().clone(),
+                role: SurfaceRole::Xdg(window),
+                _output: output,
+                size: opts.size,
+            },
+        );
+        (sid, opts.size)
+    }
+
+    pub fn enter_lock_mode(
+        &mut self,
+        qh: &QueueHandle<Self>,
+        size: Size<u32>,
+        outputs_sel: &OutputSet,
+    ) -> anyhow::Result<SessionLock> {
+        let lock = self.session_lock.lock(qh)?;
+
+        let chosen = helpers::pick_outputs(&self.outputs, outputs_sel);
+        for out in chosen {
+            let wl_surface = self._compositor.create_surface(qh);
+            let lock_surface = lock.create_lock_surface(wl_surface.clone(), &out, qh);
+            let sid = SurfaceId(wl_surface.id().protocol_id());
+            self.by_surface_id
+                .insert(wl_surface.id().protocol_id(), sid);
+            self.surfaces.insert(
+                sid,
+                SurfaceRec {
+                    wl_surface,
+                    role: SurfaceRole::Lock(lock_surface),
+                    _output: out,
+                    size,
+                },
+            );
+        }
+        Ok(lock)
     }
 }
 
@@ -208,30 +401,15 @@ impl OutputHandler for SctkState {
         &mut self.outputs
     }
 
-    fn new_output(
-        &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        output: wayland_client::protocol::wl_output::WlOutput,
-    ) {
+    fn new_output(&mut self, conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
         self.handler.new_output(conn, qh, output);
     }
 
-    fn update_output(
-        &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        output: wayland_client::protocol::wl_output::WlOutput,
-    ) {
+    fn update_output(&mut self, conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
         self.handler.update_output(conn, qh, output);
     }
 
-    fn output_destroyed(
-        &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
-        output: wayland_client::protocol::wl_output::WlOutput,
-    ) {
+    fn output_destroyed(&mut self, conn: &Connection, qh: &QueueHandle<Self>, output: WlOutput) {
         self.handler.output_destroyed(conn, qh, output);
     }
 }
@@ -268,7 +446,7 @@ impl CompositorHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &wayland_client::protocol::wl_surface::WlSurface,
+        _surface: &WlSurface,
         _new_factor: i32,
     ) {
     }
@@ -277,14 +455,16 @@ impl CompositorHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _surface: &wayland_client::protocol::wl_surface::WlSurface,
+        _surface: &WlSurface,
         _new_transform: wayland_client::protocol::wl_output::Transform,
     ) {
     }
 }
 
 impl LayerShellHandler for SctkState {
-    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _layer: &LayerSurface) {
+    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
+        self.remove_surface_by_wl(layer.wl_surface());
+
         self.emit_event(SctkEvent::Closed);
         self.closed = true;
     }
@@ -298,30 +478,130 @@ impl LayerShellHandler for SctkState {
         _serial: u32,
     ) {
         let lid = layer.wl_surface().id().protocol_id();
-        if let Some(sid) = self.by_surface_id.get(&lid).copied() {
-            let maybe_size = {
-                if let Some(s) = self.surfaces.get_mut(&sid) {
-                    let (nw, nh) = configure.new_size;
-                    let w = if nw == 0 { s.size.width } else { nw };
-                    let h = if nh == 0 { s.size.height } else { nh };
-                    if w != s.size.width || h != s.size.height {
-                        s.size = Size::new(w, h);
-                        Some(s.size)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
+        if let Some(sid) = self.by_surface_id.get(&lid).copied()
+            && let Some(rec) = self.surfaces.get_mut(&sid)
+        {
+            let (w, h) = configure.new_size;
+            if w != 0 && h != 0 {
+                let new_size = Size::new(w, h);
+                if new_size != rec.size {
+                    rec.size = new_size;
+                    self.emit_event(SctkEvent::Resized {
+                        surface: sid,
+                        size: new_size,
+                    });
                 }
-            };
-
-            if let Some(size) = maybe_size {
-                self.emit_event(SctkEvent::Resized { surface: sid, size });
             }
         }
 
-        layer.wl_surface().commit();
         self.needs_redraw = true;
+    }
+}
+
+impl WindowHandler for SctkState {
+    fn request_close(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, window: &Window) {
+        self.remove_surface_by_wl(window.wl_surface());
+
+        self.emit_event(SctkEvent::Closed);
+        self.closed = true;
+    }
+
+    fn configure(
+        &mut self,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
+        window: &Window,
+        configure: smithay_client_toolkit::shell::xdg::window::WindowConfigure,
+        _serial: u32,
+    ) {
+        println!("entered window configure");
+        let wid = window.wl_surface().id().protocol_id();
+        if let Some(sid) = self.by_surface_id.get(&wid).copied()
+            && let Some(rec) = self.surfaces.get_mut(&sid)
+            && let (Some(w), Some(h)) = configure.new_size
+        {
+            println!("{}:{}", w, h);
+            let new_size = Size::new(w.get(), h.get());
+            if new_size != rec.size {
+                rec.size = new_size;
+                self.emit_event(SctkEvent::Resized {
+                    surface: sid,
+                    size: new_size,
+                });
+            }
+        }
+
+        window.wl_surface().commit();
+        self.needs_redraw = true;
+    }
+}
+
+impl SessionLockHandler for SctkState {
+    fn locked(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        session_lock: smithay_client_toolkit::session_lock::SessionLock,
+    ) {
+        self.handler.locked(conn, qh, session_lock);
+    }
+
+    fn finished(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        session_lock: smithay_client_toolkit::session_lock::SessionLock,
+    ) {
+        for (sid, key) in self
+            .surfaces
+            .iter()
+            .filter_map(|(sid, rec)| {
+                if let SurfaceRole::Lock(_) = rec.role {
+                    Some((*sid, rec.wl_surface.id().protocol_id()))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+        {
+            self.surfaces.remove(&sid);
+            self.by_surface_id.remove(&key);
+            if self.kbd_focus == Some(sid) {
+                self.kbd_focus = None;
+            }
+        }
+        self.handler.finished(conn, qh, session_lock);
+    }
+
+    fn configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: smithay_client_toolkit::session_lock::SessionLockSurface,
+        configure: smithay_client_toolkit::session_lock::SessionLockSurfaceConfigure,
+        serial: u32,
+    ) {
+        let lid = surface.wl_surface().id().protocol_id();
+        if let Some(sid) = self.by_surface_id.get(&lid).copied()
+            && let Some(rec) = self.surfaces.get_mut(&sid)
+        {
+            let (w, h) = configure.new_size;
+            if w != 0 && h != 0 {
+                let new_size = Size::new(w, h);
+                if new_size != rec.size {
+                    rec.size = new_size;
+                    self.emit_event(SctkEvent::Resized {
+                        surface: sid,
+                        size: new_size,
+                    });
+                }
+            }
+        }
+
+        surface.wl_surface().commit();
+        self.needs_redraw = true;
+
+        self.handler.configure(conn, qh, surface, configure, serial);
     }
 }
 
@@ -506,3 +786,6 @@ delegate_seat!(SctkState);
 delegate_pointer!(SctkState);
 delegate_keyboard!(SctkState);
 delegate_layer!(SctkState);
+delegate_session_lock!(SctkState);
+delegate_xdg_shell!(SctkState);
+delegate_xdg_window!(SctkState);

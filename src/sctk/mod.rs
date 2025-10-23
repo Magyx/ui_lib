@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     fmt::Debug,
     ptr::NonNull,
-    sync::{Arc, Mutex, atomic::AtomicBool, mpsc},
+    sync::{Arc, Mutex, atomic::AtomicBool},
 };
 
 use crate::{
@@ -19,9 +19,15 @@ use smithay_client_toolkit::{
     reexports::client::{Connection, QueueHandle, globals::registry_queue_init},
     registry::RegistryState,
     seat::SeatState,
-    shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerShell},
+    session_lock::SessionLockState,
+    shell::{wlr_layer::LayerShell, xdg::XdgShell},
 };
 use wayland_client::{Proxy, protocol::wl_surface::WlSurface};
+
+pub use smithay_client_toolkit::shell::{
+    wlr_layer::{Anchor, KeyboardInteractivity, Layer},
+    xdg::window::WindowDecorations,
+};
 
 pub mod adapter;
 mod erased;
@@ -84,6 +90,33 @@ impl Default for LayerOptions {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct XdgOptions {
+    pub size: Size<u32>,
+    pub title: String,
+    pub app_id: Option<String>,
+    pub decorations: WindowDecorations,
+    pub output: Option<OutputSelector>,
+}
+
+impl Default for XdgOptions {
+    fn default() -> Self {
+        Self {
+            size: Size::new(640, 360),
+            title: "my_app".to_string(),
+            app_id: Some("ui".to_string()),
+            decorations: WindowDecorations::RequestClient,
+            output: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum Options {
+    Layer(LayerOptions),
+    Xdg(XdgOptions),
+}
+
 /// Platform event type for the SCTK backend.
 #[derive(Debug, Clone)]
 pub enum SctkEvent {
@@ -120,6 +153,18 @@ pub enum SctkEvent {
 impl SctkEvent {
     pub fn message<M: Send + 'static>(m: M) -> Self {
         SctkEvent::Message(Arc::new(Mutex::new(Some(Box::new(m)))))
+    }
+
+    pub fn surface_id(&self) -> Option<SurfaceId> {
+        match self {
+            SctkEvent::Resized { surface, .. }
+            | SctkEvent::PointerMoved { surface, .. }
+            | SctkEvent::PointerDown { surface }
+            | SctkEvent::PointerUp { surface }
+            | SctkEvent::Key { surface, .. }
+            | SctkEvent::Modifiers(surface, ..) => Some(*surface),
+            _ => None,
+        }
     }
 }
 
@@ -209,30 +254,30 @@ pub struct DefaultHandler;
 
 impl<M> handler::SctkHandler<M> for DefaultHandler {}
 
-#[derive(Clone)]
-struct UnsafeWaylandHandles {
+#[derive(Clone, Debug)]
+pub struct RawWaylandHandles {
     display: NonNull<std::ffi::c_void>,
     surface: NonNull<std::ffi::c_void>,
 }
 
-impl UnsafeWaylandHandles {
-    fn new(conn: &Connection, wl_surface: &WlSurface) -> Self {
+impl RawWaylandHandles {
+    pub fn new(conn: &Connection, wl_surface: &WlSurface) -> Self {
         let display = NonNull::new(conn.display().id().as_ptr().cast()).expect("null wl_display");
         let surface = NonNull::new(wl_surface.id().as_ptr().cast()).expect("null wl_surface");
         Self { display, surface }
     }
 }
 
-unsafe impl Send for UnsafeWaylandHandles {}
-unsafe impl Sync for UnsafeWaylandHandles {}
+unsafe impl Send for RawWaylandHandles {}
+unsafe impl Sync for RawWaylandHandles {}
 
-impl wgpu::rwh::HasWindowHandle for UnsafeWaylandHandles {
+impl wgpu::rwh::HasWindowHandle for RawWaylandHandles {
     fn window_handle(&self) -> Result<wgpu::rwh::WindowHandle<'_>, wgpu::rwh::HandleError> {
         let wl = wgpu::rwh::WaylandWindowHandle::new(self.surface);
         Ok(unsafe { wgpu::rwh::WindowHandle::borrow_raw(wgpu::rwh::RawWindowHandle::from(wl)) })
     }
 }
-impl wgpu::rwh::HasDisplayHandle for UnsafeWaylandHandles {
+impl wgpu::rwh::HasDisplayHandle for RawWaylandHandles {
     fn display_handle(&self) -> Result<wgpu::rwh::DisplayHandle<'_>, wgpu::rwh::HandleError> {
         let wl = wgpu::rwh::WaylandDisplayHandle::new(self.display);
         Ok(unsafe { wgpu::rwh::DisplayHandle::borrow_raw(wgpu::rwh::RawDisplayHandle::from(wl)) })
@@ -243,7 +288,7 @@ fn run_app_core<'a, M, S, V, U, H, F>(
     mut state: S,
     view: V,
     mut update: U,
-    opts: LayerOptions,
+    opts: Options,
     post_engine_init: F,
 ) -> anyhow::Result<()>
 where
@@ -264,26 +309,47 @@ where
     let compositor = CompositorState::bind(&globals, &qh)?;
     let outputs = OutputState::new(&globals, &qh);
     let seats = SeatState::new(&globals, &qh);
-    let layer_shell = LayerShell::bind(&globals, &qh)?;
+    let session_lock = SessionLockState::new(&globals, &qh);
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = calloop::channel::channel();
     let handler_tx = tx.clone();
     let sctk_handler = adapter::erase::<H, M, _>(move |m| {
         let _ = handler_tx.send(SctkEvent::message(m));
     });
 
     // 3) Concrete SCTK state
-    let mut st = state::SctkState::new_for(
-        &qh,
-        opts,
-        compositor,
-        layer_shell,
-        outputs,
-        seats,
-        registry,
-        sctk_handler,
-        tx,
-    )?;
+    let mut st = match opts {
+        Options::Layer(layer_options) => {
+            let layer_shell = LayerShell::bind(&globals, &qh)?;
+            state::SctkState::new_for_layer(
+                &qh,
+                layer_options,
+                compositor,
+                layer_shell,
+                outputs,
+                seats,
+                registry,
+                session_lock,
+                sctk_handler,
+                tx,
+            )?
+        }
+        Options::Xdg(xdg_options) => {
+            let xdg_shell = XdgShell::bind(&globals, &qh)?;
+            state::SctkState::new_for_window(
+                &qh,
+                xdg_options,
+                compositor,
+                xdg_shell,
+                outputs,
+                seats,
+                registry,
+                session_lock,
+                sctk_handler,
+                tx,
+            )?
+        }
+    };
 
     // 4) Create engine and attach surfaces
     let mut sid_to_tid = HashMap::new();
@@ -293,16 +359,13 @@ where
             .keys()
             .next()
             .expect("At least one surface required");
-        let target = Arc::new(UnsafeWaylandHandles::new(
-            &conn,
-            &st.surfaces[sid].wl_surface,
-        ));
+        let target = Arc::new(RawWaylandHandles::new(&conn, &st.surfaces[sid].wl_surface));
         let (tid, mut engine) = Engine::new_for(target, st.surfaces[sid].size);
         post_engine_init(&mut engine);
         sid_to_tid.insert(*sid, tid);
 
         for (&sid, rec) in st.surfaces.iter().skip(1) {
-            let target = Arc::new(UnsafeWaylandHandles::new(&conn, &rec.wl_surface));
+            let target = Arc::new(RawWaylandHandles::new(&conn, &rec.wl_surface));
             let tid = engine.attach_target(target, rec.size);
             sid_to_tid.insert(sid, tid);
         }
@@ -315,15 +378,10 @@ where
     while !loop_ctl.should_exit() && !st.closed {
         event_queue.blocking_dispatch(&mut st)?;
 
-        for ev in rx.try_iter() {
-            match &ev {
-                SctkEvent::Resized { surface, .. }
-                | SctkEvent::PointerMoved { surface, .. }
-                | SctkEvent::PointerDown { surface }
-                | SctkEvent::PointerUp { surface }
-                | SctkEvent::Key { surface, .. }
-                | SctkEvent::Modifiers(surface, ..) => {
-                    if let Some(tid) = sid_to_tid.get(surface).copied() {
+        while let Ok(ev) = rx.try_recv() {
+            match ev.surface_id() {
+                Some(sid) => {
+                    if let Some(tid) = sid_to_tid.get(&sid).copied() {
                         engine.handle_platform_event(
                             &tid,
                             &ev,
@@ -333,11 +391,11 @@ where
                         );
                     }
                 }
-                other => {
+                None => {
                     for &tid in sid_to_tid.values() {
                         engine.handle_platform_event(
                             &tid,
-                            other,
+                            &ev,
                             &mut |engine, event, state, loop_ctl| {
                                 update(tid, engine, event, state, loop_ctl)
                             },
@@ -368,7 +426,7 @@ where
     Ok(())
 }
 
-pub fn run_app<'a, M, S, H, V, U>(
+pub fn run_layer<'a, M, S, H, V, U>(
     state: S,
     view: V,
     update: U,
@@ -381,10 +439,10 @@ where
     U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
         + 'static,
 {
-    run_app_core::<M, S, V, U, H, _>(state, view, update, opts, |_| {})
+    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Layer(opts), |_| {})
 }
 
-pub fn run_app_with<'a, M, S, H, V, U, I>(
+pub fn run_layer_with<'a, M, S, H, V, U, I>(
     state: S,
     view: V,
     update: U,
@@ -401,8 +459,48 @@ where
 {
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
 
-    run_app_core::<M, S, V, U, H, _>(state, view, update, opts, move |engine| {
+    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Layer(opts), move |engine| {
         for (key, factory) in pipelines {
+            engine.register_pipeline(crate::render::pipeline::PipelineKey::Other(key), factory);
+        }
+    })
+}
+
+pub fn run_app<'a, M, S, H, V, U>(
+    state: S,
+    view: V,
+    update: U,
+    opts: XdgOptions,
+) -> anyhow::Result<()>
+where
+    M: 'static + std::fmt::Debug + Clone + Send,
+    H: handler::SctkHandler<M> + 'static,
+    V: Fn(&TargetId, &S) -> Element<M> + 'static,
+    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
+        + 'static,
+{
+    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Xdg(opts), |_| {})
+}
+
+pub fn run_app_with<'a, M, S, H, V, U, I>(
+    state: S,
+    view: V,
+    update: U,
+    opts: XdgOptions,
+    extra_pipelines: I,
+) -> anyhow::Result<()>
+where
+    M: 'static + std::fmt::Debug + Clone + Send,
+    H: handler::SctkHandler<M> + 'static,
+    V: Fn(&TargetId, &S) -> Element<M> + 'static,
+    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
+        + 'static,
+    I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
+{
+    let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
+
+    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Xdg(opts), move |engine| {
+        for (key, factory) in pipelines.iter().copied() {
             engine.register_pipeline(crate::render::pipeline::PipelineKey::Other(key), factory);
         }
     })

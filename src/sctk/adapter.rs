@@ -1,4 +1,7 @@
 use super::{erased::SctkErased, handler::SctkHandler, msg::Emit};
+use smithay_client_toolkit::session_lock::{
+    SessionLock, SessionLockSurface, SessionLockSurfaceConfigure,
+};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use wayland_client::protocol::wl_output::WlOutput;
@@ -83,6 +86,35 @@ where
         o: WlOutput,
     ) {
         self.flush(H::output_destroyed(c, q, o));
+    }
+
+    fn locked(
+        &mut self,
+        c: &Connection,
+        q: &QueueHandle<super::state::SctkState>,
+        sl: SessionLock,
+    ) {
+        self.flush(H::locked(c, q, sl));
+    }
+
+    fn finished(
+        &mut self,
+        c: &Connection,
+        q: &QueueHandle<super::state::SctkState>,
+        sl: SessionLock,
+    ) {
+        self.flush(H::finished(c, q, sl));
+    }
+
+    fn configure(
+        &mut self,
+        c: &Connection,
+        q: &QueueHandle<super::state::SctkState>,
+        s: SessionLockSurface,
+        conf: SessionLockSurfaceConfigure,
+        serial: u32,
+    ) {
+        self.flush(H::configure(c, q, s, conf, serial));
     }
 }
 

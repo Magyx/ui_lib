@@ -1,3 +1,6 @@
+use smithay_client_toolkit::session_lock::{
+    SessionLock, SessionLockSurface, SessionLockSurfaceConfigure,
+};
 // ui/sctk_erased.rs
 use wayland_client::protocol::wl_output::WlOutput;
 use wayland_client::{Connection, QueueHandle};
@@ -39,5 +42,29 @@ pub trait SctkErased {
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
         output: WlOutput,
+    );
+
+    // SessionLockHandler
+    fn locked(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        session_lock: SessionLock,
+    );
+
+    fn finished(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        session_lock: SessionLock,
+    );
+
+    fn configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: SessionLockSurface,
+        configure: SessionLockSurfaceConfigure,
+        serial: u32,
     );
 }

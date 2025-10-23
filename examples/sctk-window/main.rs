@@ -1,12 +1,10 @@
-use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer};
 use smol_str::ToSmolStr;
 use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
-    model::Size,
     pipeline_factories,
     render::pipeline::Pipeline,
-    sctk::{DefaultHandler, LayerOptions, SctkEvent, SctkLoop},
+    sctk::{DefaultHandler, SctkEvent, SctkLoop, XdgOptions},
 };
 
 #[path = "../common/mod.rs"]
@@ -44,16 +42,11 @@ fn main() -> anyhow::Result<()> {
         log::info!("Starting SCTK example");
     }
 
-    let opts = LayerOptions {
-        layer: Layer::Background,
-        size: Size::new(0, 0),
-        anchors: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
-        exclusive_zone: -1,
-        keyboard_interactivity: KeyboardInteractivity::OnDemand,
-        namespace: Some("ui-example".to_string()),
-        output: Some(ui::sctk::OutputSet::All),
+    let opts = XdgOptions {
+        title: "ui — XDG toplevel".into(),
+        app_id: Some("ui-example".into()),
+        ..Default::default()
     };
-
     ui::sctk::run_app_with::<Message, State, DefaultHandler, _, _, _>(
         State::default(),
         view,

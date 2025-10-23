@@ -1,3 +1,4 @@
 [alias]
 run-winit = "run --example winit -F winit,env_logging,vulkan,metal"
-run-sctk = "run --example sctk  -F sctk,env_logging,vulkan,metal"
+run-sctk-layer = "run --example sctk-layer -F sctk,env_logging,vulkan,metal"
+run-sctk-window = "run --example sctk-window  -F sctk,env_logging,vulkan,metal"
