@@ -6,6 +6,7 @@ pub struct Button<M> {
     id: Id,
     position: Position<i32>,
     size: Size<Length<i32>>,
+    content: Option<Element<M>>,
 
     normal_color: Color,
     hover_color: Color,
@@ -20,7 +21,7 @@ pub struct Button<M> {
     on_press: Option<M>,
 }
 
-impl<M> Button<M> {
+impl<M: Clone + 'static> Button<M> {
     pub fn new(size: Size<Length<i32>>, color: Color) -> Self {
         Self {
             layout: None,
@@ -28,6 +29,7 @@ impl<M> Button<M> {
             id: crate::context::next_id(),
             position: Position::splat(0),
             size,
+            content: None,
 
             normal_color: color,
             hover_color: color,
@@ -43,12 +45,43 @@ impl<M> Button<M> {
         }
     }
 
+    pub fn new_with(content: Element<M>) -> Self {
+        Self {
+            layout: None,
+
+            id: crate::context::next_id(),
+            position: Position::splat(0),
+            size: Size::splat(Length::Fit),
+            content: Some(content),
+
+            normal_color: Color::TRANSPARENT,
+            hover_color: Color::TRANSPARENT,
+            pressed_color: Color::TRANSPARENT,
+
+            hovered: false,
+            pressed: false,
+
+            min: Size::splat(0),
+            max: Size::splat(i32::MAX),
+
+            on_press: None,
+        }
+    }
+
+    pub fn color(mut self, c: Color) -> Self {
+        self.normal_color = c;
+        self
+    }
     pub fn hover_color(mut self, c: Color) -> Self {
         self.hover_color = c;
         self
     }
     pub fn pressed_color(mut self, c: Color) -> Self {
         self.pressed_color = c;
+        self
+    }
+    pub fn size(mut self, size: Size<Length<i32>>) -> Self {
+        self.size = size;
         self
     }
     pub fn min(mut self, size: Size<i32>) -> Self {
@@ -66,7 +99,7 @@ impl<M> Button<M> {
 
     #[inline]
     fn contains(&self, p: Position<f32>) -> bool {
-        let sz = self.size.into_fixed();
+        let sz = self.layout().current_size;
         let l = self.position.x as f32;
         let t = self.position.y as f32;
         let r = l + sz.width as f32;
@@ -86,80 +119,109 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         self.layout.as_ref().expect(LAYOUT_ERROR)
     }
 
-    fn fit_width(&mut self, _ctx: &mut LayoutCtx<M>) -> Layout {
-        let base_w = match self.size.width {
-            Length::Fixed(w) => {
-                self.min.width = w;
-                w
-            }
-            _ => 0,
-        };
-        let cur_w = base_w.clamp(self.min.width, self.max.width);
+    fn for_each_child(&self, f: &mut dyn for<'a> FnMut(&'a dyn Widget<M>)) {
+        if let Some(child) = &self.content {
+            f(child.as_ref());
+        }
+    }
+
+    fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
+        let mut min_w = 0;
+        if let Some(child) = self.content.as_mut() {
+            let Layout { current_size, .. } = child.fit_width(ctx);
+            min_w = min_w.max(current_size.width);
+        }
+
+        let resolved_w = self
+            .size
+            .into_fixed()
+            .width
+            .clamp(min_w.max(self.min.width), self.max.width);
 
         let l = Layout {
             size: self.size,
-            current_size: Size::new(cur_w, 0),
-            min: self.min,
+            current_size: Size::new(resolved_w, 0),
+            min: Size::new(min_w.max(self.min.width), self.min.height),
             max: self.max,
         };
         self.layout = Some(l);
         l
     }
 
-    fn grow_width(&mut self, _ctx: &mut LayoutCtx<M>, parent_width: i32) {
+    fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, parent_width: i32) {
         let l = self.layout.as_mut().expect(LAYOUT_ERROR);
 
         let target_w = match self.size.width {
             Length::Grow => parent_width,
             Length::Fixed(w) => w,
             Length::Fit => l.current_size.width,
-        };
+        }
+        .max(l.min.width)
+        .min(l.max.width)
+        .min(parent_width);
 
-        let final_w = target_w
-            .max(self.min.width)
-            .min(self.max.width)
-            .min(parent_width);
+        // Propagate width to content
+        if let Some(child) = self.content.as_mut() {
+            child.grow_width(ctx, target_w);
+        }
 
-        l.current_size.width = final_w;
+        l.current_size.width = target_w;
     }
 
-    fn fit_height(&mut self, _ctx: &mut LayoutCtx<M>) -> Layout {
-        let base_h = match self.size.height {
-            Length::Fixed(h) => h,
-            _ => 0,
-        };
-        let cur_h = base_h.clamp(self.min.height, self.max.height);
+    fn fit_height(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
+        let mut min_h = 0;
+        if let Some(child) = self.content.as_mut() {
+            let Layout { current_size, .. } = child.fit_height(ctx);
+            min_h = min_h.max(current_size.height);
+        }
 
-        let cur_w = self.layout.map(|l| l.current_size.width).unwrap_or(0);
+        let prev = self.layout.as_ref().expect(LAYOUT_ERROR);
+        let prev_w = prev.current_size.width;
+
+        let requested_h = match self.size.height {
+            Length::Fixed(h) => h,
+            _ => min_h,
+        };
+        let resolved_h = requested_h
+            .max(self.min.height.max(min_h))
+            .min(self.max.height);
 
         let l = Layout {
             size: self.size,
-            current_size: Size::new(cur_w, cur_h),
-            min: self.min,
+            current_size: Size::new(prev_w, resolved_h),
+            min: Size::new(prev.min.width, self.min.height.max(min_h)),
             max: self.max,
         };
         self.layout = Some(l);
         l
     }
 
-    fn grow_height(&mut self, _ctx: &mut LayoutCtx<M>, parent_height: i32) {
+    fn grow_height(&mut self, ctx: &mut LayoutCtx<M>, parent_height: i32) {
         let l = self.layout.as_mut().expect(LAYOUT_ERROR);
+
         let target_h = match self.size.height {
             Length::Grow => parent_height,
             Length::Fixed(h) => h,
             Length::Fit => l.current_size.height,
-        };
+        }
+        .max(l.min.height)
+        .min(l.max.height)
+        .min(parent_height);
 
-        let final_h = target_h
-            .max(self.min.height)
-            .min(self.max.height)
-            .min(parent_height);
+        if let Some(child) = self.content.as_mut() {
+            child.grow_height(ctx, target_h);
+        }
 
-        l.current_size.height = final_h;
+        l.current_size.height = target_h;
     }
 
-    fn place(&mut self, _ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32> {
+    fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32> {
         self.position = position;
+
+        if let Some(child) = self.content.as_mut() {
+            let _ = child.place(ctx, self.position);
+        }
+
         self.layout().current_size
     }
 
@@ -180,6 +242,10 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
+        if let Some(child) = self.content.as_mut() {
+            child.handle(ctx);
+        }
+
         let was_hovered = self.hovered;
         let was_pressed = self.pressed;
 

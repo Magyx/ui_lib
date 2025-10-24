@@ -239,6 +239,40 @@ pub mod interaction {
             .color(Color::rgb(220, 220, 240))
             .size(Size::new(Grow, Fixed(60)))
             .einto(),
+            /* 2) button with text */
+            Row::new(vec![
+                Button::new_with(
+                    Column::new(vec![
+                        Spacer::new(Size::new(Grow, Grow)).einto(),
+                        Text::new("Click Me!", 18.0).einto(),
+                        Spacer::new(Size::new(Grow, Grow)).einto(),
+                    ])
+                    .size(Size::new(Fit, Grow))
+                    .einto(),
+                )
+                .color(Color::rgb(200, 50, 50))
+                .hover_color(Color::rgb(50, 200, 50))
+                .pressed_color(Color::rgb(50, 50, 200))
+                .on_press(Message::ButtonPressed)
+                .size(Size::new(Fit, Grow))
+                .einto(),
+                Row::new(
+                    (0..(target.counter % 6))
+                        .map(|i| {
+                            let c = (i * 30 + 40) as u8;
+                            small_block(c, 30, 200u8.saturating_sub(c))
+                        })
+                        .collect(),
+                )
+                .color(Color::TRANSPARENT)
+                .size(Size::new(Fit, Grow))
+                .einto(),
+            ])
+            .padding(Vec4::splat(10))
+            .spacing(10)
+            .color(Color::rgb(220, 220, 240))
+            .size(Size::new(Grow, Fixed(60)))
+            .einto(),
         ])
         .color(Color::rgb(100, 80, 100))
         .padding(Vec4::splat(16))
