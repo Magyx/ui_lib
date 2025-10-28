@@ -22,7 +22,7 @@ impl Image {
             h: 0,
             size,
             handle,
-            tint: Color::TRANSPARENT,
+            tint: Color::WHITE,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
         }
