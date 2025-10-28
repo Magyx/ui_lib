@@ -4,6 +4,7 @@ pub(crate) mod consts;
 pub mod context;
 pub mod event;
 pub mod graphics;
+pub mod layout;
 pub mod model;
 pub mod primitive;
 pub mod render;

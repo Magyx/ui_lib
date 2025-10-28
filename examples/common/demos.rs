@@ -1,8 +1,9 @@
 use super::{Message, State};
 use ui::{
+    el,
     graphics::TargetId,
     model::*,
-    widget::{Button, Column, Container, Element, Length, Rectangle, Row, Spacer, Text, Widget},
+    widget::{Button, Column, Element, Length, Overlay, Rectangle, Row, Spacer, Text},
 };
 
 fn small_block(r: u8, g: u8, b: u8) -> Element<Message> {
@@ -10,196 +11,188 @@ fn small_block(r: u8, g: u8, b: u8) -> Element<Message> {
         Size::new(Length::Fixed(24), Length::Fixed(24)),
         Color::rgb(r, g, b),
     )
-    .einto()
+    .into()
 }
 
 pub mod layout {
+
     use super::*;
 
     pub fn view(_state: &State) -> Element<Message> {
         use Length::{Fit, Fixed, Grow};
 
-        Column::new(vec![
+        Column::new(el![
             /* 1) Fixed + Fixed, zero padding baseline */
-            Row::new(vec![
-                Rectangle::new(Size::new(Fixed(80), Fixed(40)), Color::RED).einto(),
-                Rectangle::new(Size::new(Fixed(120), Fixed(40)), Color::GREEN).einto(),
+            Row::new(el![
+                Rectangle::new(Size::new(Fixed(80), Fixed(40)), Color::RED),
+                Rectangle::new(Size::new(Fixed(120), Fixed(40)), Color::GREEN),
             ])
             .spacing(8)
             .padding(Vec4::splat(0))
             .color(Color::rgb(240, 240, 240))
-            .size(Size::new(Grow, Fixed(70)))
-            .einto(),
+            .size(Size::new(Grow, Fixed(70))),
 
             /* 2) Fixed + Grow + Fixed; height fixed, width grow (checks single-grow distribution) */
-            Row::new(vec![
-                Rectangle::new(Size::new(Fixed(60), Grow), Color::rgb(255, 200, 0)).einto(),
-                Rectangle::new(Size::new(Grow, Grow), Color::rgb(0, 180, 180)).einto(),
-                Rectangle::new(Size::new(Fixed(60), Grow), Color::rgb(255, 200, 0)).einto(),
+            Row::new(el![
+                Rectangle::new(Size::new(Fixed(60), Grow), Color::rgb(255, 200, 0)),
+                Rectangle::new(Size::new(Grow, Grow), Color::rgb(0, 180, 180)),
+                Rectangle::new(Size::new(Fixed(60), Grow), Color::rgb(255, 200, 0)),
             ])
             .spacing(10)
             .padding(Vec4::splat(10))
             .color(Color::rgb(220, 220, 240))
-            .size(Size::new(Grow, Fixed(80)))
-            .einto(),
+            .size(Size::new(Grow, Fixed(80))),
 
             /* 3) Multiple Grow children in a Row (checks equalization logic) */
-            Row::new(vec![
-                Rectangle::new(Size::new(Grow, Fixed(50)), Color::rgb(200, 50, 50)).einto(),
-                Rectangle::new(Size::new(Grow, Fixed(50)), Color::rgb(50, 200, 50)).einto(),
-                Rectangle::new(Size::new(Grow, Fixed(50)), Color::rgb(50, 50, 200)).einto(),
+            Row::new(el![
+                Rectangle::new(Size::new(Grow, Fixed(50)), Color::rgb(200, 50, 50)),
+                Rectangle::new(Size::new(Grow, Fixed(50)), Color::rgb(50, 200, 50)),
+                Rectangle::new(Size::new(Grow, Fixed(50)), Color::rgb(50, 50, 200)),
             ])
             .spacing(6)
             .padding(Vec4::splat(10))
             .color(Color::rgb(240, 220, 220))
-            .size(Size::new(Grow, Fixed(70)))
-            .einto(),
+            .size(Size::new(Grow, Fixed(70))),
 
             /* 4) Column with Grow height distribution and fixed caps at top/bottom */
-            Column::new(vec![
-                Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(80, 80, 80)).einto(),
-                Rectangle::new(Size::new(Grow, Grow), Color::rgb(100, 200, 100)).einto(),
-                Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(80, 80, 150)).einto(),
+            Column::new(el![
+                Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(80, 80, 80)),
+                Rectangle::new(Size::new(Grow, Grow), Color::rgb(100, 200, 100)),
+                Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(80, 80, 150)),
             ])
             .spacing(8)
             .padding(Vec4::splat(10))
             .color(Color::rgb(240, 240, 220))
-            .size(Size::new(Grow, Fixed(100)))
-            .einto(),
+            .size(Size::new(Grow, Fixed(100))),
 
             /* 5) Fit sizing demo: Column(Fit,Fit) measured by fixed children, next to a Grow rectangle */
-            Row::new(vec![
-                Column::new(vec![
-                    Rectangle::new(Size::new(Fixed(70), Fixed(20)), Color::rgb(100, 0, 100))
-                        .einto(),
-                    Rectangle::new(Size::new(Fixed(40), Fixed(30)), Color::rgb(140, 0, 140))
-                        .einto(),
+            Row::new(el![
+                Column::new(el![
+                    Rectangle::new(Size::new(Fixed(70), Fixed(20)), Color::rgb(100, 0, 100)),
+                    Rectangle::new(Size::new(Fixed(40), Fixed(30)), Color::rgb(140, 0, 140)),
                 ])
                 .spacing(4)
                 .padding(Vec4::splat(4))
                 .size(Size::new(Fit, Fit))
-                .color(Color::rgb(230, 200, 230))
-                .einto(),
-                Rectangle::new(Size::new(Grow, Fixed(60)), Color::rgb(180, 180, 180)).einto(),
+                .color(Color::rgb(230, 200, 230)),
+                Rectangle::new(Size::new(Grow, Fixed(60)), Color::rgb(180, 180, 180)),
             ])
             .spacing(10)
             .padding(Vec4::splat(10))
             .color(Color::rgb(220, 240, 240))
-            .size(Size::new(Grow, Fixed(80)))
-            .einto(),
+            .size(Size::new(Grow, Fixed(80))),
 
             /* 6) Nested grow: Row of two Columns; left fixed width, right flexible */
-            Row::new(vec![
-                Column::new(vec![
-                    Rectangle::new(Size::new(Grow, Fixed(18)), Color::rgb(160, 160, 0)).einto(),
-                    Rectangle::new(Size::new(Grow, Grow), Color::rgb(160, 100, 0)).einto(),
+            Row::new(el![
+                Column::new(el![
+                    Rectangle::new(Size::new(Grow, Fixed(18)), Color::rgb(160, 160, 0)),
+                    Rectangle::new(Size::new(Grow, Grow), Color::rgb(160, 100, 0)),
                 ])
                 .spacing(6)
                 .padding(Vec4::splat(6))
                 .size(Size::new(Fixed(200), Grow))
-                .color(Color::rgb(250, 240, 200))
-                .einto(),
-                Column::new(vec![
-                    Rectangle::new(Size::new(Grow, Grow), Color::rgb(0, 120, 160)).einto(),
-                    Rectangle::new(Size::new(Grow, Fixed(24)), Color::rgb(0, 80, 120)).einto(),
+                .color(Color::rgb(250, 240, 200)),
+                Column::new(el![
+                    Rectangle::new(Size::new(Grow, Grow), Color::rgb(0, 120, 160)),
+                    Rectangle::new(Size::new(Grow, Fixed(24)), Color::rgb(0, 80, 120)),
                 ])
                 .spacing(6)
                 .padding(Vec4::splat(6))
                 .size(Size::new(Grow, Grow))
                 .color(Color::rgb(200, 240, 250))
-                .einto(),
+                ,
             ])
             .spacing(10)
             .padding(Vec4::splat(10))
             .color(Color::rgb(240, 230, 230))
             .size(Size::new(Grow, Fixed(100)))
-            .einto(),
+            ,
 
             /* 7) Spacing extremes: zero vs nonzero, plus a Grow filler */
-            Row::new(vec![
-                Row::new(vec![
-                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(0, 0, 0)).einto(),
+            Row::new(el![
+                Row::new(el![
+                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(0, 0, 0)),
                     Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(80, 80, 80))
-                        .einto(),
+                        ,
                 ])
                 .spacing(0)
                 .padding(Vec4::splat(0))
                 .size(Size::new(Fixed(100), Fixed(40)))
                 .color(Color::rgb(220, 220, 220))
-                .einto(),
-                Row::new(vec![
-                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(0, 0, 0)).einto(),
+                ,
+                Row::new(el![
+                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(0, 0, 0)),
                     Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(80, 80, 80))
-                        .einto(),
+                        ,
                 ])
                 .spacing(12)
                 .padding(Vec4::splat(0))
                 .size(Size::new(Fixed(120), Fixed(40)))
                 .color(Color::rgb(220, 220, 220))
-                .einto(),
-                Rectangle::new(Size::new(Grow, Fixed(40)), Color::rgb(200, 200, 200)).einto(),
+                ,
+                Rectangle::new(Size::new(Grow, Fixed(40)), Color::rgb(200, 200, 200)),
             ])
             .spacing(10)
             .padding(Vec4::splat(10))
             .color(Color::rgb(220, 220, 240))
             .size(Size::new(Grow, Fixed(60)))
-            .einto(),
+            ,
 
             /* 8) Many children + padding stress */
             Row::new((0..8).map(|i| {
                 let c = (i * 30 + 40) as u8;
                 small_block(c, 30, 200u8.saturating_sub(c))
-            }).collect())
+            }).collect::<Vec<_>>())
             .spacing(6)
             .padding(Vec4::splat(16))
             .color(Color::rgb(245, 245, 220))
             .size(Size::new(Grow, Fixed(56)))
-            .einto(),
+            ,
 
             /* 9) Test clamping */
-            Row::new(vec![
+            Row::new(el![
                 Rectangle::new(Size::new(Length::Grow, Length::Fixed(24)), Color::GREEN)
                     .min(Size::new(120, 24))       // >= 120px wide, one line tall
                     .max(Size::new(300, 24))       // <= 300px wide
-                    .einto(),
+                    ,
                 Rectangle::new(Size::new(Length::Fixed(100), Length::Grow), Color::BLUE)
                     .min(Size::new(100, 60))       // at least 60px tall
                     .max(Size::new(100, 120))      // at most 120px tall
-                    .einto(),
+                    ,
             ])
             .spacing(6)
             .padding(Vec4::splat(16))
             .color(Color::rgb(245, 245, 220))
             .size(Size::new(Length::Grow, Length::Grow))
-            .einto(),
+            ,
 
             /* 10) Transparent container background over content below */
-            Column::new(vec![
-                Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(30, 200, 30)).einto(),
-                Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(30, 30, 200)).einto(),
+            Column::new(el![
+                Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(30, 200, 30)),
+                Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(30, 30, 200)),
             ])
             .spacing(6)
             .padding(Vec4::splat(10))
             .color(Color::TRANSPARENT)
             .size(Size::new(Grow, Fixed(60)))
-            .einto(),
+            ,
 
             /* 11) Container with background, padding, and a single child */
-            Container::new(vec![
-                Rectangle::new(Size::new(Grow, Grow), Color::rgb(220, 240, 255)).einto(),
-                Rectangle::new(Size::new(Fixed(60), Fixed(60)), Color::rgb(255, 0, 0)).einto(),
+            Overlay::new(el![
+                Rectangle::new(Size::new(Grow, Grow), Color::rgb(220, 240, 255)),
+                Rectangle::new(Size::new(Fixed(60), Fixed(60)), Color::rgb(255, 0, 0)),
             ])
             .padding(Vec4::splat(10))
             .color(Color::rgb(210, 210, 210))
             .size(Size::new(Grow, Fixed(60)))
-            .einto(),
+            ,
 
         ])
         .color(Color::rgb(100, 80, 100))
         .padding(Vec4::splat(16))
         .spacing(14)
         .size(Size::new(Grow, Grow))
-        .einto()
+        .into()
     }
 }
 
@@ -211,74 +204,67 @@ pub mod interaction {
         use Length::{Fit, Fixed, Grow};
         let target = match state.per_target.get(tid) {
             Some(t) => t,
-            None => return Container::new(vec![]).einto(),
+            None => return Rectangle::placeholder().into(),
         };
 
-        Column::new(vec![
+        Column::new(el![
             /* 1) interactive button */
-            Row::new(vec![
+            Row::new(el![
                 Button::new(Size::new(Fixed(120), Fixed(36)), Color::rgb(200, 50, 50))
                     .hover_color(Color::rgb(50, 200, 50))
                     .pressed_color(Color::rgb(50, 50, 200))
-                    .on_press(Message::ButtonPressed)
-                    .einto(),
+                    .on_press(Message::ButtonPressed),
                 Row::new(
                     (0..(target.counter % 6))
                         .map(|i| {
                             let c = (i * 30 + 40) as u8;
                             small_block(c, 30, 200u8.saturating_sub(c))
                         })
-                        .collect(),
+                        .collect::<Vec<_>>(),
                 )
                 .color(Color::TRANSPARENT)
-                .size(Size::new(Fit, Grow))
-                .einto(),
+                .size(Size::new(Fit, Grow)),
             ])
             .padding(Vec4::splat(10))
             .spacing(10)
             .color(Color::rgb(220, 220, 240))
-            .size(Size::new(Grow, Fixed(60)))
-            .einto(),
+            .size(Size::new(Grow, Fixed(60))),
             /* 2) button with text */
-            Row::new(vec![
+            Row::new(el![
                 Button::new_with(
-                    Column::new(vec![
-                        Spacer::new(Size::new(Grow, Grow)).einto(),
-                        Text::new("Click Me!", 18.0).einto(),
-                        Spacer::new(Size::new(Grow, Grow)).einto(),
+                    Column::new(el![
+                        Spacer::new(Size::new(Grow, Grow)),
+                        Text::new("Click Me!", 18.0),
+                        Spacer::new(Size::new(Grow, Grow)),
                     ])
-                    .size(Size::new(Fit, Grow))
-                    .einto(),
+                    .size(Size::new(Fit, Grow)),
                 )
                 .color(Color::rgb(200, 50, 50))
                 .hover_color(Color::rgb(50, 200, 50))
                 .pressed_color(Color::rgb(50, 50, 200))
                 .on_press(Message::ButtonPressed)
-                .size(Size::new(Fit, Grow))
-                .einto(),
+                .size(Size::new(Fit, Grow)),
                 Row::new(
                     (0..(target.counter % 6))
                         .map(|i| {
                             let c = (i * 30 + 40) as u8;
                             small_block(c, 30, 200u8.saturating_sub(c))
                         })
-                        .collect(),
+                        .collect::<Vec<_>>(),
                 )
                 .color(Color::TRANSPARENT)
-                .size(Size::new(Fit, Grow))
-                .einto(),
+                .size(Size::new(Fit, Grow)),
             ])
             .padding(Vec4::splat(10))
             .spacing(10)
             .color(Color::rgb(220, 220, 240))
-            .size(Size::new(Grow, Fixed(60)))
-            .einto(),
+            .size(Size::new(Grow, Fixed(60))),
         ])
         .color(Color::rgb(100, 80, 100))
         .padding(Vec4::splat(16))
         .spacing(14)
         .size(Size::new(Grow, Grow))
-        .einto()
+        .into()
     }
 }
 
@@ -293,19 +279,18 @@ pub mod pipeline {
 
         let target = match state.per_target.get(tid) {
             Some(t) => t,
-            None => return Container::new(vec![]).einto(),
+            None => return Rectangle::placeholder().into(),
         };
-        Container::new(vec![
+        Overlay::new(el![
             SimpleCanvas::new(
                 Size::new(Grow, Grow),
                 "planet",
                 Some(|cx| {
                     cx.ui.request_redraw();
                 }),
-            )
-            .einto(),
-            Row::new(vec![
-                Spacer::new(Size::new(Grow, Fit)).einto(),
+            ),
+            Row::new(el![
+                Spacer::new(Size::new(Grow, Fit)),
                 Text::new(
                     format!(
                         "{:.0}",
@@ -313,18 +298,17 @@ pub mod pipeline {
                     ),
                     16.0,
                 )
+                .size(Size::new(Fit, Fit))
                 .color(Color::RED)
-                .weight(Weight::SEMIBOLD)
-                .einto(),
+                .weight(Weight::SEMIBOLD),
             ])
             .padding(Vec4::splat(10))
-            .size(Size::new(Grow, Fit))
-            .einto(),
+            .size(Size::new(Grow, Fit)),
         ])
         .color(Color::rgb(20, 20, 40))
         .padding(Vec4::splat(0))
         .size(Size::new(Grow, Grow))
-        .einto()
+        .into()
     }
 }
 
@@ -340,47 +324,38 @@ pub mod texture {
         for chunk in state.icons.chunks(25) {
             let mut cells = Vec::new();
             for &h in chunk {
-                cells.push(
-                    Image::new(Size::new(Fixed(48), Fixed(48)), h)
-                        .tint(Color::WHITE)
-                        .einto(),
-                );
+                cells.push(Image::new(Size::new(Fixed(48), Fixed(48)), h).tint(Color::WHITE));
             }
             rows.push(
                 Row::new(cells)
                     .spacing(8)
                     .padding(Vec4::splat(8))
                     .size(Size::new(Grow, Fixed(64)))
-                    .einto(),
+                    .into(),
             );
         }
 
-        Container::new(vec![
-            Image::new(Size::new(Grow, Grow), state.background.unwrap_or_default()).einto(),
-            Column::new(vec![
-                Rectangle::new(Size::new(Fixed(70), Fixed(20)), Color::rgb(100, 0, 100)).einto(),
-                Rectangle::new(Size::new(Fixed(40), Fixed(30)), Color::rgb(140, 0, 140)).einto(),
+        Overlay::new(el![
+            Image::new(Size::new(Grow, Grow), state.background.unwrap_or_default()),
+            Column::new(el![
+                Rectangle::new(Size::new(Fixed(70), Fixed(20)), Color::rgb(100, 0, 100)),
+                Rectangle::new(Size::new(Fixed(40), Fixed(30)), Color::rgb(140, 0, 140)),
             ])
             .spacing(10)
             .padding(Vec4::splat(10))
             .color(Color::rgba(220, 240, 240, 1))
-            .size(Size::new(Fixed(70), Fixed(80)))
-            .einto(),
-            Container::new(vec![
-                Column::new(rows)
-                    .spacing(8)
-                    .padding(Vec4::splat(10))
-                    .color(Color::splat(204))
-                    .size(Size::new(Grow, Grow))
-                    .einto(),
-            ])
+            .size(Size::new(Fixed(70), Fixed(80))),
+            Row::new(el![Column::new(rows)
+                .spacing(8)
+                .padding(Vec4::splat(10))
+                .color(Color::splat(204))
+                .size(Size::new(Grow, Grow)),])
             .padding(Vec4::splat(120))
-            .size(Size::new(Grow, Grow))
-            .einto(),
+            .size(Size::new(Grow, Grow)),
         ])
         .padding(Vec4::splat(0))
         .size(Size::new(Grow, Grow))
-        .einto()
+        .into()
     }
 }
 
@@ -400,48 +375,41 @@ pub mod text {
         let accent = Color::rgb(88, 146, 255);
 
         // --- Sidebar (fixed width) ---
-        let sidebar = Column::new(vec![
+        let sidebar = Column::new(el![
             // Sidebar header
-            Container::new(vec![
-                Text::new("Project Nimbus", 20.0).color(fg_title).einto(),
-            ])
-            .padding(Vec4::new(16, 16, 16, 8))
-            .color(Color::TRANSPARENT)
-            .size(Size::new(Grow, Fixed(40)))
-            .einto(),
+            Row::new(el![Text::new("Project Nimbus", 20.0).color(fg_title)])
+                .padding(Vec4::new(16, 16, 16, 8))
+                .color(Color::TRANSPARENT)
+                .size(Size::new(Grow, Fixed(40))),
             // Sidebar items
-            Column::new(vec![
-                Text::new("Overview", 16.0).color(fg_text).einto(),
-                Text::new("Assets", 16.0).color(fg_text).einto(),
-                Text::new("Settings", 16.0).color(fg_text).einto(),
+            Column::new(el![
+                Text::new("Overview", 16.0).color(fg_text),
+                Text::new("Assets", 16.0).color(fg_text),
+                Text::new("Settings", 16.0).color(fg_text),
             ])
             .spacing(8)
             .padding(Vec4::new(16, 8, 16, 16))
             .color(Color::TRANSPARENT)
-            .size(Size::new(Grow, Fit))
-            .einto(),
+            .size(Size::new(Grow, Fit)),
         ])
         .spacing(6)
         .padding(Vec4::splat(8))
         .color(bg_panel)
-        .size(Size::new(Fixed(220), Grow))
-        .einto();
+        .size(Size::new(Fixed(220), Grow));
 
         // --- Top bar (fixed height) ---
-        let topbar = Row::new(vec![
-            Text::new("Dashboard", 22.0).color(fg_title).einto(),
-            Spacer::new(Size::new(Grow, Grow)).einto(),
+        let topbar = Row::new(el![
+            Text::new("Dashboard", 22.0).color(fg_title),
+            Spacer::new(Size::new(Grow, Grow)),
             // a little “pill” on the right
-            Container::new(vec![Text::new("LIVE", 14.0).weight(Weight::BLACK).einto()])
+            Row::new(el![Text::new("LIVE", 14.0).weight(Weight::BLACK)])
                 .padding(Vec4::new(10, 6, 10, 6))
                 .color(accent)
-                .size(Size::new(Fit, Grow))
-                .einto(),
+                .size(Size::new(Fit, Grow)),
         ])
         .padding(Vec4::new(16, 10, 16, 10))
         .color(bg_panel_alt)
-        .size(Size::new(Grow, Fixed(52)))
-        .einto();
+        .size(Size::new(Grow, Fixed(52)));
 
         // --- Main content ---
         let hero_text = "This area demonstrates styled, multiline text using cosmic-text. \n\
@@ -450,93 +418,75 @@ pub mod text {
         let long = "This is a very very very long line of text that should wrap \
                 when the container is narrower than the preferred single-line width.";
 
-        let content = Column::new(vec![
+        let content = Column::new(el![
             // Title
             Text::new("Welcome to the Showcase", 20.0)
                 .size(Size::new(Grow, Fit))
-                .color(fg_title)
-                .einto(),
+                .color(fg_title),
             // Body (multiline)
-            Row::new(vec![
-                Text::new(hero_text, 16.0)
-                    .size(Size::new(Grow, Fit))
-                    .color(fg_text)
-                    .einto(),
-            ])
-            .size(Size::new(Grow, Fit))
-            .einto(),
+            Text::new(hero_text, 16.0)
+                .size(Size::new(Grow, Fit))
+                .color(fg_text),
             // Body (fit checks)
-            Column::new(vec![
-                Row::new(vec![
-                    Text::new(long, 16.0).size(Size::new(Grow, Fit)).einto(),
-                    Text::new(long, 16.0).size(Size::new(Grow, Fit)).einto(),
+            Column::new(el![
+                Row::new(el![
+                    Text::new(long, 16.0).size(Size::new(Grow, Fit)),
+                    Text::new(long, 16.0).size(Size::new(Grow, Fit)),
                 ])
                 .size(Size::new(Grow, Fit))
-                .spacing(12)
-                .einto(),
-                Row::new(vec![
-                    Text::new(long, 16.0).size(Size::new(Grow, Fit)).einto(),
-                ])
-                .size(Size::new(Grow, Fit))
-                .einto(),
+                .spacing(12),
+                Text::new(long, 16.0).size(Size::new(Grow, Fit)),
             ])
             .size(Size::new(Grow, Fit))
-            .spacing(12)
-            .einto(),
+            .spacing(12),
             // Image/preview placeholder
-            Rectangle::new(Size::new(Grow, Fixed(240)), Color::rgb(72, 78, 90)).einto(),
+            Rectangle::new(Size::new(Grow, Fixed(240)), Color::rgb(72, 78, 90)),
             // A couple of stat tiles
-            Row::new(vec![
-                Column::new(vec![
-                    Text::new("Builds", 16.0).color(fg_text).einto(),
-                    Text::new("128", 28.0).color(fg_title).einto(),
+            Row::new(el![
+                Column::new(el![
+                    Text::new("Builds", 16.0).color(fg_text),
+                    Text::new("128", 28.0).color(fg_title),
                 ])
                 .padding(Vec4::splat(12))
                 .color(bg_panel)
-                .size(Size::new(Grow, Fixed(88)))
-                .einto(),
-                Column::new(vec![
-                    Text::new("Warnings", 16.0).color(fg_text).einto(),
-                    Text::new("3", 28.0).color(Color::rgb(255, 206, 86)).einto(),
+                .size(Size::new(Grow, Fixed(88))),
+                Column::new(el![
+                    Text::new("Warnings", 16.0).color(fg_text),
+                    Text::new("3", 28.0).color(Color::rgb(255, 206, 86)),
                 ])
                 .padding(Vec4::splat(12))
                 .color(bg_panel)
-                .size(Size::new(Grow, Fixed(88)))
-                .einto(),
-                Column::new(vec![
-                    Text::new("Errors", 16.0).color(fg_text).einto(),
-                    Text::new("0", 28.0).color(Color::rgb(76, 217, 100)).einto(),
+                .size(Size::new(Grow, Fixed(88))),
+                Column::new(el![
+                    Text::new("Errors", 16.0).color(fg_text),
+                    Text::new("0", 28.0).color(Color::rgb(76, 217, 100)),
                 ])
                 .padding(Vec4::splat(12))
                 .color(bg_panel)
-                .size(Size::new(Grow, Fixed(88)))
-                .einto(),
+                .size(Size::new(Grow, Fixed(88))),
             ])
             .spacing(12)
             .padding(Vec4::splat(0))
             .color(Color::TRANSPARENT)
-            .size(Size::new(Grow, Fit))
-            .einto(),
+            .size(Size::new(Grow, Fit)),
         ])
         .spacing(12)
         .padding(Vec4::splat(16))
         .color(Color::TRANSPARENT)
-        .size(Size::splat(Grow))
-        .einto();
+        .size(Size::splat(Grow));
 
         // --- Page layout: sidebar | (topbar + content) ---
-        Row::new(vec![
+        Row::new(el![
             sidebar,
-            Column::new(vec![topbar, content])
+            Column::new(el![topbar, content])
                 .spacing(12)
                 .color(Color::TRANSPARENT)
-                .size(Size::new(Grow, Grow))
-                .einto(),
+                .size(Size::new(Grow, Grow)),
         ])
         .spacing(12)
         .padding(Vec4::splat(12))
         .color(bg_app)
         .size(Size::new(Grow, Grow))
-        .einto()
+        .into()
     }
 }

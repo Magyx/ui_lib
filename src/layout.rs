@@ -1,0 +1,729 @@
+use std::cmp::{max, min};
+
+use crate::{
+    context::LayoutCtx,
+    model::{Color, Position, Size},
+    primitive::Instance,
+    widget::{Axis, Length, Padding, Widget},
+};
+
+const MAX_NODES: usize = 1024;
+
+#[inline]
+fn color_for_depth(depth: usize) -> (u8, u8, u8, u8) {
+    const P: &[(u8, u8, u8, u8)] = &[
+        (255, 66, 66, 220),  // red
+        (255, 159, 28, 220), // orange
+        (255, 214, 10, 220), // yellow
+        (52, 199, 89, 220),  // green
+        (48, 176, 199, 220), // teal
+        (10, 132, 255, 220), // blue
+        (94, 92, 230, 220),  // indigo
+        (191, 90, 242, 220), // purple
+    ];
+    P[depth % P.len()]
+}
+
+pub fn run_layout<'a, M>(
+    layout_engine: &mut LayoutEngine,
+    ctx: &mut LayoutCtx<'a, M>,
+    root: &mut dyn Widget<M>,
+    max_w: i32,
+    max_h: i32,
+) -> usize {
+    layout_engine.reset();
+    // 1) Build engine graph from the widget tree
+    let root_id = build_tree(layout_engine, ctx, root);
+
+    // 2) Width phases
+    layout_engine.measure_width(root_id);
+    layout_engine.assign_width(root_id, max_w);
+
+    // 3) Height phases
+    let mut cursor = 0usize;
+    post_width_query(root, layout_engine, ctx, &mut cursor);
+
+    layout_engine.measure_height(root_id);
+    layout_engine.assign_height(root_id, max_h);
+
+    // 4) Place everything starting at origin
+    layout_engine.place(root_id, 0, 0);
+
+    // 5) Write results back to widgets in pre-order
+    let mut cursor = 0usize;
+    write_back(root, layout_engine, &mut cursor);
+    root_id
+}
+
+fn build_tree<'a, M>(
+    layout_engine: &mut LayoutEngine,
+    ctx: &mut LayoutCtx<'a, M>,
+    w: &mut dyn Widget<M>,
+) -> usize {
+    let desc = w.layout(ctx);
+
+    let id = layout_engine.create_node(desc.width, desc.height, desc.layout_dir, desc.is_absolute);
+
+    // Copy the rest of the descriptor into the engine node
+    {
+        let n = &mut layout_engine.nodes[id];
+        n.min_width = desc.min_width;
+        n.min_height = desc.min_height;
+        n.max_width = desc.max_width;
+        n.max_height = desc.max_height;
+        n.padding = desc.padding;
+        n.spacing = desc.spacing;
+        n.offset_x = desc.offset_x;
+        n.offset_y = desc.offset_y;
+    }
+
+    let count = w.child_count();
+    for i in 0..count {
+        let child = w.child_mut(i);
+        let cid = build_tree(layout_engine, ctx, child);
+        layout_engine.add_child(id, cid);
+    }
+
+    id
+}
+
+fn post_width_query<'a, M>(
+    w: &mut dyn Widget<M>,
+    eng: &mut LayoutEngine,
+    ctx: &mut LayoutCtx<'a, M>,
+    cursor: &mut usize,
+) {
+    let id = *cursor;
+
+    let first = eng.nodes[id].first_child;
+    if first.is_none()
+        && let Some(h) = w.min_height_for_width(ctx, eng.nodes[id].current_width)
+    {
+        let clamped = h
+            .max(eng.nodes[id].min_height)
+            .min(eng.nodes[id].max_height);
+        eng.nodes[id].min_height = clamped;
+        eng.nodes[id].current_height = clamped;
+    }
+
+    *cursor += 1;
+    let count = w.child_count();
+    for i in 0..count {
+        post_width_query(w.child_mut(i), eng, ctx, cursor);
+    }
+}
+
+fn write_back<M>(w: &mut dyn Widget<M>, layout_engine: &LayoutEngine, cursor: &mut usize) {
+    let id = *cursor;
+    let n = layout_engine.nodes[id];
+    w.set_layout(n.x, n.y, n.current_width, n.current_height);
+
+    *cursor += 1;
+
+    let count = w.child_count();
+    for i in 0..count {
+        let child = w.child_mut(i);
+        write_back(child, layout_engine, cursor);
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Node {
+    pub width: Length,
+    pub height: Length,
+    pub min_width: i32,
+    pub min_height: i32,
+    pub max_width: i32,
+    pub max_height: i32,
+    pub current_width: i32,
+    pub current_height: i32,
+    pub layout_dir: Axis,
+    pub padding: Padding,
+    pub spacing: i32,
+    pub is_absolute: bool,
+    pub offset_x: i32,
+    pub offset_y: i32,
+    pub x: i32,
+    pub y: i32,
+    pub first_child: Option<usize>,
+    pub next_sibling: Option<usize>,
+}
+
+pub struct LayoutEngine {
+    nodes: [Node; MAX_NODES],
+    node_count: usize,
+
+    debug: bool,
+}
+
+impl LayoutEngine {
+    pub fn new() -> Self {
+        LayoutEngine {
+            nodes: [Node::default(); MAX_NODES],
+            node_count: 0,
+
+            debug: false,
+        }
+    }
+    fn create_node(
+        &mut self,
+        width: Length,
+        height: Length,
+        layout_dir: Axis,
+        is_absolute: bool,
+    ) -> usize {
+        assert!(self.node_count < MAX_NODES);
+        let id = self.node_count;
+        self.nodes[id] = Node {
+            width,
+            height,
+            layout_dir,
+            is_absolute,
+            ..Default::default()
+        };
+        self.node_count += 1;
+        id
+    }
+    fn add_child(&mut self, parent: usize, child: usize) {
+        if self.nodes[parent].first_child.is_none() {
+            self.nodes[parent].first_child = Some(child);
+        } else {
+            let mut cur = self.nodes[parent].first_child.unwrap();
+            while let Some(next) = self.nodes[cur].next_sibling {
+                cur = next;
+            }
+            self.nodes[cur].next_sibling = Some(child);
+        }
+    }
+    fn reset(&mut self) {
+        self.node_count = 0;
+    }
+
+    pub fn toggle_debug(&mut self) {
+        self.debug = !self.debug;
+    }
+    pub fn append_debug_instances(&self, root_id: usize, out: &mut Vec<Instance>) {
+        if !self.debug {
+            return;
+        }
+        self.append_debug_rec(root_id, 0, out);
+    }
+    fn append_debug_rec(&self, id: usize, depth: usize, out: &mut Vec<Instance>) {
+        let n = &self.nodes[id];
+        // Guard against degenerate sizes
+        let w = n.current_width.max(1);
+        let h = n.current_height.max(1);
+        let x = n.x;
+        let y = n.y;
+        let thickness = 1;
+
+        let (r, g, b, a) = color_for_depth(depth);
+        let col = Color::rgba(r, g, b, a);
+
+        // top
+        out.push(Instance::ui(
+            Position::new(x, y),
+            Size::new(w, thickness),
+            col,
+        ));
+        // bottom
+        out.push(Instance::ui(
+            Position::new(x, y + h - thickness),
+            Size::new(w, thickness),
+            col,
+        ));
+        // left
+        out.push(Instance::ui(
+            Position::new(x, y),
+            Size::new(thickness, h),
+            col,
+        ));
+        // right
+        out.push(Instance::ui(
+            Position::new(x + w - thickness, y),
+            Size::new(thickness, h),
+            col,
+        ));
+
+        if let Some(child) = n.first_child {
+            let mut idx = Some(child);
+            while let Some(cid) = idx {
+                self.append_debug_rec(cid, depth + 1, out);
+                idx = self.nodes[cid].next_sibling;
+            }
+        }
+    }
+
+    // Phase 1: measure minimal widths
+    fn measure_width(&mut self, id: usize) {
+        if let Some(child_idx) = self.nodes[id].first_child {
+            let layout_dir = self.nodes[id].layout_dir;
+            let pad = self.nodes[id].padding;
+            let spacing = self.nodes[id].spacing;
+            let min_w: i32;
+            if let Axis::Horizontal = layout_dir {
+                // Sum childrens min widths (skip absolute children)
+                let mut total = 0;
+                let mut count = 0;
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    self.measure_width(child);
+                    if !self.nodes[child].is_absolute {
+                        total += self.nodes[child].min_width;
+                        count += 1;
+                    }
+                    idx = self.nodes[child].next_sibling;
+                }
+                let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
+                min_w = total + pad.left + pad.right + gaps;
+            } else {
+                // Vertical: take max child width
+                let mut max_child_w = 0;
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    self.measure_width(child);
+                    if !self.nodes[child].is_absolute {
+                        max_child_w = max(max_child_w, self.nodes[child].min_width);
+                    }
+                    idx = self.nodes[child].next_sibling;
+                }
+                min_w = max_child_w + pad.left + pad.right;
+            }
+
+            let total_min_w = max(min_w, self.nodes[id].min_width);
+            let base_w = match self.nodes[id].width {
+                Length::Fixed(w) => {
+                    self.nodes[id].min_width = max(self.nodes[id].min_width, w);
+                    w
+                }
+                _ => 0,
+            };
+
+            let resolved_w = max(total_min_w, base_w).min(self.nodes[id].max_width);
+            self.nodes[id].current_width = resolved_w;
+            self.nodes[id].min_width = total_min_w;
+        } else {
+            let base_w = match self.nodes[id].width {
+                Length::Fixed(w) => {
+                    self.nodes[id].min_width = max(self.nodes[id].min_width, w);
+                    w
+                }
+                _ => 0,
+            };
+            let resolved_w = max(self.nodes[id].min_width, base_w).min(self.nodes[id].max_width);
+            self.nodes[id].current_width = resolved_w;
+        }
+    }
+
+    // Phase 2: assign widths with available space
+    fn assign_width(&mut self, id: usize, parent_width: i32) {
+        if let Some(child_idx) = self.nodes[id].first_child {
+            let layout_dir = self.nodes[id].layout_dir;
+            let pad = self.nodes[id].padding;
+            let spacing = self.nodes[id].spacing;
+
+            let target_w = match self.nodes[id].width {
+                Length::Grow => parent_width,
+                Length::Fixed(w) => w,
+                Length::Fit => self.nodes[id].current_width,
+            };
+            let target_w = max(target_w, self.nodes[id].min_width)
+                .min(self.nodes[id].max_width)
+                .min(parent_width);
+            self.nodes[id].current_width = target_w;
+            let inner_w = (target_w
+                - pad.left
+                - pad.right
+                - if let Axis::Horizontal = layout_dir {
+                    let mut count = 0;
+                    let mut idx = Some(child_idx);
+                    while let Some(child) = idx {
+                        if !self.nodes[child].is_absolute {
+                            count += 1;
+                        }
+                        idx = self.nodes[child].next_sibling;
+                    }
+                    if count > 0 { (count - 1) * spacing } else { 0 }
+                } else {
+                    0
+                })
+            .max(0);
+            if let Axis::Horizontal = layout_dir {
+                // **Horizontal container**: distribute inner width among children
+                let mut children = Vec::new();
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    if !self.nodes[child].is_absolute {
+                        children.push(child);
+                    }
+                    idx = self.nodes[child].next_sibling;
+                }
+
+                // Calculate each childs base width (from measure)
+                let count = children.len();
+                let mut allocated: Vec<i32> = Vec::with_capacity(count);
+                let mut total_base = 0;
+                for &child in &children {
+                    let base = self.nodes[child].current_width;
+                    allocated.push(base);
+                    total_base += base;
+                }
+                let mut remaining = inner_w - total_base;
+
+                // If not enough space, shrink proportionally above min
+                if remaining < 0 {
+                    let mut deficit = -remaining;
+                    while deficit > 0 {
+                        let shrinkables: Vec<usize> = children
+                            .iter()
+                            .enumerate()
+                            .filter(|(j, child)| allocated[*j] > self.nodes[**child].min_width)
+                            .map(|(j, _)| j)
+                            .collect();
+                        if shrinkables.is_empty() {
+                            break;
+                        }
+                        let reduce_each = (deficit / shrinkables.len() as i32).max(1);
+                        let mut used = 0;
+                        for &j in &shrinkables {
+                            let child = children[j];
+                            let reducible = allocated[j] - self.nodes[child].min_width;
+                            let reduce_amt = min(reducible, reduce_each);
+                            if reduce_amt > 0 {
+                                allocated[j] -= reduce_amt;
+                                used += reduce_amt;
+                                deficit -= reduce_amt;
+                                if deficit <= 0 {
+                                    break;
+                                }
+                            }
+                        }
+                        if used == 0 {
+                            break;
+                        }
+                    }
+                    remaining = 0;
+                }
+
+                // If extra space, distribute to Grow children
+                if remaining > 0 {
+                    while remaining > 0 {
+                        let growables: Vec<usize> = children
+                            .iter()
+                            .enumerate()
+                            .filter(|(j, child)| {
+                                matches!(self.nodes[**child].width, Length::Grow)
+                                    && allocated[*j] < self.nodes[**child].max_width
+                            })
+                            .map(|(j, _)| j)
+                            .collect();
+                        if growables.is_empty() {
+                            break;
+                        }
+                        let add_each = (remaining / growables.len() as i32).max(1);
+                        let mut used = 0;
+                        for &j in &growables {
+                            let child = children[j];
+                            let addable = self.nodes[child].max_width - allocated[j];
+                            let add_amt = min(addable, add_each);
+                            if add_amt > 0 {
+                                allocated[j] += add_amt;
+                                used += add_amt;
+                                remaining -= add_amt;
+                                if remaining <= 0 {
+                                    break;
+                                }
+                            }
+                        }
+                        if used == 0 {
+                            break;
+                        }
+                    }
+                }
+
+                for (j, &child) in children.iter().enumerate() {
+                    self.assign_width(child, allocated[j]);
+                }
+
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    if self.nodes[child].is_absolute {
+                        self.assign_width(child, inner_w);
+                    }
+                    idx = self.nodes[child].next_sibling;
+                }
+            } else {
+                // **Vertical container**: give all children the same inner width
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    self.assign_width(child, inner_w);
+                    idx = self.nodes[child].next_sibling;
+                }
+            }
+        } else {
+            let target_w = match self.nodes[id].width {
+                Length::Grow => parent_width,
+                Length::Fixed(w) => w,
+                Length::Fit => self.nodes[id].current_width,
+            };
+            let final_w = max(target_w, self.nodes[id].min_width)
+                .min(self.nodes[id].max_width)
+                .min(parent_width);
+            self.nodes[id].current_width = final_w;
+        }
+    }
+
+    // Phase 3: measure minimal heights (after widths are set)
+    fn measure_height(&mut self, id: usize) {
+        if let Some(child_idx) = self.nodes[id].first_child {
+            let layout_dir = self.nodes[id].layout_dir;
+            let pad = self.nodes[id].padding;
+            let spacing = self.nodes[id].spacing;
+            let min_h: i32;
+            if let Axis::Horizontal = layout_dir {
+                // Horizontal container: height must fit tallest child
+                let mut max_child_h = 0;
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    self.measure_height(child);
+                    if !self.nodes[child].is_absolute {
+                        max_child_h = max(max_child_h, self.nodes[child].min_height);
+                    }
+                    idx = self.nodes[child].next_sibling;
+                }
+                min_h = max_child_h + pad.top + pad.bottom;
+            } else {
+                // Vertical container: sum of children heights
+                let mut total = 0;
+                let mut count = 0;
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    self.measure_height(child);
+                    if !self.nodes[child].is_absolute {
+                        total += self.nodes[child].min_height;
+                        count += 1;
+                    }
+                    idx = self.nodes[child].next_sibling;
+                }
+                let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
+                min_h = total + pad.top + pad.bottom + gaps;
+            }
+            let total_min_h = max(min_h, self.nodes[id].min_height);
+            let base_h = match self.nodes[id].height {
+                Length::Fixed(h) => {
+                    self.nodes[id].min_height = max(self.nodes[id].min_height, h);
+                    h
+                }
+                _ => 0,
+            };
+            let resolved_h = max(total_min_h, base_h).min(self.nodes[id].max_height);
+            self.nodes[id].current_height = resolved_h;
+            self.nodes[id].min_height = total_min_h;
+        } else {
+            let base_h = match self.nodes[id].height {
+                Length::Fixed(h) => {
+                    self.nodes[id].min_height = max(self.nodes[id].min_height, h);
+                    h
+                }
+                _ => 0,
+            };
+            let resolved_h = max(self.nodes[id].min_height, base_h).min(self.nodes[id].max_height);
+            self.nodes[id].current_height = resolved_h;
+        }
+    }
+
+    // Phase 4: assign heights within available space
+    fn assign_height(&mut self, id: usize, parent_height: i32) {
+        if let Some(child_idx) = self.nodes[id].first_child {
+            let layout_dir = self.nodes[id].layout_dir;
+            let pad = self.nodes[id].padding;
+            let spacing = self.nodes[id].spacing;
+            let target_h = match self.nodes[id].height {
+                Length::Grow => parent_height,
+                Length::Fixed(h) => h,
+                Length::Fit => self.nodes[id].current_height,
+            };
+            let target_h = max(target_h, self.nodes[id].min_height)
+                .min(self.nodes[id].max_height)
+                .min(parent_height);
+            self.nodes[id].current_height = target_h;
+
+            let inner_h = (target_h
+                - pad.top
+                - pad.bottom
+                - if let Axis::Vertical = layout_dir {
+                    let mut count = 0;
+                    let mut idx = Some(child_idx);
+                    while let Some(child) = idx {
+                        if !self.nodes[child].is_absolute {
+                            count += 1;
+                        }
+                        idx = self.nodes[child].next_sibling;
+                    }
+                    if count > 0 { (count - 1) * spacing } else { 0 }
+                } else {
+                    0
+                })
+            .max(0);
+            if let Axis::Vertical = layout_dir {
+                // **Vertical container**: distribute inner height among children
+                let mut children = Vec::new();
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    if !self.nodes[child].is_absolute {
+                        children.push(child);
+                    }
+                    idx = self.nodes[child].next_sibling;
+                }
+                let mut allocated = Vec::with_capacity(children.len());
+                let mut total_base = 0;
+                for &child in &children {
+                    allocated.push(self.nodes[child].current_height);
+                    total_base += self.nodes[child].current_height;
+                }
+                let mut remaining = inner_h - total_base;
+                if remaining < 0 {
+                    // shrink heights above min_height
+                    let mut deficit = -remaining;
+                    while deficit > 0 {
+                        let shrinkables: Vec<usize> = children
+                            .iter()
+                            .enumerate()
+                            .filter(|(j, child)| allocated[*j] > self.nodes[**child].min_height)
+                            .map(|(j, _)| j)
+                            .collect();
+                        if shrinkables.is_empty() {
+                            break;
+                        }
+                        let reduce_each = (deficit / shrinkables.len() as i32).max(1);
+                        let mut used = 0;
+                        for &j in &shrinkables {
+                            let child = children[j];
+                            let reducible = allocated[j] - self.nodes[child].min_height;
+                            let reduce_amt = min(reducible, reduce_each);
+                            if reduce_amt > 0 {
+                                allocated[j] -= reduce_amt;
+                                used += reduce_amt;
+                                deficit -= reduce_amt;
+                                if deficit <= 0 {
+                                    break;
+                                }
+                            }
+                        }
+                        if used == 0 {
+                            break;
+                        }
+                    }
+                    remaining = 0;
+                }
+                if remaining > 0 {
+                    // distribute extra height to any Grow children
+                    while remaining > 0 {
+                        let growables: Vec<usize> = children
+                            .iter()
+                            .enumerate()
+                            .filter(|(j, child)| {
+                                matches!(self.nodes[**child].height, Length::Grow)
+                                    && allocated[*j] < self.nodes[**child].max_height
+                            })
+                            .map(|(j, _)| j)
+                            .collect();
+                        if growables.is_empty() {
+                            break;
+                        }
+                        let add_each = (remaining / growables.len() as i32).max(1);
+                        let mut used = 0;
+                        for &j in &growables {
+                            let child = children[j];
+                            let addable = self.nodes[child].max_height - allocated[j];
+                            let add_amt = min(addable, add_each);
+                            if add_amt > 0 {
+                                allocated[j] += add_amt;
+                                used += add_amt;
+                                remaining -= add_amt;
+                                if remaining <= 0 {
+                                    break;
+                                }
+                            }
+                        }
+                        if used == 0 {
+                            break;
+                        }
+                    }
+                }
+                for (j, &child) in children.iter().enumerate() {
+                    self.assign_height(child, allocated[j]);
+                }
+
+                // Absolute children get full inner height available
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    if self.nodes[child].is_absolute {
+                        self.assign_height(child, inner_h);
+                    }
+                    idx = self.nodes[child].next_sibling;
+                }
+            } else {
+                // **Horizontal container**: all children get same inner height
+                let mut idx = Some(child_idx);
+                while let Some(child) = idx {
+                    self.assign_height(child, inner_h);
+                    idx = self.nodes[child].next_sibling;
+                }
+            }
+        } else {
+            let target_h = match self.nodes[id].height {
+                Length::Grow => parent_height,
+                Length::Fixed(h) => h,
+                Length::Fit => self.nodes[id].current_height,
+            };
+            let final_h = max(target_h, self.nodes[id].min_height)
+                .min(self.nodes[id].max_height)
+                .min(parent_height);
+            self.nodes[id].current_height = final_h;
+        }
+    }
+
+    // Phase 5: place all nodes (compute positions)
+    fn place(&mut self, id: usize, x: i32, y: i32) -> (i32, i32) {
+        // Set this nodes position
+        self.nodes[id].x = x;
+        self.nodes[id].y = y;
+        if let Some(child_idx) = self.nodes[id].first_child {
+            let layout_dir = self.nodes[id].layout_dir;
+            let pad = self.nodes[id].padding;
+            // Starting cursor at top-left content area
+            let base_x = x + pad.left;
+            let base_y = y + pad.top;
+            let mut cursor_x = base_x;
+            let mut cursor_y = base_y;
+            let mut idx = Some(child_idx);
+            while let Some(child) = idx {
+                let is_abs = self.nodes[child].is_absolute;
+                let child_w = self.nodes[child].current_width;
+                let child_h = self.nodes[child].current_height;
+                let offx = self.nodes[child].offset_x;
+                let offy = self.nodes[child].offset_y;
+                let next = self.nodes[child].next_sibling;
+                if !is_abs {
+                    match layout_dir {
+                        Axis::Horizontal => {
+                            self.place(child, cursor_x, base_y);
+                            cursor_x += child_w + self.nodes[id].spacing;
+                        }
+                        Axis::Vertical => {
+                            self.place(child, base_x, cursor_y);
+                            cursor_y += child_h + self.nodes[id].spacing;
+                        }
+                    }
+                } else {
+                    let abs_x = base_x + offx;
+                    let abs_y = base_y + offy;
+                    self.place(child, abs_x, abs_y);
+                }
+                idx = next;
+            }
+        }
+        (self.nodes[id].current_width, self.nodes[id].current_height)
+    }
+}

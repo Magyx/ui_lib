@@ -1,32 +1,35 @@
 use super::*;
-use crate::widget::helpers::{Height, equalize_sizes};
 
 pub struct Column<M> {
-    layout: Option<Layout>,
-
-    id: Id,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
     children: Vec<Element<M>>,
     spacing: i32,
-    position: Position<i32>,
-    size: Size<Length<i32>>,
-    color: Color,
     padding: Vec4<i32>,
+    size: Size<Length>,
+    color: Color,
     min: Size<i32>,
     max: Size<i32>,
 }
 
 impl<M> Column<M> {
-    pub fn new(children: Vec<Element<M>>) -> Self {
+    pub fn new<I, E>(children: I) -> Self
+    where
+        I: IntoIterator<Item = E>,
+        E: Into<Element<M>>,
+    {
         Self {
-            layout: None,
-
-            id: crate::context::next_id(),
-            children,
+            x: 0,
+            y: 0,
+            w: 0,
+            h: 0,
+            children: children.into_iter().map(Into::into).collect(),
             spacing: 0,
-            position: Position::splat(0),
+            padding: Vec4::splat(0),
             size: Size::splat(Length::Fit),
             color: Color::TRANSPARENT,
-            padding: Vec4::splat(0),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
         }
@@ -37,7 +40,7 @@ impl<M> Column<M> {
         self
     }
 
-    pub fn size(mut self, size: Size<Length<i32>>) -> Self {
+    pub fn size(mut self, size: Size<Length>) -> Self {
         self.size = size;
         self
     }
@@ -63,148 +66,56 @@ impl<M> Column<M> {
     }
 }
 
+impl<M> IntoElement for Column<M> {}
+
 impl<M: 'static> Widget<M> for Column<M> {
-    fn id(&self) -> Id {
-        self.id
-    }
-    fn position(&self) -> &Position<i32> {
-        &self.position
-    }
-    fn layout(&self) -> &Layout {
-        self.layout.as_ref().expect(LAYOUT_ERROR)
-    }
-
-    fn for_each_child(&self, f: &mut dyn for<'a> FnMut(&'a dyn Widget<M>)) {
-        for child in &self.children {
-            f(child.as_ref());
+    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+        Node {
+            width: self.size.width,
+            height: self.size.height,
+            min_width: self.min.width,
+            min_height: self.min.height,
+            max_width: self.max.width,
+            max_height: self.max.height,
+            layout_dir: Axis::Vertical,
+            padding: Padding {
+                left: self.padding.x,
+                top: self.padding.y,
+                right: self.padding.z,
+                bottom: self.padding.w,
+            },
+            spacing: self.spacing,
+            ..Default::default()
         }
     }
 
-    fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
-        let width_padding = self.padding.x + self.padding.z;
-
-        let mut min_child_w = 0;
-        for child in self.children.iter_mut() {
-            let Layout { current_size, .. } = child.fit_width(ctx);
-            min_child_w = min_child_w.max(current_size.width);
-        }
-        let min_w = min_child_w.saturating_add(width_padding);
-
-        let resolved_w = self
-            .size
-            .into_fixed()
-            .width
-            .clamp(min_w.max(self.min.width), self.max.width);
-
-        let l = Layout {
-            size: self.size,
-            current_size: Size::new(resolved_w, 0),
-            min: Size::new(min_w.max(self.min.width), self.min.height),
-            max: self.max,
-        };
-        self.layout = Some(l);
-        l
+    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
+        self.x = x;
+        self.y = y;
+        self.w = w;
+        self.h = h;
     }
 
-    fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, parent_width: i32) {
-        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
-
-        let target_w = match self.size.width {
-            Length::Grow => parent_width,
-            Length::Fixed(w) => w,
-            Length::Fit => l.current_size.width,
-        }
-        .max(l.min.width)
-        .min(l.max.width)
-        .min(parent_width);
-
-        let inner_w = (target_w - self.padding.x - self.padding.z).max(0);
-        for child in self.children.iter_mut() {
-            child.grow_width(ctx, inner_w);
-        }
-
-        l.current_size.width = target_w;
+    fn child_count(&self) -> usize {
+        self.children.len()
+    }
+    fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
+        self.children[i].as_mut()
     }
 
-    fn fit_height(&mut self, ctx: &mut LayoutCtx<M>) -> Layout {
-        let height_padding = self.padding.y + self.padding.w;
-
-        let mut min_h = (self.children.len() as i32 - 1) * self.spacing + height_padding;
-        for child in self.children.iter_mut() {
-            let Layout { current_size, .. } = child.fit_height(ctx);
-            min_h += current_size.height;
+    fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+        if self.color.a() > 0 {
+            out.push(Instance::ui(
+                Position::new(self.x, self.y),
+                Size::new(self.w, self.h),
+                self.color,
+            ));
         }
-
-        let prev = self.layout.as_ref().expect(LAYOUT_ERROR);
-        let prev_w = prev.current_size.width;
-
-        let requested_h = match self.size.height {
-            Length::Fixed(h) => h,
-            _ => min_h,
-        };
-        let resolved_h = requested_h
-            .max(self.min.height.max(min_h))
-            .min(self.max.height);
-
-        let l = Layout {
-            size: self.size,
-            current_size: Size::new(prev_w, resolved_h),
-            min: Size::new(prev.min.width, self.min.height.max(min_h)),
-            max: self.max,
-        };
-        self.layout = Some(l);
-        l
-    }
-
-    fn grow_height(&mut self, ctx: &mut LayoutCtx<M>, parent_height: i32) {
-        let l = self.layout.as_mut().expect(LAYOUT_ERROR);
-
-        let target_h = match self.size.height {
-            Length::Grow => parent_height,
-            Length::Fixed(h) => h,
-            Length::Fit => l.current_size.height,
-        }
-        .max(l.min.height)
-        .min(l.max.height)
-        .min(parent_height);
-
-        let inner_h = target_h
-            - (self.children.len() as i32 - 1).max(0) * self.spacing
-            - self.padding.y
-            - self.padding.w;
-
-        let eq = equalize_sizes(&self.children, Height, Height, inner_h.max(0));
-        for (i, h) in eq {
-            self.children[i].grow_height(ctx, h);
-        }
-
-        l.current_size.height = target_h;
-    }
-
-    fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32> {
-        self.position = position;
-        let mut cursor = Position::new(
-            self.position.x + self.padding.x,
-            self.position.y + self.padding.y,
-        );
-        for child in self.children.iter_mut() {
-            let child_size = child.place(ctx, cursor);
-            cursor.y += child_size.height + self.spacing;
-        }
-        self.layout().current_size
-    }
-
-    fn draw_self(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        instances.push(Instance::ui(
-            self.position,
-            self.layout().current_size,
-            self.color,
-        ));
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        for child in self.children.iter_mut() {
-            child.handle(ctx);
+        for c in &mut self.children {
+            c.as_mut().handle(ctx);
         }
     }
 }

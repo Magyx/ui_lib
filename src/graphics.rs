@@ -5,14 +5,15 @@ use crate::{
     consts::*,
     context::{Context, EventCtx, LayoutCtx, PaintCtx},
     event::{Event, ToEvent},
+    layout::LayoutEngine,
     model::*,
-    primitive::{Primitive, Vertex},
+    primitive::{Instance, Primitive, Vertex},
     render::{
         pipeline::PipelineRegistry,
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
     },
-    widget::{Element, internal::PAINT_TOKEN},
+    widget::Element,
 };
 
 #[derive(Default)]
@@ -31,12 +32,12 @@ impl TargetIdAlloc {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Globals {
-    window_size: [f32; 2], // pixels
-    mouse_pos: [f32; 2],   // pixels
-    mouse_buttons: u32,    // bit 0: left, bit 1: right (etc.)
-    pub time: f32,         // seconds since start
-    pub delta_time: f32,   // seconds since last frame
-    pub frame: u32,        // frame counter
+    pub window_size: [f32; 2], // pixels
+    pub mouse_pos: [f32; 2],   // pixels
+    pub mouse_buttons: u32,    // bit 0: left, bit 1: right (etc.)
+    pub time: f32,             // seconds since start
+    pub delta_time: f32,       // seconds since last frame
+    pub frame: u32,            // frame counter
 }
 
 pub struct Gpu {
@@ -63,7 +64,7 @@ pub struct Target<'a, M> {
 pub struct TargetId(u32);
 
 pub struct Engine<'a, M> {
-    debug: bool,
+    layout_engine: LayoutEngine,
 
     gpu: Arc<Gpu>,
     target_alloc: TargetIdAlloc,
@@ -130,7 +131,7 @@ impl<'a, M> Default for Engine<'a, M> {
         let targets = HashMap::with_capacity(1);
 
         Self {
-            debug: false,
+            layout_engine: LayoutEngine::new(),
 
             gpu: Arc::new(gpu),
             target_alloc,
@@ -284,7 +285,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
     }
 
     pub fn toggle_debug(&mut self) {
-        self.debug = !self.debug;
+        self.layout_engine.toggle_debug();
     }
 
     pub fn globals(&self, tid: TargetId) -> Option<&Globals> {
@@ -302,7 +303,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
     {
         self.create_target(target, size)
     }
-
     pub fn detach_target(&mut self, tid: &TargetId) {
         if self.targets.remove(tid).is_some() && self.primary_target == Some(*tid) {
             if self.primary_target == Some(*tid) && !self.targets.is_empty() {
@@ -339,17 +339,14 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             .textures
             .load_rgba8(&self.gpu, width, height, pixels)
     }
-
     pub fn unload_texture(&mut self, handle: TextureHandle) -> bool {
         self.renderer.textures.unload(&self.gpu, handle)
     }
-
     pub fn create_atlas(&mut self, width: u32, height: u32) -> Atlas {
         self.renderer
             .textures
             .create_atlas(&self.gpu, width, height)
     }
-
     pub fn load_texture_into_atlas(
         &mut self,
         atlas: &mut Atlas,
@@ -361,7 +358,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             .textures
             .load_into_atlas(&self.gpu, atlas, width, height, pixels)
     }
-
     pub fn destroy_atlas(&mut self, atlas: &mut Atlas) {
         self.renderer.textures.destroy_atlas(&self.gpu, atlas)
     }
@@ -393,7 +389,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 globals: &target.globals,
                 ui: &mut target.ctx,
             };
-            root.handle(&mut event_cx);
+            root.as_mut().handle(&mut event_cx);
         } else {
             require_redraw = true;
         }
@@ -408,7 +404,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         require_redraw
     }
-
     pub fn render_if_needed<S>(
         &mut self,
         tid: &TargetId,
@@ -440,20 +435,18 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         )
         .max(Size::new(1, 1));
 
-        {
-            let mut layout_ctx = LayoutCtx {
-                globals: &target.globals,
-                ui: &mut target.ctx,
-                text: &mut self.renderer.text,
-            };
-            _ = root.fit_width(&mut layout_ctx);
-            root.grow_width(&mut layout_ctx, max.width);
-
-            _ = root.fit_height(&mut layout_ctx);
-            root.grow_height(&mut layout_ctx, max.height);
-
-            root.place(&mut layout_ctx, Position::splat(0));
-        }
+        let mut layout_ctx = LayoutCtx {
+            globals: &target.globals,
+            ui: &mut target.ctx,
+            text: &mut self.renderer.text,
+        };
+        let root_id = crate::layout::run_layout(
+            &mut self.layout_engine,
+            &mut layout_ctx,
+            root.as_mut(),
+            max.width,
+            max.height,
+        );
 
         let mut event_ctx = EventCtx {
             globals: &target.globals,
@@ -461,7 +454,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         };
 
         // TODO: split handle into prepare and other steps so we don't need to force a take_redraw
-        root.handle(&mut event_ctx);
+        root.as_mut().handle(&mut event_ctx);
         target.ctx.take_redraw();
 
         let mut instances = Vec::new();
@@ -472,8 +465,23 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 gpu: &self.gpu.clone(),
                 texture: &mut self.renderer.textures,
             };
-            root.__paint(&mut paint_ctx, &mut instances, &PAINT_TOKEN, self.debug);
+
+            fn paint_tree<M>(
+                w: &mut dyn crate::widget::Widget<M>,
+                ctx: &mut PaintCtx,
+                out: &mut Vec<Instance>,
+            ) {
+                w.paint(ctx, out);
+                let count = w.child_count();
+                for i in 0..count {
+                    paint_tree(w.child_mut(i), ctx, out);
+                }
+            }
+
+            paint_tree(root.as_mut(), &mut paint_ctx, &mut instances);
         }
+        self.layout_engine
+            .append_debug_instances(root_id, &mut instances);
 
         target.globals.frame = target.globals.frame.wrapping_add(1);
 
@@ -485,7 +493,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             &instances,
         );
     }
-
     pub fn handle_platform_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
         &mut self,
         target_id: &TargetId,

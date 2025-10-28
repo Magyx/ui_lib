@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use ui::{
     event::{KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
-    widget::{Container, Element, Widget},
+    widget::{Element, Rectangle},
 };
 
 use super::demos;
@@ -234,7 +234,7 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
 pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
     let target = match state.per_target.get(tid) {
         Some(t) => t,
-        None => return Container::new(vec![]).einto(),
+        None => return Rectangle::placeholder().into(),
     };
     match target.view {
         View::Layout => demos::layout::view(state),

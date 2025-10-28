@@ -1,137 +1,63 @@
-#![allow(unused_variables)]
-use std::ops::{Deref, DerefMut};
+use crate::{context::*, layout::Node, model::*, primitive::Instance};
 
-use crate::{context::*, model::*, primitive::Instance};
-
-mod helpers;
-
-pub const LAYOUT_ERROR: &str = "Layout not set during fit_width!";
-
-pub mod internal {
-    #[doc(hidden)]
-    pub struct PaintToken(());
-
-    pub(crate) const PAINT_TOKEN: PaintToken = PaintToken(());
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct Layout {
-    pub size: Size<Length<i32>>,
-    pub current_size: Size<i32>,
-    pub min: Size<i32>,
-    pub max: Size<i32>,
-}
-
-impl Layout {
-    pub fn unconstrained(size: Size<Length<i32>>, current: Size<i32>) -> Self {
-        Self {
-            size,
-            current_size: current,
-            min: Size::splat(0),
-            max: Size::splat(i32::MAX),
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum Length<U> {
+#[derive(Clone, Copy, Debug)]
+pub enum Length {
     Fit,
-    Fixed(U),
+    Fixed(i32),
     Grow,
 }
 
-impl<U> Size<Length<U>> {
-    pub fn into_fixed(self) -> Size<U>
-    where
-        U: Default,
-    {
-        Size {
-            width: match self.width {
-                Length::Fixed(x) => x,
-                _ => U::default(),
-            },
-            height: match self.height {
-                Length::Fixed(x) => x,
-                _ => U::default(),
-            },
-        }
+impl Default for Length {
+    fn default() -> Self {
+        Self::Fit
     }
 }
 
-impl<U> Size<U> {
-    pub fn from_fixed(self) -> Size<Length<U>> {
-        Size {
-            width: Length::Fixed(self.width),
-            height: Length::Fixed(self.height),
-        }
+#[derive(Clone, Copy, Debug)]
+pub enum Axis {
+    Horizontal,
+    Vertical,
+}
+
+impl Default for Axis {
+    fn default() -> Self {
+        Self::Horizontal
     }
 }
 
-pub trait Widget<M> {
-    fn id(&self) -> Id;
-    fn position(&self) -> &Position<i32>;
-    fn layout(&self) -> &Layout;
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Padding {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
 
+pub trait IntoElement {}
+
+pub trait Widget<M>: IntoElement {
     /* ----- layout ----- */
-    fn fit_width(&mut self, ctx: &mut LayoutCtx<M>) -> Layout;
-    fn grow_width(&mut self, ctx: &mut LayoutCtx<M>, parent_width: i32);
-    fn fit_height(&mut self, ctx: &mut LayoutCtx<M>) -> Layout;
-    fn grow_height(&mut self, ctx: &mut LayoutCtx<M>, parent_height: i32);
-    fn place(&mut self, ctx: &mut LayoutCtx<M>, position: Position<i32>) -> Size<i32>;
+    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node;
+    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32);
+    fn child_count(&self) -> usize;
+    fn child_mut(&mut self, idx: usize) -> &mut dyn Widget<M>;
+
+    fn min_height_for_width<'a>(
+        &mut self,
+        _ctx: &mut LayoutCtx<'a, M>,
+        _width: i32,
+    ) -> Option<i32> {
+        None
+    }
 
     /* ----- paint ----- */
-    fn draw_self(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
-
-    #[doc(hidden)]
-    fn for_each_child(&self, f: &mut dyn for<'a> FnMut(&'a dyn Widget<M>)) {
-        let _ = f;
-    }
-    #[doc(hidden)]
-    fn after_draw(
-        &self,
-        ctx: &mut PaintCtx,
-        instances: &mut Vec<Instance>,
-        t: &internal::PaintToken,
-    ) {
-        let pos = *self.position();
-        let size = self.layout().current_size - 1;
-        let opos = Position::new(pos.x + size.width, pos.y + size.height);
-
-        instances.push(Instance::ui(pos, Size::new(size.width, 1), Color::RED));
-        instances.push(Instance::ui(pos, Size::new(1, size.height), Color::RED));
-        instances.push(Instance::ui(opos, Size::new(-size.width, 1), Color::RED));
-        instances.push(Instance::ui(opos, Size::new(1, -size.height), Color::RED));
-    }
-    #[doc(hidden)]
-    fn __paint(
-        &self,
-        ctx: &mut PaintCtx,
-        instances: &mut Vec<Instance>,
-        t: &internal::PaintToken,
-        debug_on: bool,
-    ) {
-        self.draw_self(ctx, instances);
-
-        let mut each = |child: &dyn Widget<M>| child.__paint(ctx, instances, t, debug_on);
-        self.for_each_child(&mut each);
-
-        if debug_on {
-            self.after_draw(ctx, instances, t);
-        }
-    }
+    fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
 
     /* ----- interaction ----- */
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {}
-
-    fn einto(self) -> Element<M>
-    where
-        Self: Sized + 'static,
-    {
-        Element::new(self)
-    }
+    fn handle(&mut self, _ctx: &mut EventCtx<M>) {}
 }
 
-pub struct Element<M>(Box<dyn Widget<M>>);
+pub struct Element<M>(Box<dyn Widget<M> + 'static>);
 
 impl<M> Element<M> {
     pub fn new<W>(widget: W) -> Self
@@ -139,6 +65,15 @@ impl<M> Element<M> {
         W: Widget<M> + 'static,
     {
         Element(Box::new(widget))
+    }
+}
+
+impl<M, W> From<W> for Element<M>
+where
+    W: Widget<M> + IntoElement + 'static,
+{
+    fn from(w: W) -> Self {
+        Element::new(w)
     }
 }
 
@@ -154,18 +89,11 @@ impl<M> AsMut<dyn Widget<M> + 'static> for Element<M> {
     }
 }
 
-impl<M> Deref for Element<M> {
-    type Target = dyn Widget<M>;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.deref()
-    }
-}
-
-impl<M> DerefMut for Element<M> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.0.deref_mut()
-    }
+#[macro_export]
+macro_rules! el {
+    ( $( $x:expr ),* $(,)? ) => {
+        vec![ $( Element::from($x) ),* ]
+    };
 }
 
 mod rectangle;
@@ -180,8 +108,8 @@ pub use row::Row;
 mod column;
 pub use column::Column;
 
-mod container;
-pub use container::Container;
+mod overlay;
+pub use overlay::Overlay;
 
 mod button;
 pub use button::Button;
