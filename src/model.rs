@@ -269,7 +269,7 @@ impl Color {
 
     #[inline]
     pub fn r(&self) -> u8 {
-        ((self.0 & 0x00_FF_00_00) >> 16) as u8
+        (self.0 & 0x00_00_00_FF) as u8
     }
 
     #[inline]
@@ -279,7 +279,7 @@ impl Color {
 
     #[inline]
     pub fn b(&self) -> u8 {
-        (self.0 & 0x00_00_00_FF) as u8
+        ((self.0 & 0x00_FF_00_00) >> 16) as u8
     }
 
     #[inline]
