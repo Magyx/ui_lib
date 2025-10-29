@@ -82,7 +82,7 @@ impl TextMode for MultiLine {
         let mut st = state.cell_mut();
         let caret = st.caret;
         st.value.insert(caret, '\n');
-        st.caret += 2;
+        st.caret += 1;
         if let Some(f) = on_change {
             ctx.ui.emit(f(&st.value));
             ctx.ui.request_redraw();
