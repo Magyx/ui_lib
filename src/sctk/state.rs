@@ -514,13 +514,11 @@ impl WindowHandler for SctkState {
         configure: smithay_client_toolkit::shell::xdg::window::WindowConfigure,
         _serial: u32,
     ) {
-        println!("entered window configure");
         let wid = window.wl_surface().id().protocol_id();
         if let Some(sid) = self.by_surface_id.get(&wid).copied()
             && let Some(rec) = self.surfaces.get_mut(&sid)
             && let (Some(w), Some(h)) = configure.new_size
         {
-            println!("{}:{}", w, h);
             let new_size = Size::new(w.get(), h.get());
             if new_size != rec.size {
                 rec.size = new_size;
