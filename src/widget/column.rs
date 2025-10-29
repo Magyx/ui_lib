@@ -58,6 +58,13 @@ impl<M> Column<M> {
         self.max = size;
         self
     }
+
+    pub fn push<E>(&mut self, element: E)
+    where
+        E: Into<Element<M>>,
+    {
+        self.children.push(element.into());
+    }
 }
 
 impl<M> IntoElement for Column<M> {}

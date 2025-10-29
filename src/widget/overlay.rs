@@ -100,6 +100,13 @@ impl<M> Overlay<M> {
         self.max = size;
         self
     }
+
+    pub fn push<E>(&mut self, element: E, x: i32, y: i32)
+    where
+        E: Into<Element<M>>,
+    {
+        self.children.push(Absolute::new(element.into(), x, y));
+    }
 }
 
 impl<M> IntoElement for Overlay<M> {}

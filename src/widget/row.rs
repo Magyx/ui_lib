@@ -62,6 +62,13 @@ impl<M> Row<M> {
     pub(crate) fn set_spacing(&mut self, amount: i32) {
         self.spacing = amount;
     }
+
+    pub fn push<E>(&mut self, element: E)
+    where
+        E: Into<Element<M>>,
+    {
+        self.children.push(element.into());
+    }
 }
 
 impl<M> IntoElement for Row<M> {}
