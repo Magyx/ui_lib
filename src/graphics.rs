@@ -539,10 +539,11 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             _ => (),
         }
 
-        if update(self, &event, state, params)
-            && let Some(target) = self.targets.get_mut(target_id)
-        {
-            target.ctx.request_redraw();
+        let had_target = self.targets.contains_key(target_id);
+        if had_target && update(self, &event, state, params) {
+            if let Some(target) = self.targets.get_mut(target_id) {
+                target.ctx.request_redraw();
+            }
         }
     }
 }
