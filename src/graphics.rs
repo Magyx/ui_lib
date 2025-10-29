@@ -339,6 +339,11 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             .textures
             .load_rgba8(&self.gpu, width, height, pixels)
     }
+    pub fn update_texture_rgba8(&mut self, handle: TextureHandle, pixels: &[u8]) -> bool {
+        self.renderer
+            .textures
+            .update_rgba8(&self.gpu, handle, pixels)
+    }
     pub fn unload_texture(&mut self, handle: TextureHandle) -> bool {
         self.renderer.textures.unload(&self.gpu, handle)
     }
@@ -386,6 +391,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         if let Some(root) = target.root.as_mut() {
             let mut event_cx = EventCtx {
+                event: None,
                 globals: &target.globals,
                 ui: &mut target.ctx,
             };
@@ -449,6 +455,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         );
 
         let mut event_ctx = EventCtx {
+            event: None,
             globals: &target.globals,
             ui: &mut target.ctx,
         };
@@ -539,11 +546,39 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             _ => (),
         }
 
-        let had_target = self.targets.contains_key(target_id);
-        if had_target && update(self, &event, state, params) {
-            if let Some(target) = self.targets.get_mut(target_id) {
-                target.ctx.request_redraw();
+        if let Some(root) = target.root.as_mut() {
+            use crate::event::UiEventRef as U;
+            let ev_view = match &event {
+                Event::RedrawRequested => Some(U::RedrawRequested),
+                Event::Resized { size } => Some(U::Resized { size: *size }),
+                Event::CursorMoved { position } => Some(U::CursorMoved {
+                    position: *position,
+                }),
+                Event::MouseInput { mouse_down } => Some(U::MouseInput {
+                    mouse_down: *mouse_down,
+                }),
+                Event::Key(k) => Some(U::Key(k)),
+                Event::Text(t) => Some(U::Text(t)),
+                Event::ModifiersChanged(m) => Some(U::ModifiersChanged(m)),
+                _ => None,
+            };
+
+            if ev_view.is_some() {
+                let mut ctx = EventCtx {
+                    globals: &target.globals,
+                    ui: &mut target.ctx,
+                    event: ev_view,
+                };
+                root.as_mut().handle(&mut ctx);
             }
+        }
+
+        let had_target = self.targets.contains_key(target_id);
+        if had_target
+            && update(self, &event, state, params)
+            && let Some(target) = self.targets.get_mut(target_id)
+        {
+            target.ctx.request_redraw();
         }
     }
 }

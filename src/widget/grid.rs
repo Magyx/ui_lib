@@ -1,68 +1,90 @@
+use std::num::NonZero;
+
 use super::*;
 
-pub struct Column<M> {
+pub struct Grid<M> {
     x: i32,
     y: i32,
     w: i32,
     h: i32,
-    children: Vec<Element<M>>,
-    spacing: i32,
-    padding: Vec4<i32>,
+
+    rows: Vec<Row<M>>,
     size: Size<Length>,
     color: Color,
+    padding: Vec4<i32>,
+    row_spacing: i32,
     min: Size<i32>,
     max: Size<i32>,
 }
 
-impl<M> Column<M> {
-    pub fn new<I, E>(children: I) -> Self
+impl<M> Grid<M> {
+    pub fn new<I, E>(columns: NonZero<usize>, children: I) -> Self
     where
         I: IntoIterator<Item = E>,
         E: Into<Element<M>>,
     {
+        let mut cells: Vec<Element<M>> = children.into_iter().map(Into::into).collect();
+        let mut rows: Vec<Row<M>> = Vec::new();
+
+        while !cells.is_empty() {
+            let take = cells.len().min(columns.into());
+            let mut row_cells = Vec::with_capacity(take);
+            for _ in 0..take {
+                row_cells.push(cells.remove(0));
+            }
+            rows.push(Row::new(row_cells).spacing(8).color(Color::TRANSPARENT));
+        }
+
         Self {
             x: 0,
             y: 0,
             w: 0,
             h: 0,
-            children: children.into_iter().map(Into::into).collect(),
-            spacing: 0,
-            padding: Vec4::splat(0),
+            rows,
             size: Size::splat(Length::Fit),
             color: Color::TRANSPARENT,
+            padding: Vec4::splat(0),
+            row_spacing: 8,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
         }
     }
-    pub fn spacing(mut self, amount: i32) -> Self {
-        self.spacing = amount;
+
+    pub fn row_spacing(mut self, px: i32) -> Self {
+        self.row_spacing = px;
         self
     }
-    pub fn size(mut self, size: Size<Length>) -> Self {
-        self.size = size;
+    pub fn col_spacing(mut self, px: i32) -> Self {
+        for r in self.rows.iter_mut() {
+            r.set_spacing(px);
+        }
         self
     }
-    pub fn color(mut self, color: Color) -> Self {
-        self.color = color;
+    pub fn padding(mut self, pad: Vec4<i32>) -> Self {
+        self.padding = pad;
         self
     }
-    pub fn padding(mut self, amount: Vec4<i32>) -> Self {
-        self.padding = amount;
+    pub fn size(mut self, s: Size<Length>) -> Self {
+        self.size = s;
         self
     }
-    pub fn min(mut self, size: Size<i32>) -> Self {
-        self.min = size;
+    pub fn color(mut self, c: Color) -> Self {
+        self.color = c;
         self
     }
-    pub fn max(mut self, size: Size<i32>) -> Self {
-        self.max = size;
+    pub fn min(mut self, s: Size<i32>) -> Self {
+        self.min = s;
+        self
+    }
+    pub fn max(mut self, s: Size<i32>) -> Self {
+        self.max = s;
         self
     }
 }
 
-impl<M> IntoElement for Column<M> {}
+impl<M> IntoElement for Grid<M> {}
 
-impl<M: 'static> Widget<M> for Column<M> {
+impl<M: 'static> Widget<M> for Grid<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
             width: self.size.width,
@@ -78,7 +100,7 @@ impl<M: 'static> Widget<M> for Column<M> {
                 right: self.padding.z,
                 bottom: self.padding.w,
             },
-            spacing: self.spacing,
+            spacing: self.row_spacing,
             ..Default::default()
         }
     }
@@ -91,10 +113,10 @@ impl<M: 'static> Widget<M> for Column<M> {
     }
 
     fn child_count(&self) -> usize {
-        self.children.len()
+        self.rows.len()
     }
     fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
-        self.children[i].as_mut()
+        &mut self.rows[i]
     }
 
     fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
@@ -108,8 +130,8 @@ impl<M: 'static> Widget<M> for Column<M> {
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        for c in &mut self.children {
-            c.as_mut().handle(ctx);
+        for r in self.rows.iter_mut() {
+            r.handle(ctx);
         }
     }
 }

@@ -88,3 +88,14 @@ pub enum Event<M, E: ToEvent<M, E>> {
     Platform(E),
     Message(M),
 }
+
+#[derive(Debug, Clone, Copy)]
+pub enum UiEventRef<'a> {
+    RedrawRequested,
+    Resized { size: Size<u32> },
+    CursorMoved { position: Position<f32> },
+    MouseInput { mouse_down: bool },
+    Key(&'a KeyEvent),
+    Text(&'a TextInput),
+    ModifiersChanged(&'a Modifiers),
+}

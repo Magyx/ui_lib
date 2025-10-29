@@ -34,35 +34,33 @@ impl<M> Row<M> {
             max: Size::splat(i32::MAX),
         }
     }
-
     pub fn spacing(mut self, amount: i32) -> Self {
         self.spacing = amount;
         self
     }
-
     pub fn size(mut self, size: Size<Length>) -> Self {
         self.size = size;
         self
     }
-
     pub fn color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }
-
     pub fn padding(mut self, amount: Vec4<i32>) -> Self {
         self.padding = amount;
         self
     }
-
     pub fn min(mut self, size: Size<i32>) -> Self {
         self.min = size;
         self
     }
-
     pub fn max(mut self, size: Size<i32>) -> Self {
         self.max = size;
         self
+    }
+
+    pub(crate) fn set_spacing(&mut self, amount: i32) {
+        self.spacing = amount;
     }
 }
 

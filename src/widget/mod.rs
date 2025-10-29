@@ -122,3 +122,12 @@ pub use image::Image;
 
 mod text;
 pub use text::Text;
+
+mod slider;
+pub use slider::Slider;
+
+mod grid;
+pub use grid::Grid;
+
+mod text_input;
+pub use text_input::{TextArea, TextColors, TextField, TextState};

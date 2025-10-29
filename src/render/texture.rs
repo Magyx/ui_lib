@@ -285,6 +285,43 @@ impl TextureRegistry {
         }
     }
 
+    pub fn update_rgba8(&mut self, gpu: &Gpu, handle: TextureHandle, pixels_rgba8: &[u8]) -> bool {
+        let idx = handle.index as usize;
+        if idx >= self.views.len() {
+            return false;
+        }
+        if self.gens[idx] != handle.generation {
+            return false;
+        }
+        let Some(slot) = &self.views[idx] else {
+            return false;
+        };
+
+        let w = handle.size_px.width;
+        let h = handle.size_px.height;
+
+        gpu.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &slot.tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            pixels_rgba8,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * w),
+                rows_per_image: Some(h),
+            },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+        );
+        true
+    }
+
     pub fn unload(&mut self, gpu: &Gpu, handle: TextureHandle) -> bool {
         let idx = handle.index as usize;
         if idx >= self.views.len() {

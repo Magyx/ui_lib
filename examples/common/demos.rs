@@ -1,9 +1,13 @@
 use super::{Message, State};
+
 use ui::{
     el,
     graphics::TargetId,
     model::*,
-    widget::{Button, Column, Element, Length, Overlay, Rectangle, Row, Spacer, Text},
+    widget::{
+        Button, Column, Element, Grid, Length, Overlay, Rectangle, Row, Slider, Spacer, Text,
+        TextArea, TextField,
+    },
 };
 
 fn small_block(r: u8, g: u8, b: u8) -> Element<Message> {
@@ -20,6 +24,25 @@ pub mod layout {
 
     pub fn view(_state: &State) -> Element<Message> {
         use Length::{Fit, Fixed, Grow};
+
+        let grid_block = {
+            use std::num::NonZero;
+            let cells: Vec<_> = (0..12)
+                .map(|i| {
+                    let r = 60 + (i * 13) as u8;
+                    let g = 180u8.saturating_sub((i * 11) as u8);
+                    let b = 80 + (i * 7) as u8;
+                    small_block(r, g, b)
+                })
+                .collect();
+
+            Grid::new(NonZero::new(4).unwrap(), cells)
+                .col_spacing(10)
+                .row_spacing(10)
+                .padding(Vec4::splat(10))
+                .color(Color::rgb(235, 238, 245))
+                .size(Size::new(Grow, Fit))
+        };
 
         Column::new(el![
             /* 1) Fixed + Fixed, zero padding baseline */
@@ -187,6 +210,7 @@ pub mod layout {
             .size(Size::new(Grow, Fixed(60)))
             ,
 
+            grid_block
         ])
         .color(Color::rgb(100, 80, 100))
         .padding(Vec4::splat(16))
@@ -202,39 +226,42 @@ pub mod interaction {
 
     pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
         use Length::{Fit, Fixed, Grow};
+
         let target = match state.per_target.get(tid) {
             Some(t) => t,
             None => return Rectangle::placeholder().into(),
         };
 
-        Column::new(el![
-            /* 1) interactive button */
+        /* 1) button */
+        let blocks = || {
+            Row::new(
+                (0..(target.counter % 6))
+                    .map(|i| {
+                        let c = (i * 30 + 40) as u8;
+                        small_block(c, 30, 200u8.saturating_sub(c))
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .color(Color::TRANSPARENT)
+            .size(Size::new(Fit, Grow))
+        };
+        let buttons = Column::new(el![
             Row::new(el![
                 Button::new(Size::new(Fixed(120), Fixed(36)), Color::rgb(200, 50, 50))
                     .hover_color(Color::rgb(50, 200, 50))
                     .pressed_color(Color::rgb(50, 50, 200))
                     .on_press(Message::ButtonPressed),
-                Row::new(
-                    (0..(target.counter % 6))
-                        .map(|i| {
-                            let c = (i * 30 + 40) as u8;
-                            small_block(c, 30, 200u8.saturating_sub(c))
-                        })
-                        .collect::<Vec<_>>(),
-                )
-                .color(Color::TRANSPARENT)
-                .size(Size::new(Fit, Grow)),
+                blocks()
             ])
             .padding(Vec4::splat(10))
             .spacing(10)
             .color(Color::rgb(220, 220, 240))
             .size(Size::new(Grow, Fixed(60))),
-            /* 2) button with text */
             Row::new(el![
                 Button::new_with(
                     Column::new(el![
                         Spacer::new(Size::new(Grow, Grow)),
-                        Text::new("Click Me!", 18.0),
+                        Text::new("Click Me!", 18.0).wrap(cosmic_text::Wrap::None),
                         Spacer::new(Size::new(Grow, Grow)),
                     ])
                     .size(Size::new(Fit, Grow)),
@@ -244,16 +271,7 @@ pub mod interaction {
                 .pressed_color(Color::rgb(50, 50, 200))
                 .on_press(Message::ButtonPressed)
                 .size(Size::new(Fit, Grow)),
-                Row::new(
-                    (0..(target.counter % 6))
-                        .map(|i| {
-                            let c = (i * 30 + 40) as u8;
-                            small_block(c, 30, 200u8.saturating_sub(c))
-                        })
-                        .collect::<Vec<_>>(),
-                )
-                .color(Color::TRANSPARENT)
-                .size(Size::new(Fit, Grow)),
+                blocks()
             ])
             .padding(Vec4::splat(10))
             .spacing(10)
@@ -261,10 +279,55 @@ pub mod interaction {
             .size(Size::new(Grow, Fixed(60))),
         ])
         .color(Color::rgb(100, 80, 100))
-        .padding(Vec4::splat(16))
         .spacing(14)
-        .size(Size::new(Grow, Grow))
-        .into()
+        .size(Size::new(Grow, Fit));
+
+        /* 2) slider */
+        let slider_value = format!("Slider value: {:>5.1}", target.slider);
+        let slider_row = Row::new(el![
+            Text::new(slider_value, 16.0)
+                .size(Size::new(Fit, Fixed(36)))
+                .color(Color::BLACK),
+            Spacer::new(Size::new(Fixed(12), Fixed(1))),
+            Slider::new(Size::new(Grow, Fixed(36)), (0.0, 100.0), target.slider)
+                .on_change(Message::SliderChanged), // emits f32 -> Message
+        ])
+        .spacing(10)
+        .padding(Vec4::splat(10))
+        .color(Color::rgb(235, 235, 245))
+        .size(Size::new(Grow, Fixed(56)));
+
+        /* 3) text input */
+        let greeting = if target.name.is_empty() {
+            "Type your name to update the greeting…".to_string()
+        } else {
+            format!("Hello, {}!", target.name)
+        };
+
+        let inputs = Column::new(el![
+            // Single-line TextField
+            TextField::new(Size::new(Grow, Fixed(36)), &target.name)
+                .placeholder("Your name")
+                .on_submit(|s| Message::NameSubmitted(s.to_string())),
+            // Live feedback
+            Text::new(greeting, 16.0)
+                .size(Size::new(Grow, Fit))
+                .color(Color::BLACK),
+            // Multi-line TextArea
+            TextArea::new(Size::new(Grow, Fixed(120)), &target.notes)
+                .placeholder("Notes (multi-line)")
+        ])
+        .spacing(8)
+        .padding(Vec4::splat(10))
+        .color(Color::rgb(245, 245, 245))
+        .size(Size::new(Grow, Fit));
+
+        Column::new(el![buttons, slider_row, inputs,])
+            .spacing(10)
+            .padding(Vec4::splat(16))
+            .color(Color::rgb(100, 80, 100))
+            .size(Size::new(Grow, Grow))
+            .into()
     }
 }
 
@@ -299,7 +362,7 @@ pub mod pipeline {
                     16.0,
                 )
                 .size(Size::new(Fit, Fit))
-                .color(Color::RED)
+                .color(Color::BLUE)
                 .weight(Weight::SEMIBOLD),
             ])
             .padding(Vec4::splat(10))

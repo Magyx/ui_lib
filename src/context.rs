@@ -1,4 +1,5 @@
 use crate::{
+    event::UiEventRef,
     graphics::{Globals, Gpu},
     model::Position,
     render::{text::TextSystem, texture::TextureRegistry},
@@ -88,4 +89,5 @@ pub struct PaintCtx<'a> {
 pub struct EventCtx<'a, M> {
     pub globals: &'a Globals,
     pub ui: &'a mut Context<M>,
+    pub event: Option<UiEventRef<'a>>,
 }

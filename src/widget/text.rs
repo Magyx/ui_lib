@@ -39,7 +39,6 @@ impl<'a> Text<'a> {
             max: Size::splat(i32::MAX),
         }
     }
-
     pub fn family(mut self, family: Family<'a>) -> Self {
         self.attrs.family = family;
         self

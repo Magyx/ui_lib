@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use ui::{
     event::{KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
-    widget::{Element, Rectangle},
+    widget::{Element, Rectangle, TextState},
 };
 
 use super::demos;
@@ -53,12 +53,19 @@ impl View {
 #[derive(Clone, Debug)]
 pub enum Message {
     ButtonPressed,
+    SliderChanged(f32),
+    NameSubmitted(String),
 }
 
+#[derive(Clone)]
 pub struct Target {
     pub counter: u32,
     pub view: View,
     pub fps: VecDeque<f32>,
+
+    pub slider: f32,
+    pub name: TextState,
+    pub notes: TextState,
 }
 
 impl Default for Target {
@@ -67,6 +74,10 @@ impl Default for Target {
             counter: 0,
             view: View::Layout,
             fps: VecDeque::with_capacity(5),
+
+            slider: 50.0,
+            name: TextState::new(),
+            notes: TextState::new(),
         }
     }
 }
@@ -194,6 +205,15 @@ mod update {
         engine.toggle_debug();
         true
     }
+
+    pub fn set_slider(target: &mut super::Target, v: f32) -> bool {
+        target.slider = v;
+        true
+    }
+    pub fn submit_name(_target: &mut super::Target, _s: String) -> bool {
+        // no-op demo hook; could trigger toast, etc.
+        true
+    }
 }
 
 pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
@@ -227,6 +247,8 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
             _ => false,
         },
         crate::Event::Message(Message::ButtonPressed) => update::increment_counter(target),
+        crate::Event::Message(Message::SliderChanged(v)) => update::set_slider(target, *v),
+        crate::Event::Message(Message::NameSubmitted(s)) => update::submit_name(target, s.clone()),
         _ => false,
     }
 }

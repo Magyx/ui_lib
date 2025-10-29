@@ -80,7 +80,6 @@ impl<M> Overlay<M> {
             max: Size::splat(i32::MAX),
         }
     }
-
     pub fn size(mut self, size: Size<Length>) -> Self {
         self.size = size;
         self

@@ -15,7 +15,6 @@ impl Rectangle {
     pub fn placeholder() -> Self {
         Self::new(Size::splat(Length::Fit), Color::TRANSPARENT)
     }
-
     pub fn new(size: Size<Length>, color: Color) -> Self {
         Self {
             x: 0,
