@@ -3,21 +3,21 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Default, Clone)]
-pub struct TextEditState {
+pub struct TextStateInner {
     pub(crate) caret: usize,
     pub(crate) value: String,
 }
 
 #[derive(Clone, Default)]
-pub struct TextState(Rc<RefCell<TextEditState>>);
+pub struct TextState(Rc<RefCell<TextStateInner>>);
 
 impl TextState {
     pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(TextEditState::default())))
+        Self(Rc::new(RefCell::new(TextStateInner::default())))
     }
 
     pub fn from_value<V: Into<String>>(v: V) -> Self {
-        let mut s = TextEditState::default();
+        let mut s = TextStateInner::default();
         s.value = v.into();
         s.caret = s.value.len();
         Self(Rc::new(RefCell::new(s)))
@@ -56,10 +56,10 @@ impl TextState {
         s.caret = s.value.len();
     }
 
-    pub(crate) fn cell_ref(&self) -> Ref<'_, TextEditState> {
+    pub(crate) fn cell_ref(&self) -> Ref<'_, TextStateInner> {
         self.0.borrow()
     }
-    pub(crate) fn cell_mut(&mut self) -> RefMut<'_, TextEditState> {
+    pub(crate) fn cell_mut(&mut self) -> RefMut<'_, TextStateInner> {
         self.0.borrow_mut()
     }
 }

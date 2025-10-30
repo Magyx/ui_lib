@@ -23,9 +23,6 @@ pub struct Slider<M> {
     knob_color: Color,
     bg_color: Color,
 
-    hovered: bool,
-    dragging: bool,
-
     on_change: Option<Box<dyn Fn(f32) -> M + Send + Sync + 'static>>,
 }
 
@@ -52,9 +49,6 @@ impl<M> Slider<M> {
             fill_color: Color::rgb(45, 150, 245),
             knob_color: Color::rgb(220, 220, 230),
             bg_color: Color::TRANSPARENT,
-
-            hovered: false,
-            dragging: false,
 
             on_change: None,
         }
@@ -138,7 +132,6 @@ impl<M: 'static> Widget<M> for Slider<M> {
     }
 
     fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        // optional background
         if self.bg_color.a() != 0 {
             out.push(Instance::ui(
                 Position::new(self.x, self.y),
@@ -147,7 +140,6 @@ impl<M: 'static> Widget<M> for Slider<M> {
             ));
         }
 
-        // track
         let th = self.track_h.clamp(2, self.h.max(2));
         let ty = self.y + (self.h - th) / 2;
         out.push(Instance::ui(
@@ -156,7 +148,6 @@ impl<M: 'static> Widget<M> for Slider<M> {
             self.track_color,
         ));
 
-        // fill
         let ratio = if self.hi > self.lo {
             (self.value - self.lo) / (self.hi - self.lo)
         } else {
@@ -169,7 +160,6 @@ impl<M: 'static> Widget<M> for Slider<M> {
             self.fill_color,
         ));
 
-        // knob
         let kw = (th * 2).clamp(10, (self.h * 3) / 4);
         let kx = self.x + (fw - kw / 2).clamp(0, self.w - kw);
         let ky = self.y + (self.h - kw) / 2;
@@ -181,11 +171,7 @@ impl<M: 'static> Widget<M> for Slider<M> {
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        let was_hovered = self.hovered;
-        let was_dragging = self.dragging;
-
         let inside = self.contains(ctx.ui.mouse_pos);
-        self.hovered = inside;
         if inside {
             ctx.ui.hot_item = Some(self.id);
         }
@@ -193,13 +179,10 @@ impl<M: 'static> Widget<M> for Slider<M> {
         if inside && ctx.ui.is_button_pressed(MouseButton::Left) {
             ctx.ui.active_item = Some(self.id);
         }
-        self.dragging =
-            ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_down(MouseButton::Left);
 
-        let mut changed = false;
-        if self.dragging {
-            changed |= self.set_from_cursor(ctx.ui.mouse_pos.x);
-        }
+        let mut changed = ctx.ui.active_item == Some(self.id)
+            && ctx.ui.is_button_down(MouseButton::Left)
+            && self.set_from_cursor(ctx.ui.mouse_pos.x);
 
         if ctx.ui.is_button_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
             changed |= self.set_from_cursor(ctx.ui.mouse_pos.x);
@@ -210,8 +193,6 @@ impl<M: 'static> Widget<M> for Slider<M> {
             if let Some(ref cb) = self.on_change {
                 ctx.ui.emit(cb(self.value));
             }
-            ctx.ui.request_redraw();
-        } else if self.hovered != was_hovered || self.dragging != was_dragging {
             ctx.ui.request_redraw();
         }
     }
