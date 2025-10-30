@@ -9,7 +9,7 @@ use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
     error::EventLoopError,
-    event::WindowEvent,
+    event::{MouseButton as WMouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key as WKey, KeyLocation as WLoc, PhysicalKey as WPhys},
     window::{Window, WindowAttributes},
@@ -18,8 +18,8 @@ use winit::{
 use crate::{
     Size,
     event::{
-        Event, KeyEvent, KeyLocation, KeyState, LogicalKey, Modifiers, PhysicalKey, TextInput,
-        ToEvent,
+        Event, KeyEvent, KeyLocation, KeyState, LogicalKey, Modifiers, MouseButton, PhysicalKey,
+        ScrollDelta, ScrollUnits, TextInput, ToEvent,
     },
     graphics::{Engine, TargetId},
     model::Position,
@@ -111,9 +111,33 @@ impl<M> ToEvent<M, winit::event::WindowEvent> for winit::event::WindowEvent {
             WE::CursorMoved { position, .. } => Event::CursorMoved {
                 position: Position::new(position.x as f32, position.y as f32),
             },
-            WE::MouseInput { state, .. } => Event::MouseInput {
-                mouse_down: state.is_pressed(),
-            },
+            WE::MouseInput { state, button, .. } => {
+                let mb = match button {
+                    WMouseButton::Left => MouseButton::Left,
+                    WMouseButton::Right => MouseButton::Right,
+                    WMouseButton::Middle => MouseButton::Middle,
+                    WMouseButton::Back => MouseButton::Back,
+                    WMouseButton::Forward => MouseButton::Forward,
+                    WMouseButton::Other(n) => MouseButton::Other((*n).min(u16::MAX)),
+                };
+                let ks = match state {
+                    ElementState::Pressed => KeyState::Pressed,
+                    ElementState::Released => KeyState::Released,
+                };
+                Event::MouseInput {
+                    button: mb,
+                    state: ks,
+                }
+            }
+            WE::MouseWheel { delta, .. } => {
+                let (dx, dy, units) = match delta {
+                    MouseScrollDelta::LineDelta(x, y) => (*x, *y, ScrollUnits::Lines),
+                    MouseScrollDelta::PixelDelta(p) => {
+                        (p.x as f32, p.y as f32, ScrollUnits::Pixels)
+                    }
+                };
+                Event::MouseWheel(ScrollDelta { dx, dy, units })
+            }
             WE::KeyboardInput { event, .. } => {
                 let state = match event.state {
                     ElementState::Pressed => KeyState::Pressed,

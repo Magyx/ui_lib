@@ -7,7 +7,10 @@ use std::{
 };
 
 use crate::{
-    event::{Event, KeyEvent, KeyLocation, KeyState, Modifiers, PhysicalKey, ToEvent},
+    event::{
+        Event, KeyEvent, KeyLocation, KeyState, Modifiers, MouseButton, PhysicalKey, ScrollDelta,
+        ScrollUnits, ToEvent,
+    },
     graphics::{Engine, TargetId},
     model::{Position, Size},
     render::PipelineFactoryFn,
@@ -129,11 +132,15 @@ pub enum SctkEvent {
         surface: SurfaceId,
         pos: Position<f32>,
     },
-    PointerDown {
+    PointerButton {
         surface: SurfaceId,
+        button: u32, // linux input BTN_* code
+        pressed: bool,
     },
-    PointerUp {
+    PointerAxis {
         surface: SurfaceId,
+        h: f64,
+        v: f64,
     },
 
     Key {
@@ -159,8 +166,8 @@ impl SctkEvent {
         match self {
             SctkEvent::Resized { surface, .. }
             | SctkEvent::PointerMoved { surface, .. }
-            | SctkEvent::PointerDown { surface }
-            | SctkEvent::PointerUp { surface }
+            | SctkEvent::PointerButton { surface, .. }
+            | SctkEvent::PointerAxis { surface, .. }
             | SctkEvent::Key { surface, .. }
             | SctkEvent::Modifiers(surface, ..) => Some(*surface),
             _ => None,
@@ -174,8 +181,33 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
             SctkEvent::Redraw => Event::RedrawRequested,
             SctkEvent::Resized { size, .. } => Event::Resized { size: *size },
             SctkEvent::PointerMoved { pos, .. } => Event::CursorMoved { position: *pos },
-            SctkEvent::PointerDown { .. } => Event::MouseInput { mouse_down: true },
-            SctkEvent::PointerUp { .. } => Event::MouseInput { mouse_down: false },
+            SctkEvent::PointerButton {
+                button, pressed, ..
+            } => {
+                // Map common BTN_* codes; unknown -> Other(code)
+                let mb = match *button {
+                    272 => MouseButton::Left,    // BTN_LEFT
+                    273 => MouseButton::Right,   // BTN_RIGHT
+                    274 => MouseButton::Middle,  // BTN_MIDDLE
+                    275 => MouseButton::Back,    // BTN_SIDE
+                    276 => MouseButton::Forward, // BTN_EXTRA
+                    n => MouseButton::Other(n as u16),
+                };
+                let ks = if *pressed {
+                    KeyState::Pressed
+                } else {
+                    KeyState::Released
+                };
+                Event::MouseInput {
+                    button: mb,
+                    state: ks,
+                }
+            }
+            SctkEvent::PointerAxis { h, v, .. } => Event::MouseWheel(ScrollDelta {
+                dx: *h as f32,
+                dy: *v as f32,
+                units: ScrollUnits::Pixels,
+            }),
 
             SctkEvent::Key {
                 raw_code,

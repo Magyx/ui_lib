@@ -1,3 +1,5 @@
+use crate::event::MouseButton;
+
 use super::*;
 
 pub struct Slider<M> {
@@ -189,18 +191,18 @@ impl<M: 'static> Widget<M> for Slider<M> {
             ctx.ui.hot_item = Some(self.id);
         }
 
-        if inside && ctx.ui.mouse_pressed {
+        if inside && ctx.ui.is_button_pressed(MouseButton::Left) {
             ctx.ui.active_item = Some(self.id);
         }
-        self.dragging = ctx.ui.active_item == Some(self.id) && ctx.ui.mouse_down;
+        self.dragging =
+            ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_pressed(MouseButton::Left);
 
         let mut changed = false;
         if self.dragging {
             changed |= self.set_from_cursor(ctx.ui.mouse_pos.x);
         }
 
-        if ctx.ui.mouse_released && ctx.ui.active_item == Some(self.id) {
-            // snap on release too
+        if ctx.ui.is_button_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
             changed |= self.set_from_cursor(ctx.ui.mouse_pos.x);
             ctx.ui.active_item = None;
         }

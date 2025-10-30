@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use crate::{
     consts::*,
     context::{Context, EventCtx, LayoutCtx, PaintCtx},
-    event::{Event, ToEvent},
+    event::{Event, KeyState, ToEvent},
     layout::LayoutEngine,
     model::*,
     primitive::{Instance, Primitive, Vertex},
@@ -479,9 +479,11 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 out: &mut Vec<Instance>,
             ) {
                 w.paint(ctx, out);
-                let count = w.child_count();
-                for i in 0..count {
-                    paint_tree(w.child_mut(i), ctx, out);
+                if w.paint_descendants() {
+                    let count = w.child_count();
+                    for i in 0..count {
+                        paint_tree(w.child_mut(i), ctx, out);
+                    }
                 }
             }
 
@@ -516,7 +518,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         };
 
         let event = event.to_event();
-        let prev_mouse_down = target.ctx.mouse_down;
+        target.ctx.mouse_buttons_pressed = 0;
+        target.ctx.mouse_buttons_released = 0;
 
         match event {
             Event::Resized { size } => {
@@ -532,34 +535,38 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 target.ctx.mouse_pos = position;
                 target.globals.mouse_pos = [position.x, position.y];
             }
-            Event::MouseInput { mouse_down } => {
-                target.ctx.mouse_down = mouse_down;
-                target.ctx.mouse_pressed = !prev_mouse_down && mouse_down;
-                target.ctx.mouse_released = prev_mouse_down && !mouse_down;
-
-                if mouse_down {
-                    target.globals.mouse_buttons |= 1;
-                } else {
-                    target.globals.mouse_buttons &= !1;
+            Event::MouseInput { button, state } => {
+                let bit = 1u32 << button.bit();
+                match state {
+                    KeyState::Pressed => {
+                        target.ctx.mouse_buttons_pressed |= bit;
+                        target.globals.mouse_buttons |= bit;
+                    }
+                    KeyState::Released => {
+                        target.ctx.mouse_buttons_released |= bit;
+                        target.globals.mouse_buttons &= !bit;
+                    }
                 }
             }
             _ => (),
         }
 
         if let Some(root) = target.root.as_mut() {
-            use crate::event::UiEventRef as U;
+            use crate::event::UiEventRef as Ui;
             let ev_view = match &event {
-                Event::RedrawRequested => Some(U::RedrawRequested),
-                Event::Resized { size } => Some(U::Resized { size: *size }),
-                Event::CursorMoved { position } => Some(U::CursorMoved {
+                Event::RedrawRequested => Some(Ui::RedrawRequested),
+                Event::Resized { size } => Some(Ui::Resized { size: *size }),
+                Event::CursorMoved { position } => Some(Ui::CursorMoved {
                     position: *position,
                 }),
-                Event::MouseInput { mouse_down } => Some(U::MouseInput {
-                    mouse_down: *mouse_down,
+                Event::MouseInput { button, state } => Some(Ui::MouseButton {
+                    button: *button,
+                    state: *state,
                 }),
-                Event::Key(k) => Some(U::Key(k)),
-                Event::Text(t) => Some(U::Text(t)),
-                Event::ModifiersChanged(m) => Some(U::ModifiersChanged(m)),
+                Event::MouseWheel(d) => Some(Ui::MouseWheel(*d)),
+                Event::Key(k) => Some(Ui::Key(k)),
+                Event::Text(t) => Some(Ui::Text(t)),
+                Event::ModifiersChanged(m) => Some(Ui::ModifiersChanged(m)),
                 _ => None,
             };
 

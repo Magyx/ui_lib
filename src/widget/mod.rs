@@ -1,3 +1,7 @@
+// TODO: something is wrong with MouseButton usage in widgets
+
+use std::fmt::Debug;
+
 use crate::{context::*, layout::Node, model::*, primitive::Instance};
 
 #[derive(Clone, Copy, Debug)]
@@ -51,6 +55,9 @@ pub trait Widget<M>: IntoElement {
     }
 
     /* ----- paint ----- */
+    fn paint_descendants(&self) -> bool {
+        true
+    }
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
 
     /* ----- interaction ----- */
@@ -131,3 +138,6 @@ pub use grid::Grid;
 
 mod text_input;
 pub use text_input::{TextArea, TextColors, TextField, TextState};
+
+mod scroll;
+pub use scroll::{ScrollState, Scrollable};

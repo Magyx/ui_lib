@@ -89,6 +89,8 @@ pub struct Instance {
     size: Size<i32>,
     data1: [u32; 4],
     data2: [u32; 4],
+
+    clip: Option<[u32; 4]>,
 }
 
 impl Instance {
@@ -105,6 +107,8 @@ impl Instance {
             size,
             data1,
             data2,
+
+            clip: None,
         }
     }
 
@@ -115,6 +119,8 @@ impl Instance {
             size,
             data1: [color.0, 0, 0, 0],
             data2: [0, 0, 0, 0],
+
+            clip: None,
         }
     }
 
@@ -135,7 +141,29 @@ impl Instance {
                 handle.scale_packed,
                 handle.offset_packed,
             ],
+
+            clip: None,
         }
+    }
+
+    #[inline]
+    pub fn with_clip(mut self, x: i32, y: i32, w: i32, h: i32) -> Self {
+        if w > 0 && h > 0 {
+            self.clip = Some([x.max(0) as u32, y.max(0) as u32, w as u32, h as u32]);
+        } else {
+            self.clip = Some([0, 0, 0, 0]);
+        }
+        self
+    }
+
+    pub fn translate(mut self, dx: i32, dy: i32) -> Self {
+        self.position.x += dx;
+        self.position.y += dy;
+        self
+    }
+
+    pub(crate) fn scissor(&self) -> Option<[u32; 4]> {
+        self.clip
     }
 
     pub(crate) fn to_primitive(&self) -> Primitive {

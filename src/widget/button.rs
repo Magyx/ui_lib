@@ -1,3 +1,5 @@
+use crate::event::MouseButton;
+
 use super::*;
 
 pub struct Button<M> {
@@ -165,12 +167,13 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
             ctx.ui.hot_item = Some(self.id);
         }
 
-        if inside && ctx.ui.mouse_pressed {
+        if inside && ctx.ui.is_button_pressed(MouseButton::Left) {
             ctx.ui.active_item = Some(self.id);
         }
-        self.pressed = ctx.ui.active_item == Some(self.id) && ctx.ui.mouse_down;
+        self.pressed =
+            ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_pressed(MouseButton::Left);
 
-        if ctx.ui.mouse_released && ctx.ui.active_item == Some(self.id) {
+        if ctx.ui.is_button_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
             if inside && let Some(m) = self.on_press.clone() {
                 ctx.ui.emit(m);
             }

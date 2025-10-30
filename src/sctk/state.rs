@@ -664,13 +664,37 @@ impl PointerHandler for SctkState {
                         pos: Position::new(x as f32, y as f32),
                     });
                 }
-                PointerEventKind::Press { .. } => {
-                    self.emit_event(SctkEvent::PointerDown { surface: sid })
+                PointerEventKind::Press { button, .. } => {
+                    if let Some(sid) = self.kbd_focus {
+                        self.emit_event(SctkEvent::PointerButton {
+                            surface: sid,
+                            button,
+                            pressed: true,
+                        });
+                    }
                 }
-                PointerEventKind::Release { .. } => {
-                    self.emit_event(SctkEvent::PointerUp { surface: sid })
+                PointerEventKind::Release { button, .. } => {
+                    if let Some(sid) = self.kbd_focus {
+                        self.emit_event(SctkEvent::PointerButton {
+                            surface: sid,
+                            button,
+                            pressed: false,
+                        });
+                    }
                 }
-                PointerEventKind::Axis { .. } => {}
+                PointerEventKind::Axis {
+                    horizontal,
+                    vertical,
+                    ..
+                } => {
+                    if let Some(sid) = self.kbd_focus {
+                        self.emit_event(SctkEvent::PointerAxis {
+                            surface: sid,
+                            h: horizontal.absolute,
+                            v: vertical.absolute,
+                        });
+                    }
+                }
             }
         }
     }

@@ -5,8 +5,8 @@ use ui::{
     graphics::TargetId,
     model::*,
     widget::{
-        Button, Column, Element, Grid, Length, Overlay, Rectangle, Row, Slider, Spacer, Text,
-        TextArea, TextField,
+        Button, Column, Element, Grid, Length, Overlay, Rectangle, Row, Scrollable, Slider, Spacer,
+        Text, TextArea, TextField,
     },
 };
 
@@ -423,11 +423,18 @@ pub mod texture {
 }
 
 pub mod text {
+
     use super::*;
     use cosmic_text::Weight;
 
-    pub fn view(_state: &State) -> Element<Message> {
+    pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
         use Length::{Fit, Fixed, Grow};
+
+        let target = if let Some(target) = state.per_target.get(tid) {
+            target
+        } else {
+            return Rectangle::placeholder().into();
+        };
 
         // Colors
         let bg_app = Color::rgb(24, 26, 32);
@@ -536,15 +543,23 @@ pub mod text {
         .spacing(12)
         .padding(Vec4::splat(16))
         .color(Color::TRANSPARENT)
-        .size(Size::splat(Grow));
+        .size(Size::new(Grow, Fit));
 
         // --- Page layout: sidebar | (topbar + content) ---
         Row::new(el![
             sidebar,
-            Column::new(el![topbar, content])
+            Scrollable::new(
+                Column::new(el![
+                    topbar,
+                    content,
+                    Button::new(Size::new(Grow, Fixed(24)), Color::RED).hover_color(Color::GREEN)
+                ])
                 .spacing(12)
                 .color(Color::TRANSPARENT)
                 .size(Size::new(Grow, Grow)),
+                &target.scroll
+            )
+            .size(Size::splat(Grow))
         ])
         .spacing(12)
         .padding(Vec4::splat(12))

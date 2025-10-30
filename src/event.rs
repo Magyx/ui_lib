@@ -8,6 +8,43 @@ pub enum KeyState {
     Released,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MouseButton {
+    Left,
+    Right,
+    Middle,
+    Back,
+    Forward,
+    Other(u16),
+}
+
+impl MouseButton {
+    #[inline]
+    pub fn bit(self) -> u32 {
+        match self {
+            MouseButton::Left => 0,
+            MouseButton::Right => 1,
+            MouseButton::Middle => 2,
+            MouseButton::Back => 3,
+            MouseButton::Forward => 4,
+            MouseButton::Other(n) => 5 + (n as u32).min(26),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrollUnits {
+    Lines,
+    Pixels,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScrollDelta {
+    pub dx: f32,
+    pub dy: f32,
+    pub units: ScrollUnits,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Modifiers {
     pub shift: bool,
@@ -77,9 +114,17 @@ pub trait ToEvent<M, E: ToEvent<M, E>> {
 #[derive(Debug)]
 pub enum Event<M, E: ToEvent<M, E>> {
     RedrawRequested,
-    Resized { size: Size<u32> },
-    CursorMoved { position: Position<f32> },
-    MouseInput { mouse_down: bool },
+    Resized {
+        size: Size<u32>,
+    },
+    CursorMoved {
+        position: Position<f32>,
+    },
+    MouseInput {
+        button: MouseButton,
+        state: KeyState,
+    },
+    MouseWheel(ScrollDelta),
 
     Key(KeyEvent),               // key press/release (with metadata)
     Text(TextInput),             // committed text (IME/composition)
@@ -92,9 +137,17 @@ pub enum Event<M, E: ToEvent<M, E>> {
 #[derive(Debug, Clone, Copy)]
 pub enum UiEventRef<'a> {
     RedrawRequested,
-    Resized { size: Size<u32> },
-    CursorMoved { position: Position<f32> },
-    MouseInput { mouse_down: bool },
+    Resized {
+        size: Size<u32>,
+    },
+    CursorMoved {
+        position: Position<f32>,
+    },
+    MouseButton {
+        button: MouseButton,
+        state: KeyState,
+    },
+    MouseWheel(ScrollDelta),
     Key(&'a KeyEvent),
     Text(&'a TextInput),
     ModifiersChanged(&'a Modifiers),

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::marker::PhantomData;
 
 use super::*;
-use crate::event::{KeyState, LogicalKey, UiEventRef};
+use crate::event::{KeyState, LogicalKey, MouseButton, UiEventRef};
 use cosmic_text::{Attrs, Buffer, Metrics, Shaping, Wrap};
 
 mod state;
@@ -451,10 +451,10 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         let was_hovered = self.hovered;
         self.hovered = inside;
         self.focused = ctx.ui.kbd_focus_item == Some(self.id);
-        if inside && ctx.ui.mouse_pressed {
+        if inside && ctx.ui.is_button_released(MouseButton::Left) {
             self.click_focus(ctx);
         }
-        if ctx.ui.mouse_pressed && !inside && self.focused {
+        if ctx.ui.is_button_pressed(MouseButton::Left) && !inside && self.focused {
             ctx.ui.kbd_focus_item = None;
             self.focused = false;
         }

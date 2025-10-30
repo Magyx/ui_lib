@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use ui::{
     event::{KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
-    widget::{Element, Rectangle, TextState},
+    widget::{Element, Rectangle, ScrollState, TextState},
 };
 
 use super::demos;
@@ -66,6 +66,7 @@ pub struct Target {
     pub slider: f32,
     pub name: TextState,
     pub notes: TextState,
+    pub scroll: ScrollState,
 }
 
 impl Default for Target {
@@ -78,6 +79,7 @@ impl Default for Target {
             slider: 50.0,
             name: TextState::new(),
             notes: TextState::new(),
+            scroll: ScrollState::default(),
         }
     }
 }
@@ -263,6 +265,6 @@ pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
         View::Interaction => demos::interaction::view(tid, state),
         View::Pipeline => demos::pipeline::view(tid, state),
         View::Texture => demos::texture::view(state),
-        View::Text => demos::text::view(state),
+        View::Text => demos::text::view(tid, state),
     }
 }

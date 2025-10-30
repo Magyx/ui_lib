@@ -15,6 +15,7 @@ struct DrawCommand<'a> {
     pipe: &'a PipelineKey,
     base: u32,
     amount: u32,
+    clip: [u32; 4],
 }
 
 pub(crate) struct Renderer {
@@ -87,26 +88,44 @@ impl Renderer {
                 label: Some("Render Encoder"),
             });
 
+        let sw = target.config.width;
+        let sh = target.config.height;
+        let defaul_clip = [0, 0, sw, sh];
+
         let mut draw_commands = Vec::<DrawCommand>::new();
         let mut primitives = Vec::<Primitive>::with_capacity(instances.len());
 
         let mut base = 0u32;
         let mut current_key: Option<&PipelineKey> = None;
+        let mut current_clip = defaul_clip;
         for (i, instance) in instances.iter().enumerate() {
             primitives.push(instance.to_primitive());
 
-            if current_key.is_none() {
+            let mut clip = instance.scissor().unwrap_or(defaul_clip);
+            clip[0] = clip[0].min(sw.saturating_sub(1));
+            clip[1] = clip[1].min(sh.saturating_sub(1));
+            let max_w = sw.saturating_sub(clip[0]);
+            let max_h = sh.saturating_sub(clip[1]);
+            clip[2] = clip[2].min(max_w);
+            clip[3] = clip[3].min(max_h);
+
+            let need_new_segment =
+                current_key.map(|k| k != &instance.kind).unwrap_or(true) || clip != current_clip;
+
+            if need_new_segment {
+                if let Some(key) = current_key
+                    && current_clip[2] > 0
+                    && current_clip[3] > 0
+                {
+                    draw_commands.push(DrawCommand {
+                        pipe: key,
+                        base,
+                        amount: i as u32 - base,
+                        clip: current_clip,
+                    });
+                }
                 current_key = Some(&instance.kind);
-                base = i as u32;
-            } else if let Some(key) = current_key
-                && key != &instance.kind
-            {
-                draw_commands.push(DrawCommand {
-                    pipe: key,
-                    base,
-                    amount: i as u32 - base,
-                });
-                current_key = Some(&instance.kind);
+                current_clip = clip;
                 base = i as u32;
             }
         }
@@ -115,6 +134,7 @@ impl Renderer {
                 pipe: key,
                 base,
                 amount: instances.len() as u32 - base,
+                clip: current_clip,
             });
         }
 
@@ -151,6 +171,8 @@ impl Renderer {
                     self.textures.bind_group(),
                     &mut pass,
                 );
+                let [x, y, w, h] = command.clip;
+                pass.set_scissor_rect(x, y, w.max(1), h.max(1));
                 pass.draw_indexed(
                     0..self.number_of_indices,
                     0,

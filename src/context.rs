@@ -1,5 +1,5 @@
 use crate::{
-    event::UiEventRef,
+    event::{MouseButton, UiEventRef},
     graphics::{Globals, Gpu},
     model::Position,
     render::{text::TextSystem, texture::TextureRegistry},
@@ -19,9 +19,8 @@ pub fn reset_ids_for_frame() {
 
 pub struct Context<M> {
     pub mouse_pos: Position<f32>,
-    pub mouse_down: bool,
-    pub mouse_pressed: bool,
-    pub mouse_released: bool,
+    pub mouse_buttons_pressed: u32,
+    pub mouse_buttons_released: u32,
 
     pub hot_item: Option<Id>,
     pub active_item: Option<Id>,
@@ -41,9 +40,8 @@ impl<M> Context<M> {
     pub fn new() -> Self {
         Self {
             mouse_pos: Position::splat(0.0),
-            mouse_down: false,
-            mouse_pressed: false,
-            mouse_released: false,
+            mouse_buttons_pressed: 0,
+            mouse_buttons_released: 0,
 
             hot_item: None,
             active_item: None,
@@ -52,6 +50,15 @@ impl<M> Context<M> {
             messages: Vec::new(),
             redraw_requested: false,
         }
+    }
+
+    #[inline]
+    pub fn is_button_pressed(&self, b: MouseButton) -> bool {
+        (self.mouse_buttons_pressed & (1 << b.bit())) != 0
+    }
+    #[inline]
+    pub fn is_button_released(&self, b: MouseButton) -> bool {
+        (self.mouse_buttons_released & (1 << b.bit())) != 0
     }
 
     pub fn take(&mut self) -> Vec<M> {
