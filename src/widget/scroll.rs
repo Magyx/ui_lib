@@ -2,14 +2,30 @@ use std::{cell::RefCell, rc::Rc};
 
 use super::*;
 use crate::{
-    event::{ScrollUnits, UiEventRef},
+    event::{MouseButton, ScrollUnits, UiEventRef},
     primitive::Instance,
 };
 
-#[derive(Clone, Default)]
-pub struct ScrollState(Rc<RefCell<i32>>);
+#[derive(Debug)]
+pub enum ScrollBarBehavior {
+    Auto,
+    Show,
+    Hide,
+}
 
-impl ScrollState {}
+struct ScrollStateInner {
+    y: i32,
+    grab: Option<i32>,
+}
+
+#[derive(Clone)]
+pub struct ScrollState(Rc<RefCell<ScrollStateInner>>);
+
+impl Default for ScrollState {
+    fn default() -> Self {
+        Self(Rc::new(RefCell::new(ScrollStateInner { y: 0, grab: None })))
+    }
+}
 
 pub struct Scrollable<M> {
     x: i32,
@@ -20,22 +36,35 @@ pub struct Scrollable<M> {
     min: Size<i32>,
     max: Size<i32>,
     child: Element<M>,
-    scroll_y: Rc<RefCell<i32>>,
+
+    id: Id,
+    state: Rc<RefCell<ScrollStateInner>>,
+    content_h: i32,
+
+    scrollbar_behavior: ScrollBarBehavior,
+
+    bar_color: Color,
+    thumb_color: Color,
     bg: Color,
 }
 
-impl<M> Scrollable<M> {
+impl<M: 'static> Scrollable<M> {
     pub fn new<E: Into<Element<M>>>(child: E, state: &ScrollState) -> Self {
         Self {
             x: 0,
             y: 0,
             w: 0,
             h: 0,
-            size: Size::splat(Length::Fit),
+            size: Size::new(Length::Grow, Length::Fit),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
+            id: next_id(),
             child: child.into(),
-            scroll_y: state.0.clone(),
+            state: state.0.clone(),
+            content_h: 0,
+            scrollbar_behavior: ScrollBarBehavior::Auto,
+            bar_color: Color::rgba(70, 70, 80, 128),
+            thumb_color: Color::rgb(200, 200, 210),
             bg: Color::TRANSPARENT,
         }
     }
@@ -55,6 +84,49 @@ impl<M> Scrollable<M> {
     pub fn bg(mut self, c: Color) -> Self {
         self.bg = c;
         self
+    }
+    pub fn with_scrollbar(mut self, behavior: ScrollBarBehavior) -> Self {
+        self.scrollbar_behavior = behavior;
+        self
+    }
+    pub fn scrollbar_color(mut self, bar: Color, thumb: Color) -> Self {
+        self.bar_color = bar;
+        self.thumb_color = thumb;
+        self
+    }
+
+    #[inline]
+    fn track_rect(&self) -> (i32, i32, i32, i32) {
+        let margin = 2;
+        let track_w = 6;
+        let tx = self.x + self.w - margin - track_w;
+        let ty = self.y + margin;
+        let th = self.h - 2 * margin;
+        (tx, ty, track_w, th)
+    }
+
+    #[inline]
+    fn thumb_rect(&self) -> Option<(i32, i32, i32, i32)> {
+        if let ScrollBarBehavior::Hide = self.scrollbar_behavior {
+            return None;
+        }
+        let max = (self.content_h - self.h).max(0);
+        if max <= 0 && matches!(self.scrollbar_behavior, ScrollBarBehavior::Auto) {
+            return None;
+        }
+
+        let (tx, ty, tw, th) = self.track_rect();
+
+        let ch = self.content_h.max(self.h);
+        let ratio = (self.h as f32 / ch as f32).clamp(0.0, 1.0);
+        let thumb_h = (ratio * th as f32).round() as i32;
+        let thumb_h = thumb_h.clamp(20, th); // min thumb size
+
+        let y = self.state.borrow().y;
+        let t = if max > 0 { y as f32 / max as f32 } else { 0.0 };
+        let thumb_y = ty + ((th - thumb_h) as f32 * t).round() as i32;
+
+        Some((tx, thumb_y, tw, thumb_h))
     }
 }
 
@@ -111,36 +183,147 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         let mut inner = Vec::new();
         paint_subtree(self.child.as_mut(), ctx, &mut inner);
 
-        let dy = -*self.scroll_y.borrow();
+        let mut top = i32::MAX;
+        let mut bottom = i32::MIN;
+        for inst in inner.iter() {
+            let prim = inst.to_primitive();
+            let y = prim.position[1].floor() as i32;
+            let h = prim.size[1].round() as i32;
+            top = top.min(y);
+            bottom = bottom.max(y + h);
+        }
+        self.content_h = (bottom - top).max(0);
+
+        let max = (self.content_h - self.h).max(0);
+        {
+            let mut st = self.state.borrow_mut();
+            if st.y < 0 {
+                st.y = 0;
+            }
+            if st.y > max {
+                st.y = max;
+            }
+        }
+
+        let dy = -self.state.borrow().y;
         for inst in inner.into_iter() {
             out.push(
                 inst.translate(0, dy)
                     .with_clip(self.x, self.y, self.w, self.h),
             );
         }
+
+        if let Some((tx, ty, tw, th)) = self.thumb_rect() {
+            let (track_x, track_y, track_w, track_h) = self.track_rect();
+            out.push(Instance::ui(
+                Position::new(track_x, track_y),
+                Size::new(track_w, track_h),
+                self.bar_color,
+            ));
+            out.push(Instance::ui(
+                Position::new(tx, ty),
+                Size::new(tw, th),
+                self.thumb_color,
+            ));
+        }
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        let inside = ctx.ui.mouse_pos.x >= self.x as f32
-            && ctx.ui.mouse_pos.x < (self.x + self.w) as f32
-            && ctx.ui.mouse_pos.y >= self.y as f32
-            && ctx.ui.mouse_pos.y < (self.y + self.h) as f32;
+        const HIT_SLOP: i32 = 4;
 
-        if inside && let Some(UiEventRef::MouseWheel(delta)) = ctx.event {
-            let scale = match delta.units {
+        let mx = ctx.ui.mouse_pos.x as i32;
+        let my = ctx.ui.mouse_pos.y as i32;
+        let inside = mx >= self.x && mx < self.x + self.w && my >= self.y && my < self.y + self.h;
+
+        let max = (self.content_h - self.h).max(0);
+
+        let pressed = ctx.ui.is_button_pressed(MouseButton::Left);
+        let down = ctx.ui.is_button_down(MouseButton::Left);
+        let released = ctx.ui.is_button_released(MouseButton::Left);
+
+        if inside
+            && max > 0
+            && let Some(UiEventRef::MouseWheel(delta)) = ctx.event
+        {
+            let step = match delta.units {
                 ScrollUnits::Lines => 40.0,
                 ScrollUnits::Pixels => 1.0,
             };
-            let dy = (delta.dy * scale).round() as i32;
-            if dy != 0 {
-                let mut y = self.scroll_y.borrow_mut();
-                *y = (*y - dy).max(0);
+            if delta.dy != 0.0 {
+                let mut st = self.state.borrow_mut();
+                let ny = (st.y as f32 - delta.dy * step).round() as i32; // +dy up → smaller y
+                st.y = ny.clamp(0, max);
                 ctx.ui.request_redraw();
             }
         }
 
-        let scroll = *self.scroll_y.borrow();
+        let thumb = self.thumb_rect();
+        let track = self.track_rect();
 
+        if let Some((tx, ty, tw, th)) = thumb {
+            let (track_x, track_y, track_w, track_h) = track;
+
+            let over_thumb = {
+                let x0 = tx - HIT_SLOP;
+                let x1 = tx + tw + HIT_SLOP;
+                let y0 = ty - HIT_SLOP;
+                let y1 = ty + th + HIT_SLOP;
+                mx >= x0 && mx < x1 && my >= y0 && my < y1
+            };
+            let over_track = {
+                let x0 = track_x - HIT_SLOP;
+                let x1 = track_x + track_w + HIT_SLOP;
+                let y0 = track_y - HIT_SLOP;
+                let y1 = track_y + track_h + HIT_SLOP;
+                mx >= x0 && mx < x1 && my >= y0 && my < y1
+            };
+
+            if over_thumb || over_track {
+                ctx.ui.hot_item = Some(self.id);
+            }
+
+            if (over_thumb || over_track) && pressed {
+                ctx.ui.active_item = Some(self.id);
+                let grab = if over_thumb {
+                    (my - ty).clamp(0, th)
+                } else {
+                    th / 2
+                };
+                let mut st = self.state.borrow_mut();
+                st.grab = Some(grab);
+
+                if over_track && !over_thumb {
+                    let desired = (my - grab).clamp(track_y, track_y + track_h - th);
+                    let denom = (track_h - th).max(1);
+                    let t = (desired - track_y) as f32 / denom as f32;
+                    st.y = (t * max as f32).round() as i32;
+                    ctx.ui.request_redraw();
+                }
+            }
+
+            if ctx.ui.active_item == Some(self.id) && down {
+                let mut st = self.state.borrow_mut();
+                let mut pos = my - st.grab.unwrap_or(th / 2);
+                pos = pos.clamp(track_y, track_y + track_h - th);
+
+                let denom = (track_h - th).max(1);
+                let t = (pos - track_y) as f32 / denom as f32;
+                st.y = (t * max as f32).round() as i32;
+
+                ctx.ui.request_redraw();
+            }
+
+            if released && ctx.ui.active_item == Some(self.id) {
+                ctx.ui.active_item = None;
+                self.state.borrow_mut().grab = None;
+                ctx.ui.request_redraw();
+            }
+        } else if released && ctx.ui.active_item == Some(self.id) {
+            ctx.ui.active_item = None;
+            self.state.borrow_mut().grab = None;
+        }
+
+        let scroll = self.state.borrow().y;
         let saved_mouse = ctx.ui.mouse_pos;
         ctx.ui.mouse_pos.y += scroll as f32;
 

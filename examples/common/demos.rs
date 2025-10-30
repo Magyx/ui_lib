@@ -549,14 +549,10 @@ pub mod text {
         Row::new(el![
             sidebar,
             Scrollable::new(
-                Column::new(el![
-                    topbar,
-                    content,
-                    Button::new(Size::new(Grow, Fixed(24)), Color::RED).hover_color(Color::GREEN)
-                ])
-                .spacing(12)
-                .color(Color::TRANSPARENT)
-                .size(Size::new(Grow, Grow)),
+                Column::new(el![topbar, content,])
+                    .spacing(12)
+                    .color(Color::TRANSPARENT)
+                    .size(Size::new(Grow, Fit)),
                 &target.scroll
             )
             .size(Size::splat(Grow))
