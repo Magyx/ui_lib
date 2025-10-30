@@ -171,7 +171,7 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
             ctx.ui.active_item = Some(self.id);
         }
         self.pressed =
-            ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_pressed(MouseButton::Left);
+            ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_down(MouseButton::Left);
 
         if ctx.ui.is_button_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
             if inside && let Some(m) = self.on_press.clone() {

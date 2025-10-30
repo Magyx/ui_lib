@@ -19,6 +19,7 @@ pub fn reset_ids_for_frame() {
 
 pub struct Context<M> {
     pub mouse_pos: Position<f32>,
+    pub mouse_buttons_down: u32,
     pub mouse_buttons_pressed: u32,
     pub mouse_buttons_released: u32,
 
@@ -40,6 +41,7 @@ impl<M> Context<M> {
     pub fn new() -> Self {
         Self {
             mouse_pos: Position::splat(0.0),
+            mouse_buttons_down: 0,
             mouse_buttons_pressed: 0,
             mouse_buttons_released: 0,
 
@@ -51,7 +53,10 @@ impl<M> Context<M> {
             redraw_requested: false,
         }
     }
-
+    #[inline]
+    pub fn is_button_down(&self, b: MouseButton) -> bool {
+        (self.mouse_buttons_down & (1 << b.bit())) != 0
+    }
     #[inline]
     pub fn is_button_pressed(&self, b: MouseButton) -> bool {
         (self.mouse_buttons_pressed & (1 << b.bit())) != 0

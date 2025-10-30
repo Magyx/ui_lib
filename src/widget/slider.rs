@@ -181,7 +181,6 @@ impl<M: 'static> Widget<M> for Slider<M> {
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        // children first (none), then self — same pattern as Button. :contentReference[oaicite:5]{index=5}
         let was_hovered = self.hovered;
         let was_dragging = self.dragging;
 
@@ -195,7 +194,7 @@ impl<M: 'static> Widget<M> for Slider<M> {
             ctx.ui.active_item = Some(self.id);
         }
         self.dragging =
-            ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_pressed(MouseButton::Left);
+            ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_down(MouseButton::Left);
 
         let mut changed = false;
         if self.dragging {

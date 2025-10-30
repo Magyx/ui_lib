@@ -539,10 +539,12 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 let bit = 1u32 << button.bit();
                 match state {
                     KeyState::Pressed => {
+                        target.ctx.mouse_buttons_down |= bit;
                         target.ctx.mouse_buttons_pressed |= bit;
                         target.globals.mouse_buttons |= bit;
                     }
                     KeyState::Released => {
+                        target.ctx.mouse_buttons_down &= !bit;
                         target.ctx.mouse_buttons_released |= bit;
                         target.globals.mouse_buttons &= !bit;
                     }
