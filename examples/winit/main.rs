@@ -1,4 +1,3 @@
-use smol_str::ToSmolStr;
 use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
@@ -27,7 +26,7 @@ fn update<'a>(
             state: KeyState::Pressed,
             logical_key: k,
             ..
-        }) if k == &LogicalKey::Escape || k == &LogicalKey::Character("q".to_smolstr()) => {
+        }) if k == &LogicalKey::Escape => {
             event_loop.exit();
             false
         }
