@@ -118,7 +118,7 @@ impl<M> ToEvent<M, winit::event::WindowEvent> for winit::event::WindowEvent {
                     WMouseButton::Middle => MouseButton::Middle,
                     WMouseButton::Back => MouseButton::Back,
                     WMouseButton::Forward => MouseButton::Forward,
-                    WMouseButton::Other(n) => MouseButton::Other((*n).min(u16::MAX)),
+                    WMouseButton::Other(n) => MouseButton::Other(*n),
                 };
                 let ks = match state {
                     ElementState::Pressed => KeyState::Pressed,

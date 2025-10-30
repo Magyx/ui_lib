@@ -38,6 +38,7 @@ use crate::{
 
 use super::{SctkEvent, erased::SctkErased, helpers};
 
+#[allow(dead_code)]
 enum SurfaceRole {
     Layer(LayerSurface),
     Xdg(Window),
