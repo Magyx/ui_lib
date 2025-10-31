@@ -192,6 +192,9 @@ mod update {
         } else {
             target.view = target.view.clone().prev();
         }
+        target.scroll.reset();
+        target.list_scroll.reset();
+
         if let super::View::Texture = target.view {
             ensure_background_loaded(engine, state);
             ensure_icons_loaded(engine, state);
@@ -263,7 +266,7 @@ pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
         None => return Rectangle::placeholder().into(),
     };
     match target.view {
-        View::Layout => demos::layout::view(state),
+        View::Layout => demos::layout::view(tid, state),
         View::Interaction => demos::interaction::view(tid, state),
         View::Pipeline => demos::pipeline::view(tid, state),
         View::Texture => demos::texture::view(state),

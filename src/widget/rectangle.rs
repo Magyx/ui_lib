@@ -31,6 +31,14 @@ impl Rectangle {
         self.min = s;
         self
     }
+    pub fn min_y(mut self, height: i32) -> Self {
+        self.min.height = height;
+        self
+    }
+    pub fn min_x(mut self, width: i32) -> Self {
+        self.min.width = width;
+        self
+    }
     pub fn max(mut self, s: Size<i32>) -> Self {
         self.max = s;
         self

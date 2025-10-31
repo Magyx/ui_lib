@@ -27,6 +27,12 @@ impl Default for ScrollState {
     }
 }
 
+impl ScrollState {
+    pub fn reset(&self) {
+        self.0.borrow_mut().y = 0;
+    }
+}
+
 pub struct Scrollable<M> {
     x: i32,
     y: i32,
