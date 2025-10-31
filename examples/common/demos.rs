@@ -378,7 +378,7 @@ pub mod pipeline {
 pub mod texture {
 
     use super::*;
-    use ui::widget::Image;
+    use ui::widget::{ContentFit, Image};
 
     pub fn view(state: &State) -> Element<Message> {
         use Length::{Fixed, Grow};
@@ -399,7 +399,8 @@ pub mod texture {
         }
 
         Overlay::new(el![
-            Image::new(Size::new(Grow, Grow), state.background.unwrap_or_default()),
+            Image::new(Size::new(Grow, Grow), state.background.unwrap_or_default())
+                .fit(ContentFit::Cover),
             Column::new(el![
                 Rectangle::new(Size::new(Fixed(70), Fixed(20)), Color::rgb(100, 0, 100)),
                 Rectangle::new(Size::new(Fixed(40), Fixed(30)), Color::rgb(140, 0, 140)),

@@ -1,5 +1,31 @@
 use crate::{consts::DEFAULT_MAX_TEXTURES, graphics::Gpu, model::Size};
 
+#[inline]
+pub fn pack_unorm2x16(xy: [f32; 2]) -> u32 {
+    let q = |v: f32| -> u32 { (v.clamp(0.0, 1.0) * 65535.0 + 0.5).floor() as u32 };
+    q(xy[0]) | (q(xy[1]) << 16)
+}
+
+#[inline]
+pub fn pack_unorm4x8(xyzw: [f32; 4]) -> u32 {
+    let q = |v: f32| -> u32 { (v.clamp(0.0, 1.0) * 255.0 + 0.5).floor() as u32 };
+    q(xyzw[0]) | (q(xyzw[1]) << 8) | (q(xyzw[2]) << 16) | (q(xyzw[3]) << 24)
+}
+
+// up to 4096 textures (12 bits), 20-bit generations
+pub const SLOT_BITS: u32 = 12;
+pub const SLOT_MASK: u32 = (1 << SLOT_BITS) - 1;
+#[inline]
+pub fn pack_slot_gen(slot: usize, generation: u32) -> u32 {
+    (generation << SLOT_BITS) | ((slot + 1) as u32 & SLOT_MASK)
+}
+#[inline]
+pub fn unpack_slot_gen(packed: u32) -> (usize, u32) {
+    let slot_plus_one = packed & SLOT_MASK;
+    let generation = packed >> SLOT_BITS;
+    (slot_plus_one as usize - 1, generation)
+}
+
 fn dummy_bind_group(device: &wgpu::Device) -> wgpu::BindGroup {
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("dummy"),
@@ -10,17 +36,6 @@ fn dummy_bind_group(device: &wgpu::Device) -> wgpu::BindGroup {
         layout: &layout,
         entries: &[],
     })
-}
-
-#[inline]
-pub fn pack_unorm2x16(xy: [f32; 2]) -> u32 {
-    let q = |v: f32| -> u32 { (v.clamp(0.0, 1.0) * 65535.0 + 0.5).floor() as u32 };
-    q(xy[0]) | (q(xy[1]) << 16)
-}
-
-#[inline]
-pub fn unpack_unorm2x16(p: u32) -> [f32; 2] {
-    [(p & 0xFFFF) as f32 / 65535.0, (p >> 16) as f32 / 65535.0]
 }
 
 pub struct AtlasRect {
@@ -81,8 +96,7 @@ impl Atlas {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub struct TextureHandle {
-    pub index: u32,
-    pub generation: u32,
+    pub slot_gen: u32,
     pub scale_packed: u32,
     pub offset_packed: u32,
     pub size_px: Size<u32>,
@@ -277,8 +291,7 @@ impl TextureRegistry {
         self.update_bind_group(&gpu.device);
 
         TextureHandle {
-            index: idx as u32,
-            generation: self.gens[idx],
+            slot_gen: pack_slot_gen(idx, self.gens[idx]),
             scale_packed: pack_unorm2x16([1.0, 1.0]),
             offset_packed: pack_unorm2x16([0.0, 0.0]),
             size_px: Size::new(width, height),
@@ -286,11 +299,11 @@ impl TextureRegistry {
     }
 
     pub fn update_rgba8(&mut self, gpu: &Gpu, handle: TextureHandle, pixels_rgba8: &[u8]) -> bool {
-        let idx = handle.index as usize;
+        let (idx, generation) = unpack_slot_gen(handle.slot_gen);
         if idx >= self.views.len() {
             return false;
         }
-        if self.gens[idx] != handle.generation {
+        if self.gens[idx] != generation {
             return false;
         }
         let Some(slot) = &self.views[idx] else {
@@ -323,11 +336,11 @@ impl TextureRegistry {
     }
 
     pub fn unload(&mut self, gpu: &Gpu, handle: TextureHandle) -> bool {
-        let idx = handle.index as usize;
+        let (idx, generation) = unpack_slot_gen(handle.slot_gen);
         if idx >= self.views.len() {
             return false;
         }
-        if self.gens[idx] != handle.generation {
+        if self.gens[idx] != generation {
             return false;
         }
 
@@ -423,8 +436,7 @@ impl TextureRegistry {
         ];
 
         Some(TextureHandle {
-            index: atlas.slot_index as u32,
-            generation: atlas.generation,
+            slot_gen: pack_slot_gen(atlas.slot_index, atlas.generation),
             scale_packed: pack_unorm2x16(scale),
             offset_packed: pack_unorm2x16(offs),
             size_px: Size::new(w, h),

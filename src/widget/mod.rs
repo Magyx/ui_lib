@@ -125,7 +125,7 @@ mod simple_canvas;
 pub use simple_canvas::SimpleCanvas;
 
 mod image;
-pub use image::Image;
+pub use image::{ContentFit, Image};
 
 mod text;
 pub use text::Text;
