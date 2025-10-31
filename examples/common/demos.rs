@@ -488,6 +488,27 @@ pub mod text {
             Resize the window to see wrapping and layout negotiation.";
         let long = "This is a very very very long line of text that should wrap \
                 when the container is narrower than the preferred single-line width.";
+        let list = "\
+            Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n\
+            Etiam ullamcorper arcu a dolor eleifend luctus.\n\
+            Vestibulum sit amet mi quis lacus cursus accumsan eu non ante.\n\
+            Etiam a magna hendrerit massa mattis fermentum ac eu nisl.\n\
+            Quisque vulputate eros id quam pulvinar, vel aliquam tellus placerat.\n\
+            Pellentesque sollicitudin odio eu neque fringilla varius.\n\n\
+            In dignissim odio et nunc posuere laoreet.\n\
+            Phasellus facilisis sapien sit amet lectus vestibulum elementum.\n\
+            Proin in turpis convallis, mollis ligula et, tincidunt ante.\n\n\
+            Ut vestibulum risus at turpis tincidunt, ut eleifend erat euismod.\n\
+            Nullam sed turpis convallis, laoreet lacus id, rutrum dolor.\n\
+            In euismod diam at elit blandit lobortis.\n\n\
+            Nulla interdum neque non neque aliquet sodales.\n\
+            Aenean non purus et nulla dignissim gravida.\n\
+            Ut placerat lorem non lorem ultricies tincidunt.\n\
+            Nullam eu tortor at dui tincidunt pulvinar vitae vel quam.\n\n\
+            Maecenas aliquam sem fringilla tellus ornare placerat.\n\
+            Nam viverra nibh a metus ornare vulputate.\n\
+            Donec quis neque et nisl fermentum ultrices.\n\
+        ";
 
         let content = Column::new(el![
             // Title
@@ -510,8 +531,10 @@ pub mod text {
             ])
             .size(Size::new(Grow, Fit))
             .spacing(12),
-            // Image/preview placeholder
-            Rectangle::new(Size::new(Grow, Fixed(240)), Color::rgb(72, 78, 90)),
+            // List of text with scrolling
+            Scrollable::new(Text::new(list, 16.0), &target.list_scroll)
+                .size(Size::new(Grow, Fixed(140)))
+                .bg(Color::rgb(72, 78, 90)),
             // A couple of stat tiles
             Row::new(el![
                 Column::new(el![

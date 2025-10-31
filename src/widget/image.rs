@@ -57,7 +57,7 @@ impl IntoElement for Image {}
 
 impl<M> Widget<M> for Image {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
-        Node {
+        let mut node = Node {
             width: self.size.width,
             height: self.size.height,
             min_width: self.min.width,
@@ -65,7 +65,11 @@ impl<M> Widget<M> for Image {
             max_width: self.max.width,
             max_height: self.max.height,
             ..Default::default()
+        };
+        if matches!(self.fit, ContentFit::Cover) {
+            node.clip_children = true;
         }
+        node
     }
 
     fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
@@ -115,20 +119,11 @@ impl<M> Widget<M> for Image {
         let dw = draw_w.round().max(1.0) as i32;
         let dh = draw_h.round().max(1.0) as i32;
 
-        let inst = Instance::ui_tex(
+        out.push(Instance::ui_tex(
             Position::new(px, py),
             Size::new(dw, dh),
             self.tint,
             self.handle,
-        );
-
-        match self.fit {
-            ContentFit::Cover => {
-                out.push(inst.with_clip(self.x, self.y, self.w, self.h));
-            }
-            _ => {
-                out.push(inst);
-            }
-        }
+        ));
     }
 }

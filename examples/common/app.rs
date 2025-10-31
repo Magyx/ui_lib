@@ -67,6 +67,7 @@ pub struct Target {
     pub name: TextState,
     pub notes: TextState,
     pub scroll: ScrollState,
+    pub list_scroll: ScrollState,
 }
 
 impl Default for Target {
@@ -80,6 +81,7 @@ impl Default for Target {
             name: TextState::new(),
             notes: TextState::new(),
             scroll: ScrollState::default(),
+            list_scroll: ScrollState::default(),
         }
     }
 }

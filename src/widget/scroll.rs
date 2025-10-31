@@ -141,6 +141,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             min_height: self.min.height,
             max_width: self.max.width,
             max_height: self.max.height,
+            clip_children: true,
             ..Default::default()
         }
     }
@@ -158,9 +159,8 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
         self.child.as_mut()
     }
-
-    fn paint_descendants(&self) -> bool {
-        false
+    fn children_offset(&self) -> (i32, i32) {
+        (0, -self.state.borrow().y)
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
@@ -171,48 +171,10 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
                 self.bg,
             ));
         }
+        self.content_h = ctx.child_content_height();
+    }
 
-        fn paint_subtree<M>(w: &mut dyn Widget<M>, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-            w.paint(ctx, out);
-            let n = w.child_count();
-            for i in 0..n {
-                paint_subtree(w.child_mut(i), ctx, out);
-            }
-        }
-
-        let mut inner = Vec::new();
-        paint_subtree(self.child.as_mut(), ctx, &mut inner);
-
-        let mut top = i32::MAX;
-        let mut bottom = i32::MIN;
-        for inst in inner.iter() {
-            let prim = inst.to_primitive();
-            let y = prim.position[1].floor() as i32;
-            let h = prim.size[1].round() as i32;
-            top = top.min(y);
-            bottom = bottom.max(y + h);
-        }
-        self.content_h = (bottom - top).max(0);
-
-        let max = (self.content_h - self.h).max(0);
-        {
-            let mut st = self.state.borrow_mut();
-            if st.y < 0 {
-                st.y = 0;
-            }
-            if st.y > max {
-                st.y = max;
-            }
-        }
-
-        let dy = -self.state.borrow().y;
-        for inst in inner.into_iter() {
-            out.push(
-                inst.translate(0, dy)
-                    .with_clip(self.x, self.y, self.w, self.h),
-            );
-        }
-
+    fn paint_overlay(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         if let Some((tx, ty, tw, th)) = self.thumb_rect() {
             let (track_x, track_y, track_w, track_h) = self.track_rect();
             out.push(Instance::ui(

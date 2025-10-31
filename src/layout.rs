@@ -1,7 +1,8 @@
+// TODO: text height can exede its parents fixed size, increasing the parents size
 use std::cmp::{max, min};
 
 use crate::{
-    context::LayoutCtx,
+    context::{LayoutCtx, PaintCtx},
     model::{Color, Position, Size},
     primitive::Instance,
     widget::{Axis, Length, Padding, Widget},
@@ -61,10 +62,7 @@ fn build_tree<'a, M>(
     w: &mut dyn Widget<M>,
 ) -> usize {
     let desc = w.layout(ctx);
-
     let id = layout_engine.create_node(desc.width, desc.height, desc.layout_dir, desc.is_absolute);
-
-    // Copy the rest of the descriptor into the engine node
     {
         let n = &mut layout_engine.nodes[id];
         n.min_width = desc.min_width;
@@ -75,6 +73,7 @@ fn build_tree<'a, M>(
         n.spacing = desc.spacing;
         n.offset_x = desc.offset_x;
         n.offset_y = desc.offset_y;
+        n.clip_children = desc.clip_children;
     }
 
     let count = w.child_count();
@@ -113,6 +112,76 @@ fn post_width_query<'a, M>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn paint_tree<M>(
+    w: &mut dyn crate::widget::Widget<M>,
+    ctx: &mut PaintCtx,
+    eng: &crate::layout::LayoutEngine,
+    cursor: &mut usize,
+    out: &mut Vec<Instance>,
+    parent_clip: Option<[i32; 4]>,
+    acc_tx: i32,
+    acc_ty: i32,
+) {
+    let id = *cursor;
+    ctx.__set_current_node(id);
+    let n = eng.nodes[id];
+
+    let mut clip = parent_clip;
+    if n.clip_children {
+        let mut r = [
+            n.x + acc_tx,
+            n.y + acc_ty,
+            n.current_width,
+            n.current_height,
+        ];
+        if let Some([px, py, pw, ph]) = clip {
+            // intersect
+            let x0 = px.max(r[0]);
+            let y0 = py.max(r[1]);
+            let x1 = (px + pw).min(r[0] + r[2]);
+            let y1 = (py + ph).min(r[1] + r[3]);
+            let w = (x1 - x0).max(0);
+            let h = (y1 - y0).max(0);
+            r = [x0, y0, w, h];
+        }
+        clip = Some(r);
+    }
+
+    let self_begin = out.len();
+    w.paint(ctx, out);
+    if let Some([cx, cy, cw, ch]) = clip {
+        for inst in &mut out[self_begin..] {
+            inst.add_clip(cx, cy, cw, ch);
+        }
+    }
+
+    *cursor += 1;
+
+    let (dx, dy) = w.children_offset();
+    let child_count = w.child_count();
+    for i in 0..child_count {
+        let new_begin = out.len();
+        {
+            let child = w.child_mut(i);
+            paint_tree(child, ctx, eng, cursor, out, clip, acc_tx + dx, acc_ty + dy);
+        }
+        if dx != 0 || dy != 0 {
+            for inst in &mut out[new_begin..] {
+                inst.translate(dx, dy);
+            }
+        }
+    }
+
+    let overlay_begin = out.len();
+    w.paint_overlay(ctx, out);
+    if let Some([cx, cy, cw, ch]) = clip {
+        for inst in &mut out[overlay_begin..] {
+            inst.add_clip(cx, cy, cw, ch);
+        }
+    }
+}
+
 fn write_back<M>(w: &mut dyn Widget<M>, layout_engine: &LayoutEngine, cursor: &mut usize) {
     let id = *cursor;
     let n = layout_engine.nodes[id];
@@ -135,23 +204,25 @@ pub struct Node {
     pub min_height: i32,
     pub max_width: i32,
     pub max_height: i32,
-    pub current_width: i32,
-    pub current_height: i32,
+    pub(crate) current_width: i32,
+    pub(crate) current_height: i32,
     pub layout_dir: Axis,
     pub padding: Padding,
     pub spacing: i32,
     pub is_absolute: bool,
     pub offset_x: i32,
     pub offset_y: i32,
-    pub x: i32,
-    pub y: i32,
-    pub first_child: Option<usize>,
-    pub next_sibling: Option<usize>,
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) first_child: Option<usize>,
+    pub(crate) next_sibling: Option<usize>,
+    pub clip_children: bool,
+    pub(crate) content_height: i32,
 }
 
 pub struct LayoutEngine {
-    nodes: [Node; MAX_NODES],
-    node_count: usize,
+    pub(crate) nodes: [Node; MAX_NODES],
+    pub(crate) node_count: usize,
 
     debug: bool,
 }
@@ -300,6 +371,7 @@ impl LayoutEngine {
             let base_w = match self.nodes[id].width {
                 Length::Fixed(w) => {
                     self.nodes[id].min_width = max(self.nodes[id].min_width, w);
+                    self.nodes[id].max_width = min(self.nodes[id].max_width, w);
                     w
                 }
                 _ => 0,
@@ -312,6 +384,7 @@ impl LayoutEngine {
             let base_w = match self.nodes[id].width {
                 Length::Fixed(w) => {
                     self.nodes[id].min_width = max(self.nodes[id].min_width, w);
+                    self.nodes[id].max_width = min(self.nodes[id].max_width, w);
                     w
                 }
                 _ => 0,
@@ -485,56 +558,60 @@ impl LayoutEngine {
             let layout_dir = self.nodes[id].layout_dir;
             let pad = self.nodes[id].padding;
             let spacing = self.nodes[id].spacing;
-            let min_h: i32;
-            if let Axis::Horizontal = layout_dir {
-                // Horizontal container: height must fit tallest child
-                let mut max_child_h = 0;
-                let mut idx = Some(child_idx);
-                while let Some(child) = idx {
-                    self.measure_height(child);
-                    if !self.nodes[child].is_absolute {
-                        max_child_h = max(max_child_h, self.nodes[child].min_height);
+            let min_h = match layout_dir {
+                Axis::Horizontal => {
+                    let mut max_child_h = 0;
+                    let mut idx = Some(child_idx);
+                    while let Some(child) = idx {
+                        self.measure_height(child);
+                        if !self.nodes[child].is_absolute {
+                            max_child_h = max(max_child_h, self.nodes[child].min_height);
+                        }
+                        idx = self.nodes[child].next_sibling;
                     }
-                    idx = self.nodes[child].next_sibling;
+                    max_child_h + pad.top + pad.bottom
                 }
-                min_h = max_child_h + pad.top + pad.bottom;
-            } else {
-                // Vertical container: sum of children heights
-                let mut total = 0;
-                let mut count = 0;
-                let mut idx = Some(child_idx);
-                while let Some(child) = idx {
-                    self.measure_height(child);
-                    if !self.nodes[child].is_absolute {
-                        total += self.nodes[child].min_height;
-                        count += 1;
+                Axis::Vertical => {
+                    let mut total = 0;
+                    let mut count = 0;
+                    let mut idx = Some(child_idx);
+                    while let Some(child) = idx {
+                        self.measure_height(child);
+                        if !self.nodes[child].is_absolute {
+                            total += self.nodes[child].min_height;
+                            count += 1;
+                        }
+                        idx = self.nodes[child].next_sibling;
                     }
-                    idx = self.nodes[child].next_sibling;
+                    let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
+                    total + pad.top + pad.bottom + gaps
                 }
-                let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
-                min_h = total + pad.top + pad.bottom + gaps;
-            }
+            };
             let total_min_h = max(min_h, self.nodes[id].min_height);
             let base_h = match self.nodes[id].height {
                 Length::Fixed(h) => {
                     self.nodes[id].min_height = max(self.nodes[id].min_height, h);
+                    self.nodes[id].max_height = min(self.nodes[id].max_height, h);
                     h
                 }
                 _ => 0,
             };
             let resolved_h = max(total_min_h, base_h).min(self.nodes[id].max_height);
             self.nodes[id].current_height = resolved_h;
+            self.nodes[id].content_height = resolved_h;
             self.nodes[id].min_height = total_min_h;
         } else {
             let base_h = match self.nodes[id].height {
                 Length::Fixed(h) => {
                     self.nodes[id].min_height = max(self.nodes[id].min_height, h);
+                    self.nodes[id].max_height = min(self.nodes[id].max_height, h);
                     h
                 }
                 _ => 0,
             };
             let resolved_h = max(self.nodes[id].min_height, base_h).min(self.nodes[id].max_height);
             self.nodes[id].current_height = resolved_h;
+            self.nodes[id].content_height = resolved_h;
         }
     }
 

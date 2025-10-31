@@ -179,19 +179,17 @@ impl Instance {
     }
 
     #[inline]
-    pub fn with_clip(mut self, x: i32, y: i32, w: i32, h: i32) -> Self {
+    pub fn add_clip(&mut self, x: i32, y: i32, w: i32, h: i32) {
         if w > 0 && h > 0 {
             self.clip = Some([x.max(0) as u32, y.max(0) as u32, w as u32, h as u32]);
         } else {
             self.clip = Some([0, 0, 0, 0]);
         }
-        self
     }
 
-    pub fn translate(mut self, dx: i32, dy: i32) -> Self {
+    pub fn translate(&mut self, dx: i32, dy: i32) {
         self.position.x += dx;
         self.position.y += dy;
-        self
     }
 
     pub(crate) fn scissor(&self) -> Option<[u32; 4]> {

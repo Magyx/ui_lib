@@ -1,5 +1,3 @@
-// TODO: something is wrong with MouseButton usage in widgets
-
 use std::fmt::Debug;
 
 use crate::{context::*, layout::Node, model::*, primitive::Instance};
@@ -55,10 +53,11 @@ pub trait Widget<M>: IntoElement {
     }
 
     /* ----- paint ----- */
-    fn paint_descendants(&self) -> bool {
-        true
+    fn children_offset(&self) -> (i32, i32) {
+        (0, 0)
     }
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
+    fn paint_overlay(&mut self, _ctx: &mut PaintCtx, _instancess: &mut Vec<Instance>) {}
 
     /* ----- interaction ----- */
     fn handle(&mut self, _ctx: &mut EventCtx<M>) {}

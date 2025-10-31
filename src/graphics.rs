@@ -5,9 +5,9 @@ use crate::{
     consts::*,
     context::{Context, EventCtx, LayoutCtx, PaintCtx},
     event::{Event, KeyState, ToEvent},
-    layout::LayoutEngine,
+    layout::{self, LayoutEngine},
     model::*,
-    primitive::{Instance, Primitive, Vertex},
+    primitive::{Primitive, Vertex},
     render::{
         pipeline::PipelineRegistry,
         renderer::Renderer,
@@ -446,7 +446,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             ui: &mut target.ctx,
             text: &mut self.renderer.text,
         };
-        let root_id = crate::layout::run_layout(
+        let root_id = layout::run_layout(
             &mut self.layout_engine,
             &mut layout_ctx,
             root.as_mut(),
@@ -471,23 +471,27 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 text: &mut self.renderer.text,
                 gpu: &self.gpu.clone(),
                 texture: &mut self.renderer.textures,
+                layout: &self.layout_engine,
+                current_node: root_id,
             };
 
-            fn paint_tree<M>(
-                w: &mut dyn crate::widget::Widget<M>,
-                ctx: &mut PaintCtx,
-                out: &mut Vec<Instance>,
-            ) {
-                w.paint(ctx, out);
-                if w.paint_descendants() {
-                    let count = w.child_count();
-                    for i in 0..count {
-                        paint_tree(w.child_mut(i), ctx, out);
-                    }
-                }
-            }
-
-            paint_tree(root.as_mut(), &mut paint_ctx, &mut instances);
+            let mut cursor = root_id;
+            let screen_clip = Some([
+                0,
+                0,
+                target.globals.window_size[0] as i32,
+                target.globals.window_size[1] as i32,
+            ]);
+            layout::paint_tree(
+                root.as_mut(),
+                &mut paint_ctx,
+                &self.layout_engine,
+                &mut cursor,
+                &mut instances,
+                screen_clip,
+                0,
+                0,
+            );
         }
         self.layout_engine
             .append_debug_instances(root_id, &mut instances);
