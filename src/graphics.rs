@@ -489,12 +489,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 &mut cursor,
                 &mut instances,
                 screen_clip,
-                0,
-                0,
             );
         }
-        self.layout_engine
-            .append_debug_instances(root_id, &mut instances);
 
         target.globals.frame = target.globals.frame.wrapping_add(1);
 

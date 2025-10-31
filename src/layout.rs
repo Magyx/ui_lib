@@ -112,8 +112,18 @@ fn post_width_query<'a, M>(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn paint_tree<M>(
+    w: &mut dyn crate::widget::Widget<M>,
+    ctx: &mut PaintCtx,
+    eng: &crate::layout::LayoutEngine,
+    cursor: &mut usize,
+    out: &mut Vec<Instance>,
+    parent_clip: Option<[i32; 4]>,
+) {
+    __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, 0, 0);
+}
+#[allow(clippy::too_many_arguments)]
+fn __paint_tree<M>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut PaintCtx,
     eng: &crate::layout::LayoutEngine,
@@ -122,6 +132,7 @@ pub fn paint_tree<M>(
     parent_clip: Option<[i32; 4]>,
     acc_tx: i32,
     acc_ty: i32,
+    depth: usize,
 ) {
     let id = *cursor;
     ctx.__set_current_node(id);
@@ -164,7 +175,17 @@ pub fn paint_tree<M>(
         let new_begin = out.len();
         {
             let child = w.child_mut(i);
-            paint_tree(child, ctx, eng, cursor, out, clip, acc_tx + dx, acc_ty + dy);
+            __paint_tree(
+                child,
+                ctx,
+                eng,
+                cursor,
+                out,
+                clip,
+                acc_tx + dx,
+                acc_ty + dy,
+                depth + 1,
+            );
         }
         if dx != 0 || dy != 0 {
             for inst in &mut out[new_begin..] {
@@ -175,6 +196,42 @@ pub fn paint_tree<M>(
 
     let overlay_begin = out.len();
     w.paint_overlay(ctx, out);
+
+    if eng.debug {
+        let (r, g, b, a) = color_for_depth(depth);
+        let col = Color::rgba(r, g, b, a);
+        let w = n.current_width.max(1);
+        let h = n.current_height.max(1);
+        let x = n.x;
+        let y = n.y;
+        let thickness = 1;
+
+        // top
+        out.push(Instance::ui(
+            Position::new(x, y),
+            Size::new(w, thickness),
+            col,
+        ));
+        // bottom
+        out.push(Instance::ui(
+            Position::new(x, y + h - thickness),
+            Size::new(w, thickness),
+            col,
+        ));
+        // left
+        out.push(Instance::ui(
+            Position::new(x, y),
+            Size::new(thickness, h),
+            col,
+        ));
+        // right
+        out.push(Instance::ui(
+            Position::new(x + w - thickness, y),
+            Size::new(thickness, h),
+            col,
+        ));
+    }
+
     if let Some([cx, cy, cw, ch]) = clip {
         for inst in &mut out[overlay_begin..] {
             inst.add_clip(cx, cy, cw, ch);
@@ -278,57 +335,6 @@ impl LayoutEngine {
 
     pub fn toggle_debug(&mut self) {
         self.debug = !self.debug;
-    }
-    pub fn append_debug_instances(&self, root_id: usize, out: &mut Vec<Instance>) {
-        if !self.debug {
-            return;
-        }
-        self.append_debug_rec(root_id, 0, out);
-    }
-    fn append_debug_rec(&self, id: usize, depth: usize, out: &mut Vec<Instance>) {
-        let n = &self.nodes[id];
-        // Guard against degenerate sizes
-        let w = n.current_width.max(1);
-        let h = n.current_height.max(1);
-        let x = n.x;
-        let y = n.y;
-        let thickness = 1;
-
-        let (r, g, b, a) = color_for_depth(depth);
-        let col = Color::rgba(r, g, b, a);
-
-        // top
-        out.push(Instance::ui(
-            Position::new(x, y),
-            Size::new(w, thickness),
-            col,
-        ));
-        // bottom
-        out.push(Instance::ui(
-            Position::new(x, y + h - thickness),
-            Size::new(w, thickness),
-            col,
-        ));
-        // left
-        out.push(Instance::ui(
-            Position::new(x, y),
-            Size::new(thickness, h),
-            col,
-        ));
-        // right
-        out.push(Instance::ui(
-            Position::new(x + w - thickness, y),
-            Size::new(thickness, h),
-            col,
-        ));
-
-        if let Some(child) = n.first_child {
-            let mut idx = Some(child);
-            while let Some(cid) = idx {
-                self.append_debug_rec(cid, depth + 1, out);
-                idx = self.nodes[cid].next_sibling;
-            }
-        }
     }
 
     // Phase 1: measure minimal widths
