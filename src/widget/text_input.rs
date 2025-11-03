@@ -453,7 +453,17 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
 
         if let Some(ev) = ctx.event {
             match ev {
-                // TODO: IME support
+                UiEventRef::Text(t) => {
+                    if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                        let caret = st.caret;
+                        st.value.insert_str(caret, &t.text);
+                        st.caret += t.text.len();
+                        if let Some(f) = &self.on_change {
+                            queued_emit = Some(f(&st.value));
+                        }
+                        ctx.ui.request_redraw();
+                    }
+                }
                 UiEventRef::Key(k) if k.state == KeyState::Pressed => {
                     use LogicalKey::*;
                     match k.logical_key {
@@ -575,7 +585,6 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                         }
 
                         Enter => {
-                            // Avoid borrowing ctx.ui and view_state at the same time.
                             if TypeId::of::<Mode>() == TypeId::of::<SingleLine>() {
                                 // Submit current value
                                 let to_emit = {
