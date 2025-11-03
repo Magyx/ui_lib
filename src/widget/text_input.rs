@@ -216,7 +216,6 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         view_state: &'b mut HashMap<Id, Box<dyn Any>>,
         fs: &mut cosmic_text::FontSystem,
     ) -> &'b mut TextInputViewState {
-        dbg!(&self.id);
         view_state
             .entry(self.id)
             .or_insert_with(|| {
@@ -352,13 +351,24 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
                 pb.shape_until_scroll(fs, false);
 
                 let mut x_advance = 0.0f32;
-                let mut baseline = 0.0f32;
+                let mut last_line_y: Option<f32> = None;
                 for run in pb.layout_runs() {
-                    baseline = run.line_y;
+                    last_line_y = Some(run.line_y);
                     for g in run.glyphs {
                         x_advance = g.x + g.w;
                     }
                 }
+
+                let line_advance = self.font_size * self.line_height;
+                let mut baseline = last_line_y
+                    .or_else(|| st.buffer.layout_runs().next().map(|r| r.line_y))
+                    .unwrap_or(line_advance);
+
+                if prefix.ends_with('\n') {
+                    baseline += line_advance;
+                    x_advance = 0.0;
+                }
+
                 let caret_x = (l as f32 + x_advance).round() as i32;
                 let caret_h = (self.font_size * 1.1) as i32;
                 let caret_y = (t as f32 + baseline - self.font_size * 0.9).round() as i32;

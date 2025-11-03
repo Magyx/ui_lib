@@ -90,7 +90,6 @@ impl<'a> Text<'a> {
         view_state: &'b mut HashMap<Id, Box<dyn Any>>,
         fs: &mut cosmic_text::FontSystem,
     ) -> &'b mut Buffer {
-        dbg!(&self.id);
         let b = view_state
             .entry(self.id)
             .or_insert_with(|| {
