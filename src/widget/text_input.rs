@@ -1,13 +1,28 @@
-use std::borrow::Cow;
+use std::any::{Any, TypeId};
 use std::marker::PhantomData;
+use std::{borrow::Cow, collections::HashMap};
 
 use super::*;
 use crate::event::{KeyState, LogicalKey, MouseButton, UiEventRef};
 use cosmic_text::{Attrs, Buffer, Metrics, Shaping, Wrap};
 
-mod state;
+pub struct TextInputViewState {
+    buffer: Buffer,
+    value: String,
+    width: i32,
+    caret: usize,
+}
 
-pub use state::TextState;
+impl TextInputViewState {
+    fn new(fs: &mut cosmic_text::FontSystem, font_size: f32, line_height: f32) -> Self {
+        Self {
+            buffer: Buffer::new(fs, Metrics::relative(font_size, line_height)),
+            value: String::new(),
+            width: 0,
+            caret: 0,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct TextColors {
@@ -37,7 +52,7 @@ pub type Handler<M> = dyn Fn(&str) -> M + Send + Sync + 'static;
 pub trait TextMode {
     fn wrap() -> Wrap;
     fn handle_enter<M>(
-        state: &mut TextState,
+        state: &mut TextInputViewState,
         on_change: &Option<Box<Handler<M>>>,
         on_submit: &Option<Box<Handler<M>>>,
         ctx: &mut EventCtx<M>,
@@ -56,13 +71,13 @@ impl TextMode for SingleLine {
     }
     #[inline]
     fn handle_enter<M>(
-        state: &mut TextState,
+        state: &mut TextInputViewState,
         _on_change: &Option<Box<dyn Fn(&str) -> M + Send + Sync + 'static>>,
         on_submit: &Option<Box<dyn Fn(&str) -> M + Send + Sync + 'static>>,
         ctx: &mut EventCtx<M>,
     ) {
         if let Some(f) = on_submit {
-            ctx.ui.emit(f(&state.cell_ref().value));
+            ctx.ui.emit(f(&state.value));
         }
     }
 }
@@ -74,17 +89,16 @@ impl TextMode for MultiLine {
     }
     #[inline]
     fn handle_enter<M>(
-        state: &mut TextState,
+        state: &mut TextInputViewState,
         on_change: &Option<Box<dyn Fn(&str) -> M + Send + Sync + 'static>>,
         _on_submit: &Option<Box<dyn Fn(&str) -> M + Send + Sync + 'static>>,
         ctx: &mut EventCtx<M>,
     ) {
-        let mut st = state.cell_mut();
-        let caret = st.caret;
-        st.value.insert(caret, '\n');
-        st.caret += 1;
+        let caret = state.caret;
+        state.value.insert(caret, '\n');
+        state.caret += 1;
         if let Some(f) = on_change {
-            ctx.ui.emit(f(&st.value));
+            ctx.ui.emit(f(&state.value));
             ctx.ui.request_redraw();
         }
     }
@@ -103,7 +117,6 @@ pub struct TextInput<M, Mode: TextMode = SingleLine> {
 
     padding: Vec4<i32>,
 
-    state: TextState,
     placeholder: Option<Cow<'static, str>>,
     font_size: f32,
     line_height: f32,
@@ -120,18 +133,17 @@ pub struct TextInput<M, Mode: TextMode = SingleLine> {
 }
 
 impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
-    fn new_impl(size: Size<Length>, state: TextState) -> Self {
+    fn new_impl(size: Size<Length>) -> Self {
         Self {
             x: 0,
             y: 0,
             w: 0,
             h: 0,
-            id: next_id(),
+            id: 0,
             size,
             min: Size::splat(28),
             max: Size::splat(i32::MAX),
             padding: Vec4::new(8, 6, 8, 6),
-            state,
             placeholder: None,
             font_size: 14.0,
             line_height: if std::any::TypeId::of::<Mode>() == std::any::TypeId::of::<MultiLine>() {
@@ -151,10 +163,6 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
     pub fn placeholder(mut self, text: impl Into<Cow<'static, str>>) -> Self {
         self.placeholder = Some(text.into());
-        self
-    }
-    pub fn value(self, text: impl Into<String>) -> Self {
-        self.state.set(text.into());
         self
     }
     pub fn padding(mut self, p: Vec4<i32>) -> Self {
@@ -203,68 +211,32 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         (l, t, r, b)
     }
 
-    fn insert_text(&mut self, s: &str) {
-        let mut st = self.state.cell_mut();
-        let caret = st.caret;
-        st.value.insert_str(caret, s);
-        st.caret += s.len();
+    fn ensure_state<'b>(
+        &self,
+        view_state: &'b mut HashMap<Id, Box<dyn Any>>,
+        fs: &mut cosmic_text::FontSystem,
+    ) -> &'b mut TextInputViewState {
+        dbg!(&self.id);
+        view_state
+            .entry(self.id)
+            .or_insert_with(|| {
+                Box::new(TextInputViewState::new(
+                    fs,
+                    self.font_size,
+                    self.line_height,
+                ))
+            })
+            .downcast_mut::<TextInputViewState>()
+            .expect("View state was wrong type")
     }
 
-    fn backspace(&mut self) {
-        let mut st = self.state.cell_mut();
-        if st.caret == 0 || st.value.is_empty() {
-            return;
-        }
-
-        let caret = st.caret;
-        let new_caret = caret - 1;
-        st.value.replace_range(new_caret..caret, "");
-        st.caret -= 1;
-    }
-
-    fn delete(&mut self) {
-        let mut st = self.state.cell_mut();
-        let caret = st.caret;
-        if caret >= st.value.len() {
-            return;
-        }
-        let mut end = caret + 1;
-        while end < st.value.len() && !st.value.is_char_boundary(end) {
-            end += 1;
-        }
-        st.value.drain(caret..end);
-    }
-
-    fn move_left(&mut self) {
-        let mut st = self.state.cell_mut();
-        if st.caret == 0 {
-            return;
-        }
-        let mut idx = st.caret - 1;
-        while idx > 0 && !st.value.is_char_boundary(idx) {
-            idx -= 1;
-        }
-        st.caret = idx;
-    }
-
-    fn move_right(&mut self) {
-        let mut st = self.state.cell_mut();
-        if st.caret >= st.value.len() {
-            return;
-        }
-        let mut idx = st.caret + 1;
-        while idx < st.value.len() && !st.value.is_char_boundary(idx) {
-            idx += 1;
-        }
-        st.caret = idx;
-    }
-
-    fn click_focus(&mut self, ctx: &mut EventCtx<M>) {
-        ctx.ui.kbd_focus_item = Some(self.id);
-        self.focused = true;
-        let mut st = self.state.cell_mut();
-        st.caret = st.value.len();
-        ctx.ui.request_redraw();
+    fn state_mut<'b>(
+        &self,
+        view_state: &'b mut HashMap<Id, Box<dyn Any>>,
+    ) -> Option<&'b mut TextInputViewState> {
+        view_state
+            .get_mut(&self.id)?
+            .downcast_mut::<TextInputViewState>()
     }
 
     fn paint_text_and_caret(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
@@ -287,7 +259,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         let (l, t, r, _b) = self.inner_bounds();
         let available_w = (r - l).max(1) as f32;
 
-        let st = self.state.cell_ref();
+        let st = self.ensure_state(ctx.view_state, ctx.text.font_system_mut());
         let show_placeholder = st.value.is_empty();
         let text = if show_placeholder {
             self.placeholder.as_deref().unwrap_or("")
@@ -312,19 +284,21 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             ));
         }
 
-        let b = {
+        {
             let fs = ctx.text.font_system_mut();
-            let mut b = Buffer::new(fs, Metrics::relative(self.font_size, self.line_height));
+            let b = &mut st.buffer;
+            if st.width != self.w {
+                st.width = self.w;
+            }
             b.set_wrap(fs, Mode::wrap());
             b.set_text(fs, text, &attrs, Shaping::Basic);
             b.set_size(fs, Some(available_w), None);
             b.shape_until_scroll(fs, false);
-            b
-        };
+        }
 
         const BASE_COLOR: cosmic_text::Color = cosmic_text::Color::rgba(255, 255, 255, 255);
 
-        for run in b.layout_runs() {
+        for run in st.buffer.layout_runs() {
             for glyph in run.glyphs {
                 let (top_left, width, height, cache_key, tint) = {
                     let (Position { x: left, y: top }, Size { width, height }, cache_key) =
@@ -401,13 +375,13 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 }
 
 impl<M> TextInput<M, SingleLine> {
-    pub fn new(size: Size<Length>, state: &TextState) -> Self {
-        Self::new_impl(size, state.clone())
+    pub fn new(size: Size<Length>) -> Self {
+        Self::new_impl(size)
     }
 }
 impl<M> TextInput<M, MultiLine> {
-    pub fn new(size: Size<Length>, state: &TextState) -> Self {
-        let mut s = Self::new_impl(size, state.clone());
+    pub fn new(size: Size<Length>) -> Self {
+        let mut s = Self::new_impl(size);
         s.min = Size::new(60, 60);
         s
     }
@@ -433,6 +407,9 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         self.w = w;
         self.h = h;
     }
+    fn set_id(&mut self, id: Id) {
+        self.id = id;
+    }
     fn child_count(&self) -> usize {
         0
     }
@@ -451,14 +428,26 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         let was_hovered = self.hovered;
         self.hovered = inside;
         self.focused = ctx.ui.kbd_focus_item == Some(self.id);
+
+        let mut queued_emit: Option<M> = None;
+        let mut needs_redraw = false;
+
         if inside && ctx.ui.is_button_released(MouseButton::Left) {
-            self.click_focus(ctx);
+            ctx.ui.kbd_focus_item = Some(self.id);
+            self.focused = true;
+            if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                st.caret = st.value.len();
+            }
+            needs_redraw = true;
         }
         if ctx.ui.is_button_pressed(MouseButton::Left) && !inside && self.focused {
             ctx.ui.kbd_focus_item = None;
             self.focused = false;
         }
         if !self.focused {
+            if was_hovered != self.hovered {
+                ctx.ui.request_redraw();
+            }
             return;
         }
 
@@ -469,64 +458,184 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                     use LogicalKey::*;
                     match k.logical_key {
                         Backspace => {
-                            self.backspace();
-                            if let Some(f) = &self.on_change {
-                                ctx.ui.emit(f(&self.state.cell_ref().value));
+                            let mut changed = false;
+                            {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
+                                    && st.caret > 0
+                                    && !st.value.is_empty()
+                                {
+                                    let caret = st.caret;
+                                    let mut new_caret = caret - 1;
+                                    while new_caret > 0 && !st.value.is_char_boundary(new_caret) {
+                                        new_caret -= 1;
+                                    }
+                                    st.value.replace_range(new_caret..caret, "");
+                                    st.caret = new_caret;
+                                    if let Some(f) = &self.on_change {
+                                        queued_emit = Some(f(&st.value));
+                                    }
+                                    changed = true;
+                                }
                             }
-                            ctx.ui.request_redraw();
+                            if changed {
+                                needs_redraw = true;
+                            }
                         }
                         Delete => {
-                            self.delete();
-                            if let Some(f) = &self.on_change {
-                                ctx.ui.emit(f(&self.state.cell_ref().value));
+                            let mut changed = false;
+                            {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                    let caret = st.caret;
+                                    if caret < st.value.len() {
+                                        let mut end = caret + 1;
+                                        while end < st.value.len()
+                                            && !st.value.is_char_boundary(end)
+                                        {
+                                            end += 1;
+                                        }
+                                        st.value.drain(caret..end);
+                                        if let Some(f) = &self.on_change {
+                                            queued_emit = Some(f(&st.value));
+                                        }
+                                        changed = true;
+                                    }
+                                }
                             }
-                            ctx.ui.request_redraw();
+                            if changed {
+                                needs_redraw = true;
+                            }
                         }
                         ArrowLeft => {
-                            self.move_left();
-                            ctx.ui.request_redraw();
+                            let mut moved = false;
+                            {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
+                                    && st.caret > 0
+                                {
+                                    let mut idx = st.caret - 1;
+                                    while idx > 0 && !st.value.is_char_boundary(idx) {
+                                        idx -= 1;
+                                    }
+                                    st.caret = idx;
+                                    moved = true;
+                                }
+                            }
+                            if moved {
+                                needs_redraw = true;
+                            }
                         }
+
                         ArrowRight => {
-                            self.move_right();
-                            ctx.ui.request_redraw();
+                            let mut moved = false;
+                            {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
+                                    && st.caret < st.value.len()
+                                {
+                                    let mut idx = st.caret + 1;
+                                    while idx < st.value.len() && !st.value.is_char_boundary(idx) {
+                                        idx += 1;
+                                    }
+                                    st.caret = idx;
+                                    moved = true;
+                                }
+                            }
+                            if moved {
+                                needs_redraw = true;
+                            }
                         }
+
                         Home => {
-                            self.state.cell_mut().caret = 0;
-                            ctx.ui.request_redraw();
+                            let mut moved = false;
+                            {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
+                                    && st.caret != 0
+                                {
+                                    st.caret = 0;
+                                    moved = true;
+                                }
+                            }
+                            if moved {
+                                needs_redraw = true;
+                            }
                         }
+
                         End => {
-                            let mut st = self.state.cell_mut();
-                            st.caret = st.value.len();
-                            ctx.ui.request_redraw();
+                            let mut moved = false;
+                            {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                    let end = st.value.len();
+                                    if st.caret != end {
+                                        st.caret = end;
+                                        moved = true;
+                                    }
+                                }
+                            }
+                            if moved {
+                                needs_redraw = true;
+                            }
                         }
+
                         Enter => {
-                            Mode::handle_enter(
-                                &mut self.state,
-                                &self.on_change,
-                                &self.on_submit,
-                                ctx,
-                            );
-                        }
-                        Character(ref char) => {
-                            self.insert_text(char);
-                            if let Some(f) = &self.on_change {
-                                ctx.ui.emit(f(&self.state.cell_ref().value));
+                            // Avoid borrowing ctx.ui and view_state at the same time.
+                            if TypeId::of::<Mode>() == TypeId::of::<SingleLine>() {
+                                // Submit current value
+                                let to_emit = {
+                                    if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                        if let Some(f) = &self.on_submit {
+                                            Some(f(&st.value))
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                };
+                                if to_emit.is_some() {
+                                    queued_emit = to_emit;
+                                }
+                            } else {
+                                // MultiLine: insert '\n' and treat as change
+                                let mut changed = false;
+                                {
+                                    if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                        let caret = st.caret;
+                                        st.value.insert(caret, '\n');
+                                        st.caret += 1;
+                                        if let Some(f) = &self.on_change {
+                                            queued_emit = Some(f(&st.value));
+                                        }
+                                        changed = true;
+                                    }
+                                }
+                                if changed {
+                                    needs_redraw = true;
+                                }
                             }
-                            ctx.ui.request_redraw();
                         }
-                        Space => {
-                            self.insert_text(" ");
-                            if let Some(f) = &self.on_change {
-                                ctx.ui.emit(f(&self.state.cell_ref().value));
-                            }
-                            ctx.ui.request_redraw();
-                        }
+
                         Tab => {
                             self.focused = false;
                             if ctx.ui.kbd_focus_item == Some(self.id) {
                                 ctx.ui.kbd_focus_item = None;
                             }
-                            ctx.ui.request_redraw();
+                            needs_redraw = true;
+                        }
+
+                        Character(ref s) if !s.is_empty() => {
+                            let mut changed = false;
+                            {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                    let caret = st.caret;
+                                    st.value.insert_str(caret, s);
+                                    st.caret += s.len();
+                                    if let Some(f) = &self.on_change {
+                                        queued_emit = Some(f(&st.value));
+                                    }
+                                    changed = true;
+                                }
+                            }
+                            if changed {
+                                needs_redraw = true;
+                            }
                         }
                         _ => {}
                     }
@@ -535,7 +644,10 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             }
         }
 
-        if was_hovered != self.hovered {
+        if let Some(msg) = queued_emit {
+            ctx.ui.emit(msg);
+        }
+        if needs_redraw || was_hovered != self.hovered {
             ctx.ui.request_redraw();
         }
     }

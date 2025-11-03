@@ -1,7 +1,11 @@
-use std::borrow::Cow;
+use std::{any::Any, borrow::Cow, collections::HashMap};
 
 use super::*;
 use cosmic_text::{Attrs, Buffer, Family, Metrics, Shaping, Style, Weight, Wrap};
+
+struct TextViewState {
+    buffer: Buffer,
+}
 
 pub struct Text<'a> {
     x: i32,
@@ -9,7 +13,7 @@ pub struct Text<'a> {
     w: i32,
     h: i32,
 
-    buffer: Option<Buffer>,
+    id: Id,
     text: Cow<'static, str>,
     font_size: f32,
     line_height: f32,
@@ -28,7 +32,7 @@ impl<'a> Text<'a> {
             y: 0,
             w: 0,
             h: 0,
-            buffer: None,
+            id: 0,
             text: content.into(),
             font_size,
             line_height: 1.2,
@@ -81,12 +85,22 @@ impl<'a> Text<'a> {
         self
     }
 
-    fn ensure_buffer<'b>(&'b mut self, fs: &mut cosmic_text::FontSystem) -> &'b mut Buffer {
-        if self.buffer.is_none() {
-            let metrics = Metrics::relative(self.font_size, self.line_height);
-            self.buffer = Some(Buffer::new(fs, metrics));
-        }
-        self.buffer.as_mut().unwrap()
+    fn ensure_buffer<'b>(
+        &self,
+        view_state: &'b mut HashMap<Id, Box<dyn Any>>,
+        fs: &mut cosmic_text::FontSystem,
+    ) -> &'b mut Buffer {
+        dbg!(&self.id);
+        let b = view_state
+            .entry(self.id)
+            .or_insert_with(|| {
+                Box::new(TextViewState {
+                    buffer: Buffer::new(fs, Metrics::relative(self.font_size, self.line_height)),
+                })
+            })
+            .downcast_mut::<TextViewState>()
+            .expect("View state was wrong type");
+        &mut b.buffer
     }
 }
 
@@ -100,7 +114,7 @@ impl<'a, M> Widget<M> for Text<'a> {
 
         let (intrinsic_w, line_count) = {
             let fs = ctx.text.font_system_mut();
-            let b = self.ensure_buffer(fs);
+            let b = self.ensure_buffer(&mut ctx.ui.view_state, fs);
 
             // (a) Unwrapped measurement
             b.set_wrap(fs, Wrap::None);
@@ -165,18 +179,7 @@ impl<'a, M> Widget<M> for Text<'a> {
         let text = self.text.clone();
         let attrs = self.attrs.clone();
 
-        let b = self.ensure_buffer(fs);
-        b.set_wrap(fs, wrap);
-        b.set_text(fs, &text, &attrs, Shaping::Basic);
-        b.set_size(fs, Some(width.max(1) as f32), None);
-        b.shape_until_scroll(fs, false);
-
-        let fs = ctx.text.font_system_mut();
-        let wrap = self.wrap;
-        let text = self.text.clone();
-        let attrs = self.attrs.clone();
-
-        let b = self.ensure_buffer(fs);
+        let b = self.ensure_buffer(&mut ctx.ui.view_state, fs);
         b.set_wrap(fs, wrap);
         b.set_text(fs, &text, &attrs, Shaping::Basic);
         b.set_size(fs, Some(width.max(1) as f32), None);
@@ -194,7 +197,6 @@ impl<'a, M> Widget<M> for Text<'a> {
         let line_px = (self.font_size * self.line_height).ceil() as i32;
         let h = lines.saturating_mul(line_px);
 
-        // Respect the widget's own clamps
         Some(h.clamp(self.min.height, self.max.height))
     }
 
@@ -203,6 +205,10 @@ impl<'a, M> Widget<M> for Text<'a> {
         self.y = y;
         self.w = w;
         self.h = h;
+    }
+
+    fn set_id(&mut self, id: Id) {
+        self.id = id;
     }
 
     fn child_count(&self) -> usize {
@@ -220,15 +226,12 @@ impl<'a, M> Widget<M> for Text<'a> {
         let attrs = self.attrs.clone();
         let target_w = self.w.max(1) as f32;
 
-        {
-            let fs = ctx.text.font_system_mut();
-            let b = self.ensure_buffer(fs);
-            b.set_wrap(fs, wrap);
-            b.set_text(fs, &text, &attrs, Shaping::Basic);
-            b.set_size(fs, Some(target_w), None);
-            b.shape_until_scroll(fs, false);
-        }
-        let buf = self.buffer.as_ref().expect("buffer must be initialized");
+        let fs = ctx.text.font_system_mut();
+        let buf = self.ensure_buffer(ctx.view_state, fs);
+        buf.set_wrap(fs, wrap);
+        buf.set_text(fs, &text, &attrs, Shaping::Basic);
+        buf.set_size(fs, Some(target_w), None);
+        buf.shape_until_scroll(fs, false);
 
         for run in buf.layout_runs() {
             for glyph in run.glyphs {

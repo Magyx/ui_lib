@@ -35,7 +35,7 @@ impl<M> Slider<M> {
             y: 0,
             w: 0,
             h: 0,
-            id: next_id(),
+            id: 0,
             size,
             min_px: Size::splat(0),
             max_px: Size::splat(i32::MAX),
@@ -122,6 +122,10 @@ impl<M: 'static> Widget<M> for Slider<M> {
         self.y = y;
         self.w = w;
         self.h = h;
+    }
+
+    fn set_id(&mut self, id: Id) {
+        self.id = id;
     }
 
     fn child_count(&self) -> usize {

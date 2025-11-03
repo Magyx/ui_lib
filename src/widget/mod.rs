@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{any::Any, collections::HashMap, fmt::Debug};
 
 use crate::{context::*, layout::Node, model::*, primitive::Instance};
 
@@ -41,6 +41,10 @@ pub trait Widget<M>: IntoElement {
     /* ----- layout ----- */
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node;
     fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32);
+    fn supplied_id(&self) -> Option<Id> {
+        None
+    }
+    fn set_id(&mut self, _id: Id) {}
     fn child_count(&self) -> usize;
     fn child_mut(&mut self, idx: usize) -> &mut dyn Widget<M>;
 
@@ -53,7 +57,7 @@ pub trait Widget<M>: IntoElement {
     }
 
     /* ----- paint ----- */
-    fn children_offset(&self) -> (i32, i32) {
+    fn children_offset(&self, _view_state: &mut HashMap<Id, Box<dyn Any>>) -> (i32, i32) {
         (0, 0)
     }
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
@@ -136,7 +140,7 @@ mod grid;
 pub use grid::Grid;
 
 mod text_input;
-pub use text_input::{TextArea, TextColors, TextField, TextState};
+pub use text_input::{TextArea, TextColors, TextField};
 
 mod scroll;
-pub use scroll::{ScrollState, Scrollable};
+pub use scroll::Scrollable;

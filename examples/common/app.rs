@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use ui::{
     event::{KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
-    widget::{Element, Rectangle, ScrollState, TextState},
+    widget::{Element, Rectangle},
 };
 
 use super::demos;
@@ -54,7 +54,7 @@ impl View {
 pub enum Message {
     ButtonPressed,
     SliderChanged(f32),
-    NameSubmitted(String),
+    NameChanged(String),
 }
 
 #[derive(Clone)]
@@ -64,10 +64,8 @@ pub struct Target {
     pub fps: VecDeque<f32>,
 
     pub slider: f32,
-    pub name: TextState,
-    pub notes: TextState,
-    pub scroll: ScrollState,
-    pub list_scroll: ScrollState,
+    pub name: String,
+    pub notes: String,
 }
 
 impl Default for Target {
@@ -78,10 +76,8 @@ impl Default for Target {
             fps: VecDeque::with_capacity(5),
 
             slider: 50.0,
-            name: TextState::new(),
-            notes: TextState::new(),
-            scroll: ScrollState::default(),
-            list_scroll: ScrollState::default(),
+            name: String::new(),
+            notes: String::new(),
         }
     }
 }
@@ -192,8 +188,6 @@ mod update {
         } else {
             target.view = target.view.clone().prev();
         }
-        target.scroll.reset();
-        target.list_scroll.reset();
 
         if let super::View::Texture = target.view {
             ensure_background_loaded(engine, state);
@@ -255,7 +249,7 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
         },
         crate::Event::Message(Message::ButtonPressed) => update::increment_counter(target),
         crate::Event::Message(Message::SliderChanged(v)) => update::set_slider(target, *v),
-        crate::Event::Message(Message::NameSubmitted(s)) => update::submit_name(target, s.clone()),
+        crate::Event::Message(Message::NameChanged(s)) => update::submit_name(target, s.clone()),
         _ => false,
     }
 }
@@ -266,10 +260,10 @@ pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
         None => return Rectangle::placeholder().into(),
     };
     match target.view {
-        View::Layout => demos::layout::view(tid, state),
+        View::Layout => demos::layout::view(state),
         View::Interaction => demos::interaction::view(tid, state),
         View::Pipeline => demos::pipeline::view(tid, state),
         View::Texture => demos::texture::view(state),
-        View::Text => demos::text::view(tid, state),
+        View::Text => demos::text::view(state),
     }
 }

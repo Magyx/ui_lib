@@ -2,11 +2,7 @@ use super::*;
 
 use Length::{Fit, Fixed, Grow};
 
-pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
-    let target = match state.per_target.get(tid) {
-        Some(t) => t,
-        None => return Rectangle::placeholder().into(),
-    };
+pub fn view(_state: &State) -> Element<Message> {
     let main = Column::new(vec![
         view_fixed_fixed(),
         view_fixed_grow_fixed(),
@@ -24,7 +20,7 @@ pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
     .spacing(14)
     .size(Size::new(Grow, Fit));
 
-    Scrollable::new(main, &target.scroll)
+    Scrollable::new(main)
         .size(Size::new(Grow, Grow))
         .bg(Color::rgb(100, 80, 100))
         .into()

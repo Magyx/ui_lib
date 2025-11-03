@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{any::Any, collections::HashMap};
 
 use super::*;
 use crate::{
@@ -13,24 +13,9 @@ pub enum ScrollBarBehavior {
     Hide,
 }
 
-struct ScrollStateInner {
+struct ScrollViewState {
     y: i32,
     grab: Option<i32>,
-}
-
-#[derive(Clone)]
-pub struct ScrollState(Rc<RefCell<ScrollStateInner>>);
-
-impl Default for ScrollState {
-    fn default() -> Self {
-        Self(Rc::new(RefCell::new(ScrollStateInner { y: 0, grab: None })))
-    }
-}
-
-impl ScrollState {
-    pub fn reset(&self) {
-        self.0.borrow_mut().y = 0;
-    }
 }
 
 pub struct Scrollable<M> {
@@ -44,7 +29,6 @@ pub struct Scrollable<M> {
     child: Element<M>,
 
     id: Id,
-    state: Rc<RefCell<ScrollStateInner>>,
     content_h: i32,
 
     scrollbar_behavior: ScrollBarBehavior,
@@ -55,7 +39,7 @@ pub struct Scrollable<M> {
 }
 
 impl<M: 'static> Scrollable<M> {
-    pub fn new<E: Into<Element<M>>>(child: E, state: &ScrollState) -> Self {
+    pub fn new<E: Into<Element<M>>>(child: E) -> Self {
         Self {
             x: 0,
             y: 0,
@@ -64,9 +48,8 @@ impl<M: 'static> Scrollable<M> {
             size: Size::new(Length::Grow, Length::Fit),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
-            id: next_id(),
+            id: 0,
             child: child.into(),
-            state: state.0.clone(),
             content_h: 0,
             scrollbar_behavior: ScrollBarBehavior::Auto,
             bar_color: Color::rgba(70, 70, 80, 128),
@@ -112,7 +95,7 @@ impl<M: 'static> Scrollable<M> {
     }
 
     #[inline]
-    fn thumb_rect(&self) -> Option<(i32, i32, i32, i32)> {
+    fn thumb_rect(&self, state: &ScrollViewState) -> Option<(i32, i32, i32, i32)> {
         if let ScrollBarBehavior::Hide = self.scrollbar_behavior {
             return None;
         }
@@ -128,11 +111,25 @@ impl<M: 'static> Scrollable<M> {
         let thumb_h = (ratio * th as f32).round() as i32;
         let thumb_h = thumb_h.clamp(20, th); // min thumb size
 
-        let y = self.state.borrow().y;
-        let t = if max > 0 { y as f32 / max as f32 } else { 0.0 };
+        let t = if max > 0 {
+            state.y as f32 / max as f32
+        } else {
+            0.0
+        };
         let thumb_y = ty + ((th - thumb_h) as f32 * t).round() as i32;
 
         Some((tx, thumb_y, tw, thumb_h))
+    }
+
+    fn ensure_state<'b>(
+        &self,
+        view_state: &'b mut HashMap<Id, Box<dyn Any>>,
+    ) -> &'b mut ScrollViewState {
+        view_state
+            .entry(self.id)
+            .or_insert_with(|| Box::new(ScrollViewState { y: 0, grab: None }))
+            .downcast_mut::<ScrollViewState>()
+            .expect("View state was wrong type")
     }
 }
 
@@ -159,14 +156,18 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         self.h = h;
     }
 
+    fn set_id(&mut self, id: Id) {
+        self.id = id;
+    }
+
     fn child_count(&self) -> usize {
         1
     }
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
         self.child.as_mut()
     }
-    fn children_offset(&self) -> (i32, i32) {
-        (0, -self.state.borrow().y)
+    fn children_offset<'a>(&self, view_state: &mut HashMap<Id, Box<dyn Any>>) -> (i32, i32) {
+        (0, -self.ensure_state(view_state).y)
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
@@ -180,8 +181,9 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         self.content_h = ctx.child_content_height();
     }
 
-    fn paint_overlay(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        if let Some((tx, ty, tw, th)) = self.thumb_rect() {
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+        let state = self.ensure_state(ctx.view_state);
+        if let Some((tx, ty, tw, th)) = self.thumb_rect(state) {
             let (track_x, track_y, track_w, track_h) = self.track_rect();
             out.push(Instance::ui(
                 Position::new(track_x, track_y),
@@ -218,14 +220,15 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
                 ScrollUnits::Pixels => 1.0,
             };
             if delta.dy != 0.0 {
-                let mut st = self.state.borrow_mut();
+                let st = self.ensure_state(&mut ctx.ui.view_state);
                 let ny = (st.y as f32 - delta.dy * step).round() as i32; // +dy up → smaller y
                 st.y = ny.clamp(0, max);
                 ctx.ui.request_redraw();
             }
         }
 
-        let thumb = self.thumb_rect();
+        let st = self.ensure_state(&mut ctx.ui.view_state);
+        let thumb = self.thumb_rect(st);
         let track = self.track_rect();
 
         if let Some((tx, ty, tw, th)) = thumb {
@@ -257,7 +260,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
                 } else {
                     th / 2
                 };
-                let mut st = self.state.borrow_mut();
+                let st = self.ensure_state(&mut ctx.ui.view_state);
                 st.grab = Some(grab);
 
                 if over_track && !over_thumb {
@@ -270,7 +273,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             }
 
             if ctx.ui.active_item == Some(self.id) && down {
-                let mut st = self.state.borrow_mut();
+                let st = self.ensure_state(&mut ctx.ui.view_state);
                 let mut pos = my - st.grab.unwrap_or(th / 2);
                 pos = pos.clamp(track_y, track_y + track_h - th);
 
@@ -283,20 +286,22 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
 
             if released && ctx.ui.active_item == Some(self.id) {
                 ctx.ui.active_item = None;
-                self.state.borrow_mut().grab = None;
+                let st = self.ensure_state(&mut ctx.ui.view_state);
+                st.grab = None;
                 ctx.ui.request_redraw();
             }
         } else if released && ctx.ui.active_item == Some(self.id) {
             ctx.ui.active_item = None;
-            self.state.borrow_mut().grab = None;
+            let st = self.ensure_state(&mut ctx.ui.view_state);
+            st.grab = None;
         }
 
-        let scroll = self.state.borrow().y;
+        let st = self.ensure_state(&mut ctx.ui.view_state);
         let saved_mouse = ctx.ui.mouse_pos;
-        ctx.ui.mouse_pos.y += scroll as f32;
+        ctx.ui.mouse_pos.y += st.y as f32;
 
         let mut updated_globals = *ctx.globals;
-        updated_globals.mouse_pos[1] += scroll as f32;
+        updated_globals.mouse_pos[1] += st.y as f32;
 
         self.child.as_mut().handle(&mut EventCtx {
             globals: &updated_globals,

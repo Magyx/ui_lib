@@ -105,16 +105,15 @@ pub mod interaction {
 
         let inputs = Column::new(el![
             // Single-line TextField
-            TextField::new(Size::new(Grow, Fixed(36)), &target.name)
+            TextField::new(Size::new(Grow, Fixed(36)))
                 .placeholder("Your name")
-                .on_submit(|s| Message::NameSubmitted(s.to_string())),
+                .on_change(|s| Message::NameChanged(s.to_string())),
             // Live feedback
             Text::new(greeting, 16.0)
                 .size(Size::new(Grow, Fit))
                 .color(Color::BLACK),
             // Multi-line TextArea
-            TextArea::new(Size::new(Grow, Fixed(120)), &target.notes)
-                .placeholder("Notes (multi-line)")
+            TextArea::new(Size::new(Grow, Fixed(120))).placeholder("Notes (multi-line)")
         ])
         .spacing(8)
         .padding(Vec4::splat(10))
@@ -227,14 +226,8 @@ pub mod text {
     use super::*;
     use cosmic_text::Weight;
 
-    pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
+    pub fn view(_state: &State) -> Element<Message> {
         use Length::{Fit, Fixed, Grow};
-
-        let target = if let Some(target) = state.per_target.get(tid) {
-            target
-        } else {
-            return Rectangle::placeholder().into();
-        };
 
         // Colors
         let bg_app = Color::rgb(24, 26, 32);
@@ -331,7 +324,7 @@ pub mod text {
             .size(Size::new(Grow, Fit))
             .spacing(12),
             // List of text with scrolling
-            Scrollable::new(Text::new(list, 16.0), &target.list_scroll)
+            Scrollable::new(Text::new(list, 16.0))
                 .size(Size::new(Grow, Fixed(140)))
                 .bg(Color::rgb(72, 78, 90)),
             // A couple of stat tiles
@@ -376,7 +369,6 @@ pub mod text {
                     .spacing(12)
                     .color(Color::TRANSPARENT)
                     .size(Size::new(Grow, Fit)),
-                &target.scroll
             )
             .size(Size::splat(Grow))
         ])

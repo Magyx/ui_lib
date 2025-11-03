@@ -1,3 +1,5 @@
+use std::{any::Any, collections::HashMap};
+
 use crate::{
     event::{MouseButton, UiEventRef},
     graphics::{Globals, Gpu},
@@ -8,15 +10,15 @@ use crate::{
 
 pub type Id = u64;
 
-use std::sync::atomic::{AtomicU64, Ordering};
-static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-pub fn next_id() -> Id {
-    NEXT_ID.fetch_add(1, Ordering::Relaxed)
-}
-
-pub fn reset_ids_for_frame() {
-    NEXT_ID.store(1, Ordering::Relaxed);
-}
+// use std::sync::atomic::{AtomicU64, Ordering};
+// static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+// pub fn next_id() -> Id {
+//     NEXT_ID.fetch_add(1, Ordering::Relaxed)
+// }
+//
+// pub fn reset_ids_for_frame() {
+//     NEXT_ID.store(1, Ordering::Relaxed);
+// }
 
 pub struct Context<M> {
     pub mouse_pos: Position<f32>,
@@ -30,6 +32,8 @@ pub struct Context<M> {
 
     messages: Vec<M>,
     redraw_requested: bool,
+
+    pub view_state: HashMap<Id, Box<dyn Any>>,
 }
 
 impl<M> Default for Context<M> {
@@ -52,6 +56,8 @@ impl<M> Context<M> {
 
             messages: Vec::new(),
             redraw_requested: false,
+
+            view_state: HashMap::new(),
         }
     }
     #[inline]
@@ -99,6 +105,7 @@ pub struct PaintCtx<'a> {
     pub texture: &'a mut TextureRegistry,
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
+    pub view_state: &'a mut HashMap<Id, Box<dyn Any>>,
 }
 
 impl<'a> PaintCtx<'a> {

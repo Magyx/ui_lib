@@ -427,11 +427,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             return;
         }
 
-        // TODO: this should eventually be removed, as it is not accurate way to have id's
-        // maybe move to a depth based id system where id is passed from context instead of
-        // generated in each widget
-        crate::context::reset_ids_for_frame();
-
         target.root = Some(view(tid, state));
         let root = target.root.as_mut().expect("root built");
 
@@ -471,6 +466,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 text: &mut self.renderer.text,
                 gpu: &self.gpu.clone(),
                 texture: &mut self.renderer.textures,
+                view_state: &mut target.ctx.view_state,
                 layout: &self.layout_engine,
                 current_node: root_id,
             };

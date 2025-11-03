@@ -32,7 +32,7 @@ impl<M: Clone + 'static> Button<M> {
             y: 0,
             w: 0,
             h: 0,
-            id: next_id(),
+            id: 0,
             size,
             content: None,
             normal_color: color,
@@ -55,7 +55,7 @@ impl<M: Clone + 'static> Button<M> {
             y: 0,
             w: 0,
             h: 0,
-            id: next_id(),
+            id: 0,
             size: Size::splat(Length::Fit),
             content: Some(content.into()),
             normal_color: Color::TRANSPARENT,
@@ -129,6 +129,10 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         self.y = y;
         self.w = w;
         self.h = h;
+    }
+
+    fn set_id(&mut self, id: Id) {
+        self.id = id;
     }
 
     fn child_count(&self) -> usize {

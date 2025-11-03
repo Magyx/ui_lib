@@ -2,13 +2,22 @@
 use std::cmp::{max, min};
 
 use crate::{
-    context::{LayoutCtx, PaintCtx},
+    context::{Id, LayoutCtx, PaintCtx},
     model::{Color, Position, Size},
     primitive::Instance,
     widget::{Axis, Length, Padding, Widget},
 };
 
 const MAX_NODES: usize = 1024;
+
+#[inline]
+fn mix64(parent: Id, idx: usize) -> Id {
+    let mut z =
+        (parent ^ 0x9E37_79B9_7F4A_7C15u64) ^ (idx as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15u64);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9u64);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EBu64);
+    z ^ (z >> 31)
+}
 
 #[inline]
 fn color_for_depth(depth: usize) -> (u8, u8, u8, u8) {
@@ -52,7 +61,7 @@ pub fn run_layout<'a, M>(
 
     // 5) Write results back to widgets in pre-order
     let mut cursor = 0usize;
-    write_back(root, layout_engine, &mut cursor);
+    write_back(root, layout_engine, &mut cursor, 0xCBF2_9CE4_8422_2325u64);
     root_id
 }
 
@@ -169,7 +178,7 @@ fn __paint_tree<M>(
 
     *cursor += 1;
 
-    let (dx, dy) = w.children_offset();
+    let (dx, dy) = w.children_offset(ctx.view_state);
     let child_count = w.child_count();
     for i in 0..child_count {
         let new_begin = out.len();
@@ -239,17 +248,24 @@ fn __paint_tree<M>(
     }
 }
 
-fn write_back<M>(w: &mut dyn Widget<M>, layout_engine: &LayoutEngine, cursor: &mut usize) {
+fn write_back<M>(
+    w: &mut dyn Widget<M>,
+    layout_engine: &LayoutEngine,
+    cursor: &mut usize,
+    root_seed: u64,
+) {
     let id = *cursor;
     let n = layout_engine.nodes[id];
     w.set_layout(n.x, n.y, n.current_width, n.current_height);
+    w.set_id(root_seed);
 
     *cursor += 1;
 
     let count = w.child_count();
     for i in 0..count {
         let child = w.child_mut(i);
-        write_back(child, layout_engine, cursor);
+        let child_seed = mix64(root_seed, i + 1);
+        write_back(child, layout_engine, cursor, child_seed);
     }
 }
 
@@ -261,19 +277,19 @@ pub struct Node {
     pub min_height: i32,
     pub max_width: i32,
     pub max_height: i32,
-    pub(crate) current_width: i32,
-    pub(crate) current_height: i32,
     pub layout_dir: Axis,
     pub padding: Padding,
     pub spacing: i32,
+    pub clip_children: bool,
     pub is_absolute: bool,
     pub offset_x: i32,
     pub offset_y: i32,
+    pub(crate) current_width: i32,
+    pub(crate) current_height: i32,
     pub(crate) x: i32,
     pub(crate) y: i32,
     pub(crate) first_child: Option<usize>,
     pub(crate) next_sibling: Option<usize>,
-    pub clip_children: bool,
     pub(crate) content_height: i32,
 }
 
