@@ -107,12 +107,9 @@ impl<M> IntoElement for Slider<M> {}
 impl<M: 'static> Widget<M> for Slider<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
-            width: self.size.width,
-            height: self.size.height,
-            min_width: self.min_px.width,
-            min_height: self.min_px.height,
-            max_width: self.max_px.width,
-            max_height: self.max_px.height,
+            size: self.size,
+            min: self.min_px,
+            max: self.max_px,
             ..Default::default()
         }
     }

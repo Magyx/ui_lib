@@ -58,12 +58,9 @@ impl IntoElement for Image {}
 impl<M> Widget<M> for Image {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         let mut node = Node {
-            width: self.size.width,
-            height: self.size.height,
-            min_width: self.min.width,
-            min_height: self.min.height,
-            max_width: self.max.width,
-            max_height: self.max.height,
+            size: self.size,
+            min: self.min,
+            max: self.max,
             ..Default::default()
         };
         if matches!(self.fit, ContentFit::Cover) {

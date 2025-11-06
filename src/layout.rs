@@ -71,17 +71,14 @@ fn build_tree<'a, M>(
     w: &mut dyn Widget<M>,
 ) -> usize {
     let desc = w.layout(ctx);
-    let id = layout_engine.create_node(desc.width, desc.height, desc.layout_dir, desc.is_absolute);
+    let id = layout_engine.create_node(desc.size, desc.layout_dir, desc.is_absolute);
     {
         let n = &mut layout_engine.nodes[id];
-        n.min_width = desc.min_width;
-        n.min_height = desc.min_height;
-        n.max_width = desc.max_width;
-        n.max_height = desc.max_height;
+        n.min = desc.min;
+        n.max = desc.max;
         n.padding = desc.padding;
         n.spacing = desc.spacing;
-        n.offset_x = desc.offset_x;
-        n.offset_y = desc.offset_y;
+        n.offset_pos = desc.offset_pos;
         n.clip_children = desc.clip_children;
     }
 
@@ -105,13 +102,12 @@ fn post_width_query<'a, M>(
 
     let first = eng.nodes[id].first_child;
     if first.is_none()
-        && let Some(h) = w.min_height_for_width(ctx, eng.nodes[id].current_width)
+        && let Some(h) = w.min_height_for_width(ctx, eng.nodes[id].current_size.width)
     {
         let clamped = h
-            .max(eng.nodes[id].min_height)
-            .min(eng.nodes[id].max_height);
-        eng.nodes[id].min_height = clamped;
-        eng.nodes[id].current_height = clamped;
+            .max(eng.nodes[id].min.height)
+            .min(eng.nodes[id].max.height);
+        eng.nodes[id].min.height = clamped;
     }
 
     *cursor += 1;
@@ -150,10 +146,10 @@ fn __paint_tree<M>(
     let mut clip = parent_clip;
     if n.clip_children {
         let mut r = [
-            n.x + acc_tx,
-            n.y + acc_ty,
-            n.current_width,
-            n.current_height,
+            n.pos.x + acc_tx,
+            n.pos.y + acc_ty,
+            n.current_size.width,
+            n.current_size.height,
         ];
         if let Some([px, py, pw, ph]) = clip {
             // intersect
@@ -209,10 +205,10 @@ fn __paint_tree<M>(
     if eng.debug {
         let (r, g, b, a) = color_for_depth(depth);
         let col = Color::rgba(r, g, b, a);
-        let w = n.current_width.max(1);
-        let h = n.current_height.max(1);
-        let x = n.x;
-        let y = n.y;
+        let w = n.current_size.width.max(1);
+        let h = n.current_size.height.max(1);
+        let x = n.pos.x;
+        let y = n.pos.y;
         let thickness = 1;
 
         // top
@@ -256,7 +252,12 @@ fn write_back<M>(
 ) {
     let id = *cursor;
     let n = layout_engine.nodes[id];
-    w.set_layout(n.x, n.y, n.current_width, n.current_height);
+    w.set_layout(
+        n.pos.x,
+        n.pos.y,
+        n.current_size.width,
+        n.current_size.height,
+    );
     w.set_id(root_seed);
 
     *cursor += 1;
@@ -271,26 +272,23 @@ fn write_back<M>(
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Node {
-    pub width: Length,
-    pub height: Length,
-    pub min_width: i32,
-    pub min_height: i32,
-    pub max_width: i32,
-    pub max_height: i32,
+    pub size: Size<Length>,
+    pub min: Size<i32>,
+    pub max: Size<i32>,
     pub layout_dir: Axis,
     pub padding: Padding,
     pub spacing: i32,
     pub clip_children: bool,
     pub is_absolute: bool,
-    pub offset_x: i32,
-    pub offset_y: i32,
-    pub(crate) current_width: i32,
-    pub(crate) current_height: i32,
-    pub(crate) x: i32,
-    pub(crate) y: i32,
+    pub offset_pos: Position<i32>,
+
+    pub(crate) pos: Position<i32>,
+    pub(crate) current_size: Size<i32>,
+    pub(crate) content_size: Size<i32>,
+
+    pub(crate) parent: Option<usize>,
     pub(crate) first_child: Option<usize>,
     pub(crate) next_sibling: Option<usize>,
-    pub(crate) content_height: i32,
 }
 
 pub struct LayoutEngine {
@@ -315,18 +313,11 @@ impl LayoutEngine {
             debug: false,
         }
     }
-    fn create_node(
-        &mut self,
-        width: Length,
-        height: Length,
-        layout_dir: Axis,
-        is_absolute: bool,
-    ) -> usize {
+    fn create_node(&mut self, size: Size<Length>, layout_dir: Axis, is_absolute: bool) -> usize {
         assert!(self.node_count < MAX_NODES);
         let id = self.node_count;
         self.nodes[id] = Node {
-            width,
-            height,
+            size,
             layout_dir,
             is_absolute,
             ..Default::default()
@@ -335,6 +326,7 @@ impl LayoutEngine {
         id
     }
     fn add_child(&mut self, parent: usize, child: usize) {
+        self.nodes[child].parent = Some(parent);
         if self.nodes[parent].first_child.is_none() {
             self.nodes[parent].first_child = Some(child);
         } else {
@@ -368,7 +360,7 @@ impl LayoutEngine {
                 while let Some(child) = idx {
                     self.measure_width(child);
                     if !self.nodes[child].is_absolute {
-                        total += self.nodes[child].min_width;
+                        total += self.nodes[child].min.width;
                         count += 1;
                     }
                     idx = self.nodes[child].next_sibling;
@@ -382,37 +374,37 @@ impl LayoutEngine {
                 while let Some(child) = idx {
                     self.measure_width(child);
                     if !self.nodes[child].is_absolute {
-                        max_child_w = max(max_child_w, self.nodes[child].min_width);
+                        max_child_w = max(max_child_w, self.nodes[child].min.width);
                     }
                     idx = self.nodes[child].next_sibling;
                 }
                 min_w = max_child_w + pad.left + pad.right;
             }
 
-            let total_min_w = max(min_w, self.nodes[id].min_width);
-            let base_w = match self.nodes[id].width {
+            let total_min_w = max(min_w, self.nodes[id].min.width);
+            let base_w = match self.nodes[id].size.width {
                 Length::Fixed(w) => {
-                    self.nodes[id].min_width = max(self.nodes[id].min_width, w);
-                    self.nodes[id].max_width = min(self.nodes[id].max_width, w);
+                    self.nodes[id].min.width = max(self.nodes[id].min.width, w);
+                    self.nodes[id].max.width = min(self.nodes[id].max.width, w);
                     w
                 }
                 _ => 0,
             };
 
-            let resolved_w = max(total_min_w, base_w).min(self.nodes[id].max_width);
-            self.nodes[id].current_width = resolved_w;
-            self.nodes[id].min_width = total_min_w;
+            let resolved_w = max(total_min_w, base_w).min(self.nodes[id].max.width);
+            self.nodes[id].current_size.width = resolved_w;
+            self.nodes[id].min.width = total_min_w;
         } else {
-            let base_w = match self.nodes[id].width {
+            let base_w = match self.nodes[id].size.width {
                 Length::Fixed(w) => {
-                    self.nodes[id].min_width = max(self.nodes[id].min_width, w);
-                    self.nodes[id].max_width = min(self.nodes[id].max_width, w);
+                    self.nodes[id].min.width = max(self.nodes[id].min.width, w);
+                    self.nodes[id].max.width = min(self.nodes[id].max.width, w);
                     w
                 }
                 _ => 0,
             };
-            let resolved_w = max(self.nodes[id].min_width, base_w).min(self.nodes[id].max_width);
-            self.nodes[id].current_width = resolved_w;
+            let resolved_w = max(self.nodes[id].min.width, base_w).min(self.nodes[id].max.width);
+            self.nodes[id].current_size.width = resolved_w;
         }
     }
 
@@ -423,15 +415,15 @@ impl LayoutEngine {
             let pad = self.nodes[id].padding;
             let spacing = self.nodes[id].spacing;
 
-            let target_w = match self.nodes[id].width {
+            let target_w = match self.nodes[id].size.width {
                 Length::Grow => parent_width,
                 Length::Fixed(w) => w,
-                Length::Fit => self.nodes[id].current_width,
+                Length::Fit => self.nodes[id].current_size.width,
             };
-            let target_w = max(target_w, self.nodes[id].min_width)
-                .min(self.nodes[id].max_width)
+            let target_w = max(target_w, self.nodes[id].min.width)
+                .min(self.nodes[id].max.width)
                 .min(parent_width);
-            self.nodes[id].current_width = target_w;
+            self.nodes[id].current_size.width = target_w;
             let inner_w = (target_w
                 - pad.left
                 - pad.right
@@ -465,7 +457,7 @@ impl LayoutEngine {
                 let mut allocated: Vec<i32> = Vec::with_capacity(count);
                 let mut total_base = 0;
                 for &child in &children {
-                    let base = self.nodes[child].current_width;
+                    let base = self.nodes[child].current_size.width;
                     allocated.push(base);
                     total_base += base;
                 }
@@ -478,7 +470,7 @@ impl LayoutEngine {
                         let shrinkables: Vec<usize> = children
                             .iter()
                             .enumerate()
-                            .filter(|(j, child)| allocated[*j] > self.nodes[**child].min_width)
+                            .filter(|(j, child)| allocated[*j] > self.nodes[**child].min.width)
                             .map(|(j, _)| j)
                             .collect();
                         if shrinkables.is_empty() {
@@ -488,7 +480,7 @@ impl LayoutEngine {
                         let mut used = 0;
                         for &j in &shrinkables {
                             let child = children[j];
-                            let reducible = allocated[j] - self.nodes[child].min_width;
+                            let reducible = allocated[j] - self.nodes[child].min.width;
                             let reduce_amt = min(reducible, reduce_each);
                             if reduce_amt > 0 {
                                 allocated[j] -= reduce_amt;
@@ -513,8 +505,8 @@ impl LayoutEngine {
                             .iter()
                             .enumerate()
                             .filter(|(j, child)| {
-                                matches!(self.nodes[**child].width, Length::Grow)
-                                    && allocated[*j] < self.nodes[**child].max_width
+                                matches!(self.nodes[**child].size.width, Length::Grow)
+                                    && allocated[*j] < self.nodes[**child].max.width
                             })
                             .map(|(j, _)| j)
                             .collect();
@@ -525,7 +517,7 @@ impl LayoutEngine {
                         let mut used = 0;
                         for &j in &growables {
                             let child = children[j];
-                            let addable = self.nodes[child].max_width - allocated[j];
+                            let addable = self.nodes[child].max.width - allocated[j];
                             let add_amt = min(addable, add_each);
                             if add_amt > 0 {
                                 allocated[j] += add_amt;
@@ -562,15 +554,15 @@ impl LayoutEngine {
                 }
             }
         } else {
-            let target_w = match self.nodes[id].width {
+            let target_w = match self.nodes[id].size.width {
                 Length::Grow => parent_width,
                 Length::Fixed(w) => w,
-                Length::Fit => self.nodes[id].current_width,
+                Length::Fit => self.nodes[id].current_size.width,
             };
-            let final_w = max(target_w, self.nodes[id].min_width)
-                .min(self.nodes[id].max_width)
+            let final_w = max(target_w, self.nodes[id].min.width)
+                .min(self.nodes[id].max.width)
                 .min(parent_width);
-            self.nodes[id].current_width = final_w;
+            self.nodes[id].current_size.width = final_w;
         }
     }
 
@@ -587,7 +579,7 @@ impl LayoutEngine {
                     while let Some(child) = idx {
                         self.measure_height(child);
                         if !self.nodes[child].is_absolute {
-                            max_child_h = max(max_child_h, self.nodes[child].min_height);
+                            max_child_h = max(max_child_h, self.nodes[child].min.height);
                         }
                         idx = self.nodes[child].next_sibling;
                     }
@@ -600,7 +592,7 @@ impl LayoutEngine {
                     while let Some(child) = idx {
                         self.measure_height(child);
                         if !self.nodes[child].is_absolute {
-                            total += self.nodes[child].min_height;
+                            total += self.nodes[child].min.height;
                             count += 1;
                         }
                         idx = self.nodes[child].next_sibling;
@@ -609,31 +601,31 @@ impl LayoutEngine {
                     total + pad.top + pad.bottom + gaps
                 }
             };
-            let total_min_h = max(min_h, self.nodes[id].min_height);
-            let base_h = match self.nodes[id].height {
+            let total_min_h = max(min_h, self.nodes[id].min.height);
+            let base_h = match self.nodes[id].size.height {
                 Length::Fixed(h) => {
-                    self.nodes[id].min_height = max(self.nodes[id].min_height, h);
-                    self.nodes[id].max_height = min(self.nodes[id].max_height, h);
+                    self.nodes[id].min.height = max(self.nodes[id].min.height, h);
+                    self.nodes[id].max.height = min(self.nodes[id].max.height, h);
                     h
                 }
                 _ => 0,
             };
-            let resolved_h = max(total_min_h, base_h).min(self.nodes[id].max_height);
-            self.nodes[id].current_height = resolved_h;
-            self.nodes[id].content_height = resolved_h;
-            self.nodes[id].min_height = total_min_h;
+            let resolved_h = max(total_min_h, base_h).min(self.nodes[id].max.height);
+            self.nodes[id].current_size.height = resolved_h;
+            self.nodes[id].content_size.height = resolved_h;
+            self.nodes[id].min.height = total_min_h;
         } else {
-            let base_h = match self.nodes[id].height {
+            let base_h = match self.nodes[id].size.height {
                 Length::Fixed(h) => {
-                    self.nodes[id].min_height = max(self.nodes[id].min_height, h);
-                    self.nodes[id].max_height = min(self.nodes[id].max_height, h);
+                    self.nodes[id].min.height = max(self.nodes[id].min.height, h);
+                    self.nodes[id].max.height = min(self.nodes[id].max.height, h);
                     h
                 }
                 _ => 0,
             };
-            let resolved_h = max(self.nodes[id].min_height, base_h).min(self.nodes[id].max_height);
-            self.nodes[id].current_height = resolved_h;
-            self.nodes[id].content_height = resolved_h;
+            let resolved_h = max(self.nodes[id].min.height, base_h).min(self.nodes[id].max.height);
+            self.nodes[id].current_size.height = resolved_h;
+            self.nodes[id].content_size.height = resolved_h;
         }
     }
 
@@ -643,15 +635,15 @@ impl LayoutEngine {
             let layout_dir = self.nodes[id].layout_dir;
             let pad = self.nodes[id].padding;
             let spacing = self.nodes[id].spacing;
-            let target_h = match self.nodes[id].height {
+            let target_h = match self.nodes[id].size.height {
                 Length::Grow => parent_height,
                 Length::Fixed(h) => h,
-                Length::Fit => self.nodes[id].current_height,
+                Length::Fit => self.nodes[id].current_size.height,
             };
-            let target_h = max(target_h, self.nodes[id].min_height)
-                .min(self.nodes[id].max_height)
+            let target_h = max(target_h, self.nodes[id].min.height)
+                .min(self.nodes[id].max.height)
                 .min(parent_height);
-            self.nodes[id].current_height = target_h;
+            self.nodes[id].current_size.height = target_h;
 
             let inner_h = (target_h
                 - pad.top
@@ -683,8 +675,8 @@ impl LayoutEngine {
                 let mut allocated = Vec::with_capacity(children.len());
                 let mut total_base = 0;
                 for &child in &children {
-                    allocated.push(self.nodes[child].current_height);
-                    total_base += self.nodes[child].current_height;
+                    allocated.push(self.nodes[child].current_size.height);
+                    total_base += self.nodes[child].current_size.height;
                 }
                 let mut remaining = inner_h - total_base;
                 if remaining < 0 {
@@ -694,7 +686,7 @@ impl LayoutEngine {
                         let shrinkables: Vec<usize> = children
                             .iter()
                             .enumerate()
-                            .filter(|(j, child)| allocated[*j] > self.nodes[**child].min_height)
+                            .filter(|(j, child)| allocated[*j] > self.nodes[**child].min.height)
                             .map(|(j, _)| j)
                             .collect();
                         if shrinkables.is_empty() {
@@ -704,7 +696,7 @@ impl LayoutEngine {
                         let mut used = 0;
                         for &j in &shrinkables {
                             let child = children[j];
-                            let reducible = allocated[j] - self.nodes[child].min_height;
+                            let reducible = allocated[j] - self.nodes[child].min.height;
                             let reduce_amt = min(reducible, reduce_each);
                             if reduce_amt > 0 {
                                 allocated[j] -= reduce_amt;
@@ -728,8 +720,8 @@ impl LayoutEngine {
                             .iter()
                             .enumerate()
                             .filter(|(j, child)| {
-                                matches!(self.nodes[**child].height, Length::Grow)
-                                    && allocated[*j] < self.nodes[**child].max_height
+                                matches!(self.nodes[**child].size.height, Length::Grow)
+                                    && allocated[*j] < self.nodes[**child].max.height
                             })
                             .map(|(j, _)| j)
                             .collect();
@@ -740,7 +732,7 @@ impl LayoutEngine {
                         let mut used = 0;
                         for &j in &growables {
                             let child = children[j];
-                            let addable = self.nodes[child].max_height - allocated[j];
+                            let addable = self.nodes[child].max.height - allocated[j];
                             let add_amt = min(addable, add_each);
                             if add_amt > 0 {
                                 allocated[j] += add_amt;
@@ -777,23 +769,22 @@ impl LayoutEngine {
                 }
             }
         } else {
-            let target_h = match self.nodes[id].height {
+            let target_h = match self.nodes[id].size.height {
                 Length::Grow => parent_height,
                 Length::Fixed(h) => h,
-                Length::Fit => self.nodes[id].current_height,
+                Length::Fit => self.nodes[id].current_size.height,
             };
-            let final_h = max(target_h, self.nodes[id].min_height)
-                .min(self.nodes[id].max_height)
+            let final_h = max(target_h, self.nodes[id].min.height)
+                .min(self.nodes[id].max.height)
                 .min(parent_height);
-            self.nodes[id].current_height = final_h;
+            self.nodes[id].current_size.height = final_h;
         }
     }
 
     // Phase 5: place all nodes (compute positions)
     fn place(&mut self, id: usize, x: i32, y: i32) -> (i32, i32) {
         // Set this nodes position
-        self.nodes[id].x = x;
-        self.nodes[id].y = y;
+        self.nodes[id].pos = Position::new(x, y);
         if let Some(child_idx) = self.nodes[id].first_child {
             let layout_dir = self.nodes[id].layout_dir;
             let pad = self.nodes[id].padding;
@@ -805,10 +796,10 @@ impl LayoutEngine {
             let mut idx = Some(child_idx);
             while let Some(child) = idx {
                 let is_abs = self.nodes[child].is_absolute;
-                let child_w = self.nodes[child].current_width;
-                let child_h = self.nodes[child].current_height;
-                let offx = self.nodes[child].offset_x;
-                let offy = self.nodes[child].offset_y;
+                let child_w = self.nodes[child].current_size.width;
+                let child_h = self.nodes[child].current_size.height;
+                let offx = self.nodes[child].offset_pos.x;
+                let offy = self.nodes[child].offset_pos.y;
                 let next = self.nodes[child].next_sibling;
                 if !is_abs {
                     match layout_dir {
@@ -829,6 +820,9 @@ impl LayoutEngine {
                 idx = next;
             }
         }
-        (self.nodes[id].current_width, self.nodes[id].current_height)
+        (
+            self.nodes[id].current_size.width,
+            self.nodes[id].current_size.height,
+        )
     }
 }

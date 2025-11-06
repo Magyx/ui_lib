@@ -46,12 +46,9 @@ impl<M> IntoElement for SimpleCanvas<M> {}
 impl<M> Widget<M> for SimpleCanvas<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
-            width: self.size.width,
-            height: self.size.height,
-            min_width: self.min.width,
-            min_height: self.min.height,
-            max_width: self.max.width,
-            max_height: self.max.height,
+            size: self.size,
+            min: self.min,
+            max: self.max,
             ..Default::default()
         }
     }

@@ -402,12 +402,9 @@ impl<M, Mode: TextMode> IntoElement for TextInput<M, Mode> {}
 impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     fn layout<'b>(&mut self, _ctx: &mut LayoutCtx<'b, M>) -> Node {
         Node {
-            width: self.size.width,
-            height: self.size.height,
-            min_width: self.min.width,
-            min_height: self.min.height,
-            max_width: self.max.width,
-            max_height: self.max.height,
+            size: self.size,
+            min: self.min,
+            max: self.max,
             ..Default::default()
         }
     }

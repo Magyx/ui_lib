@@ -22,8 +22,8 @@ impl<M> Widget<M> for Absolute<M> {
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node {
         let mut n = self.inner.as_mut().layout(ctx);
         n.is_absolute = true;
-        n.offset_x += self.offx;
-        n.offset_y += self.offy;
+        n.offset_pos.x += self.offx;
+        n.offset_pos.y += self.offy;
         n
     }
     fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
@@ -114,12 +114,9 @@ impl<M> IntoElement for Overlay<M> {}
 impl<M: 'static> Widget<M> for Overlay<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
-            width: self.size.width,
-            height: self.size.height,
-            min_width: self.min.width,
-            min_height: self.min.height,
-            max_width: self.max.width,
-            max_height: self.max.height,
+            size: self.size,
+            min: self.min,
+            max: self.max,
             layout_dir: Axis::Horizontal,
             padding: Padding {
                 left: self.padding.x,

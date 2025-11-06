@@ -162,12 +162,12 @@ impl<'a, M> Widget<M> for Text<'a> {
         let intrinsic_h = (line_count as i32).saturating_mul(line_px);
 
         Node {
-            width: self.size.width,
-            height: self.size.height,
-            min_width: self.min.width.max(intrinsic_w).min(self.max.width),
-            min_height: self.min.height.max(intrinsic_h).min(self.max.height),
-            max_width: self.max.width,
-            max_height: self.max.height,
+            size: self.size,
+            min: self
+                .min
+                .max(Size::new(intrinsic_w, intrinsic_h))
+                .min(self.max),
+            max: self.max,
             ..Default::default()
         }
     }

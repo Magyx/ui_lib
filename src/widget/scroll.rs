@@ -138,12 +138,9 @@ impl<M> IntoElement for Scrollable<M> {}
 impl<M: 'static> Widget<M> for Scrollable<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
-            width: self.size.width,
-            height: self.size.height,
-            min_width: self.min.width,
-            min_height: self.min.height,
-            max_width: self.max.width,
-            max_height: self.max.height,
+            size: self.size,
+            min: self.min,
+            max: self.max,
             clip_children: true,
             ..Default::default()
         }

@@ -150,8 +150,6 @@ macro_rules! define_vector {
     };
 }
 
-define_vector!(Vec2, 2, x, y);
-define_vector!(Vec3, 3, x, y, z);
 define_vector!(Vec4, 4, x, y, z, w);
 define_vector!(Size, 2, width, height);
 define_vector!(Position, 2, x, y);
