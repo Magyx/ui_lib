@@ -108,8 +108,6 @@ impl<'a> IntoElement for Text<'a> {}
 impl<'a, M> Widget<M> for Text<'a> {
     fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
         let wrap = self.wrap;
-        let text = self.text.clone();
-        let attrs = self.attrs.clone();
 
         let (intrinsic_w, line_count) = {
             let fs = ctx.text.font_system_mut();
@@ -117,7 +115,7 @@ impl<'a, M> Widget<M> for Text<'a> {
 
             // (a) Unwrapped measurement
             b.set_wrap(fs, Wrap::None);
-            b.set_text(fs, &text, &attrs, Shaping::Basic);
+            b.set_text(fs, &self.text, &self.attrs, Shaping::Basic);
             b.set_size(fs, None, None);
             b.shape_until_scroll(fs, false);
 
@@ -136,9 +134,9 @@ impl<'a, M> Widget<M> for Text<'a> {
             // (b) Minimal useful width with wrapping
             let min_break_w_i = if wrap != Wrap::None {
                 let mut longest = 0.0f32;
-                for piece in text.split_whitespace().filter(|s| !s.is_empty()) {
+                for piece in self.text.split_whitespace().filter(|s| !s.is_empty()) {
                     b.set_wrap(fs, Wrap::None);
-                    b.set_text(fs, piece, &attrs, Shaping::Basic);
+                    b.set_text(fs, piece, &self.attrs, Shaping::Basic);
                     b.set_size(fs, None, None);
                     b.shape_until_scroll(fs, false);
                     for run in b.layout_runs() {
@@ -174,13 +172,10 @@ impl<'a, M> Widget<M> for Text<'a> {
 
     fn min_height_for_width<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>, width: i32) -> Option<i32> {
         let fs = ctx.text.font_system_mut();
-        let wrap = self.wrap;
-        let text = self.text.clone();
-        let attrs = self.attrs.clone();
 
         let b = self.ensure_buffer(&mut ctx.ui.view_state, fs);
-        b.set_wrap(fs, wrap);
-        b.set_text(fs, &text, &attrs, Shaping::Basic);
+        b.set_wrap(fs, self.wrap);
+        b.set_text(fs, &self.text, &self.attrs, Shaping::Basic);
         b.set_size(fs, Some(width.max(1) as f32), None);
         b.shape_until_scroll(fs, false);
 
@@ -218,18 +213,13 @@ impl<'a, M> Widget<M> for Text<'a> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        const BASE_COLOR: cosmic_text::Color = cosmic_text::Color::rgba(255, 255, 255, 255);
-
-        let wrap = self.wrap;
-        let text = self.text.clone();
-        let attrs = self.attrs.clone();
-        let target_w = self.w.max(1) as f32;
+        const BASE_COLOR: Color = Color::rgba(255, 255, 255, 255);
 
         let fs = ctx.text.font_system_mut();
         let buf = self.ensure_buffer(ctx.view_state, fs);
-        buf.set_wrap(fs, wrap);
-        buf.set_text(fs, &text, &attrs, Shaping::Basic);
-        buf.set_size(fs, Some(target_w), None);
+        buf.set_wrap(fs, self.wrap);
+        buf.set_text(fs, &self.text, &self.attrs, Shaping::Basic);
+        buf.set_size(fs, Some(self.w.max(1) as f32), None);
         buf.shape_until_scroll(fs, false);
 
         for run in buf.layout_runs() {
@@ -245,13 +235,10 @@ impl<'a, M> Widget<M> for Text<'a> {
                     (self.y as f32 + glyph.y + run.line_y).round() as i32 - top,
                 );
 
-                let glyph_color = glyph.color_opt.unwrap_or(BASE_COLOR);
-                let tint = Color::rgba(
-                    glyph_color.r(),
-                    glyph_color.g(),
-                    glyph_color.b(),
-                    glyph_color.a(),
-                );
+                let tint = glyph
+                    .color_opt
+                    .map(|c| Color::rgba(c.r(), c.g(), c.b(), c.a()))
+                    .unwrap_or(BASE_COLOR);
 
                 let handle =
                     match ctx

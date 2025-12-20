@@ -295,32 +295,25 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             b.shape_until_scroll(fs, false);
         }
 
-        const BASE_COLOR: cosmic_text::Color = cosmic_text::Color::rgba(255, 255, 255, 255);
+        const BASE_COLOR: Color = Color::rgba(255, 255, 255, 255);
 
         for run in st.buffer.layout_runs() {
             for glyph in run.glyphs {
-                let (top_left, width, height, cache_key, tint) = {
-                    let (Position { x: left, y: top }, Size { width, height }, cache_key) =
-                        match ctx.text.get_glyph_data(glyph) {
-                            Some(v) => v,
-                            None => continue,
-                        };
+                let (Position { x: left, y: top }, Size { width, height }, cache_key) =
+                    match ctx.text.get_glyph_data(glyph) {
+                        Some(v) => v,
+                        None => continue,
+                    };
 
-                    let top_left = Position::new(
-                        (l as f32 + glyph.x).round() as i32 + left,
-                        (t as f32 + glyph.y + run.line_y).round() as i32 - top,
-                    );
+                let top_left = Position::new(
+                    (l as f32 + glyph.x).round() as i32 + left,
+                    (t as f32 + glyph.y + run.line_y).round() as i32 - top,
+                );
 
-                    let glyph_color = glyph.color_opt.unwrap_or(BASE_COLOR);
-                    let tint = Color::rgba(
-                        glyph_color.r(),
-                        glyph_color.g(),
-                        glyph_color.b(),
-                        glyph_color.a(),
-                    );
-
-                    (top_left, width, height, cache_key, tint)
-                };
+                let tint = glyph
+                    .color_opt
+                    .map(|c| Color::rgba(c.r(), c.g(), c.b(), c.a()))
+                    .unwrap_or(BASE_COLOR);
 
                 let handle =
                     match ctx
