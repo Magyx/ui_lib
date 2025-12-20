@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use ui::{
     event::{KeyEvent, KeyState, LogicalKey},
@@ -8,7 +8,7 @@ use ui::{
 
 use super::demos;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum View {
     Layout = 0,
     Interaction = 1,
@@ -17,6 +17,7 @@ pub enum View {
     Text = 4,
 }
 
+#[allow(dead_code)]
 impl View {
     const COUNT: u8 = 5;
 
@@ -31,7 +32,7 @@ impl View {
         }
     }
 
-    fn to_str(&self) -> &str {
+    fn to_str(self) -> &'static str {
         match self {
             View::Layout => "Layout",
             View::Interaction => "Interaction",
@@ -61,11 +62,11 @@ pub enum Message {
 pub struct Target {
     pub counter: u32,
     pub view: View,
-    pub fps: VecDeque<f32>,
+    pub fps: [f32; 5],
+    pub fps_idx: usize,
 
     pub slider: f32,
     pub name: String,
-    pub notes: String,
 }
 
 impl Default for Target {
@@ -73,11 +74,11 @@ impl Default for Target {
         Self {
             counter: 0,
             view: View::Layout,
-            fps: VecDeque::with_capacity(5),
+            fps: [0.0; 5],
+            fps_idx: Default::default(),
 
             slider: 50.0,
             name: String::new(),
-            notes: String::new(),
         }
     }
 }
@@ -184,9 +185,9 @@ mod update {
             None => return false,
         };
         if dir {
-            target.view = target.view.clone().next();
+            target.view = target.view.next();
         } else {
-            target.view = target.view.clone().prev();
+            target.view = target.view.prev();
         }
 
         if let super::View::Texture = target.view {
@@ -226,12 +227,9 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
     let target = state.per_target.entry(tid).or_default();
     match event {
         crate::Event::RedrawRequested => {
-            if target.fps.len() == 5 {
-                target.fps.pop_front();
-            }
-            target
-                .fps
-                .push_back(1.0 / engine.globals(tid).unwrap().delta_time);
+            let dt = engine.globals(tid).unwrap().delta_time;
+            target.fps[target.fps_idx] = 1.0 / dt;
+            target.fps_idx = (target.fps_idx + 1) % 5;
             false
         }
         crate::Event::Key(KeyEvent {
