@@ -2,29 +2,19 @@ use std::{any::Any, collections::HashMap, fmt::Debug};
 
 use crate::{context::*, layout::Node, model::*, primitive::Instance};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum Length {
+    #[default]
     Fit,
     Fixed(i32),
     Grow,
 }
 
-impl Default for Length {
-    fn default() -> Self {
-        Self::Fit
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum Axis {
+    #[default]
     Horizontal,
     Vertical,
-}
-
-impl Default for Axis {
-    fn default() -> Self {
-        Self::Horizontal
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
