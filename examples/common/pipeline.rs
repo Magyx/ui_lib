@@ -102,7 +102,7 @@ impl Pipeline for PlanetPipeline {
     }
 
     fn apply_pipeline(
-        &self,
+        &mut self,
         globals: &Globals,
         _texture_bindgroup: &wgpu::BindGroup,
         render_pass: &mut wgpu::RenderPass<'_>,

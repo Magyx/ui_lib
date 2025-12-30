@@ -493,7 +493,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         let _ = self.renderer.render(
             &self.gpu,
             target,
-            &self.pipeline_registry,
+            &mut self.pipeline_registry,
             &target.globals,
             &instances,
         );

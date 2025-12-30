@@ -99,7 +99,7 @@ impl Pipeline for UiPipeline {
     }
 
     fn apply_pipeline(
-        &self,
+        &mut self,
         globals: &Globals,
         texture_bindgroup: &wgpu::BindGroup,
         render_pass: &mut wgpu::RenderPass<'_>,

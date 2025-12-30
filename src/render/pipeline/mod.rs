@@ -31,7 +31,7 @@ pub trait Pipeline {
     );
 
     fn apply_pipeline(
-        &self,
+        &mut self,
         globals: &Globals,
         texture_bindgroup: &wgpu::BindGroup,
         render_pass: &mut wgpu::RenderPass<'_>,
@@ -99,16 +99,16 @@ impl PipelineRegistry {
     }
 
     pub(crate) fn apply_pipeline(
-        &self,
+        &mut self,
         key: &PipelineKey,
         globals: &Globals,
         texture_bindgroup: &wgpu::BindGroup,
         pass: &mut wgpu::RenderPass<'_>,
     ) {
         self.pipelines
-            .get(key)
+            .get_mut(key)
             .expect("Pipeline not registered!")
-            .as_ref()
+            .as_mut()
             .apply_pipeline(globals, texture_bindgroup, pass);
     }
 }

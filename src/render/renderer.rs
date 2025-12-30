@@ -64,7 +64,7 @@ impl Renderer {
         &self,
         gpu: &Gpu,
         target: &Target<'a, M>,
-        pipeline_registry: &PipelineRegistry,
+        pipeline_registry: &mut PipelineRegistry,
         globals: &Globals,
         instances: &[Instance],
     ) -> Result<(), wgpu::SurfaceError> {
