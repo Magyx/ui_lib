@@ -216,8 +216,19 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         view_state: &'b mut HashMap<Id, Box<dyn Any>>,
         fs: &mut cosmic_text::FontSystem,
     ) -> &'b mut TextInputViewState {
+        let desired = Metrics::relative(self.font_size, self.line_height);
+
         view_state
             .entry(self.id)
+            .and_modify(|e| {
+                if let Some(TextInputViewState { buffer, .. }) =
+                    e.downcast_mut::<TextInputViewState>()
+                    && (buffer.metrics().font_size != desired.font_size
+                        || buffer.metrics().line_height != desired.line_height)
+                {
+                    buffer.set_metrics(fs, desired);
+                }
+            })
             .or_insert_with(|| {
                 Box::new(TextInputViewState::new(
                     fs,

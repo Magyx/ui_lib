@@ -90,11 +90,21 @@ impl<'a> Text<'a> {
         view_state: &'b mut HashMap<Id, Box<dyn Any>>,
         fs: &mut cosmic_text::FontSystem,
     ) -> &'b mut Buffer {
+        let desired = Metrics::relative(self.font_size, self.line_height);
+
         let b = view_state
             .entry(self.id)
+            .and_modify(|e| {
+                if let Some(TextViewState { buffer, .. }) = e.downcast_mut::<TextViewState>()
+                    && (buffer.metrics().font_size != desired.font_size
+                        || buffer.metrics().line_height != desired.line_height)
+                {
+                    buffer.set_metrics(fs, desired);
+                }
+            })
             .or_insert_with(|| {
                 Box::new(TextViewState {
-                    buffer: Buffer::new(fs, Metrics::relative(self.font_size, self.line_height)),
+                    buffer: Buffer::new(fs, desired),
                 })
             })
             .downcast_mut::<TextViewState>()
