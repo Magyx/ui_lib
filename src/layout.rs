@@ -271,7 +271,7 @@ fn write_back<M>(
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Node {
+pub struct __Node {
     pub size: Size<Length>,
     pub min: Size<i32>,
     pub max: Size<i32>,
@@ -291,8 +291,21 @@ pub struct Node {
     pub(crate) next_sibling: Option<usize>,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Node {
+    pub size: Size<Length>,
+    pub min: Size<i32>,
+    pub max: Size<i32>,
+    pub layout_dir: Axis,
+    pub padding: Padding,
+    pub spacing: i32,
+    pub clip_children: bool,
+    pub is_absolute: bool,
+    pub offset_pos: Position<i32>,
+}
+
 pub struct LayoutEngine {
-    pub(crate) nodes: [Node; MAX_NODES],
+    pub(crate) nodes: [__Node; MAX_NODES],
     pub(crate) node_count: usize,
 
     debug: bool,
@@ -307,7 +320,7 @@ impl Default for LayoutEngine {
 impl LayoutEngine {
     pub fn new() -> Self {
         LayoutEngine {
-            nodes: [Node::default(); MAX_NODES],
+            nodes: [__Node::default(); MAX_NODES],
             node_count: 0,
 
             debug: false,
@@ -316,7 +329,7 @@ impl LayoutEngine {
     fn create_node(&mut self, size: Size<Length>, layout_dir: Axis, is_absolute: bool) -> usize {
         assert!(self.node_count < MAX_NODES);
         let id = self.node_count;
-        self.nodes[id] = Node {
+        self.nodes[id] = __Node {
             size,
             layout_dir,
             is_absolute,
