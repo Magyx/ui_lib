@@ -10,11 +10,11 @@ macro_rules! define_vector {
         }
 
         impl<T> $name<T> {
-            pub fn new($( $field: T ),+) -> Self {
+            pub const fn new($( $field: T ),+) -> Self {
                 Self { $( $field ),+ }
             }
 
-            pub fn splat(value: T) -> Self where T: Copy {
+            pub const fn splat(value: T) -> Self where T: Copy {
                 Self { $( $field: value ),+ }
             }
 
@@ -62,7 +62,7 @@ macro_rules! define_vector {
             }
         }
 
-                impl<T> core::ops::Add for $name<T>
+        impl<T> core::ops::Add for $name<T>
         where
             T: core::ops::Add<Output = T>,
         {
