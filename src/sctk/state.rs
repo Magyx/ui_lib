@@ -214,9 +214,9 @@ impl SctkState {
         if let Some(app_id) = &opts.app_id {
             window.set_app_id(app_id);
         }
-
         window.set_min_size(None);
         window.set_max_size(None);
+        window.commit();
 
         let mut surfaces = HashMap::with_capacity(1);
         let mut by_surface_id = HashMap::with_capacity(1);
@@ -314,12 +314,14 @@ impl SctkState {
         let xdg = self._xdg_shell.as_ref().expect("XDG shell not bound");
         let wl_surface = self._compositor.create_surface(qh);
         let window = xdg.create_window(wl_surface.clone(), opts.decorations, qh);
+
         window.set_title(&opts.title);
         if let Some(app_id) = &opts.app_id {
             window.set_app_id(app_id);
         }
         window.set_min_size(None);
         window.set_max_size(None);
+        window.commit();
 
         let sid = SurfaceId(window.wl_surface().id().protocol_id());
         self.by_surface_id
