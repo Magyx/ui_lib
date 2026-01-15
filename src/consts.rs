@@ -3,6 +3,7 @@ pub const DEFAULT_MAX_INSTANCES: u64 = 10_000;
 
 pub(crate) fn feature_backends() -> wgpu::Backends {
     if cfg!(any(feature = "metal", feature = "vulkan")) {
+        #[allow(unused)]
         let mut b = wgpu::Backends::empty();
         #[cfg(feature = "vulkan")]
         {

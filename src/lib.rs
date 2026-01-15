@@ -1,3 +1,4 @@
+#[allow(unused)]
 use crate::model::*;
 
 pub(crate) mod consts;
