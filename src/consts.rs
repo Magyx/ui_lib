@@ -40,7 +40,7 @@ pub(crate) fn default_backends() -> wgpu::Backends {
 pub(crate) fn default_instance_flags() -> wgpu::InstanceFlags {
     let mut flags = wgpu::InstanceFlags::empty();
 
-    #[cfg(feature = "env_logging")]
+    #[cfg(feature = "tracing")]
     {
         flags.insert(wgpu::InstanceFlags::DEBUG);
     }

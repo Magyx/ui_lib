@@ -185,6 +185,7 @@ fn frame_interval_from_monitor(window: &Window) -> Duration {
     Duration::from_nanos(ns as u64)
 }
 
+// TODO: winit can only have 1 target
 pub struct WinitApp<'a, M, S, V, U>
 where
     M: 'static + std::fmt::Debug,
@@ -318,6 +319,9 @@ where
                     &self.view,
                     &mut self.state,
                 );
+                if should_redraw {
+                    crate::profile::frame_mark();
+                }
             }
             _ => {
                 match event {
@@ -364,6 +368,7 @@ where
         ) -> bool
         + 'static,
 {
+    crate::profile::set_thread_name("ui-main");
     let event_loop = EventLoop::new()?;
     let mut app =
         WinitApp::<'a, M, S, V, U>::new(state, view, update, window_attrs, extra_pipelines);

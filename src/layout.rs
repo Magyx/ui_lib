@@ -41,27 +41,53 @@ pub fn run_layout<'a, M>(
     max_w: i32,
     max_h: i32,
 ) -> usize {
+    crate::scope!("layout::run_layout");
+
     layout_engine.reset();
     // 1) Build engine graph from the widget tree
-    let root_id = build_tree(layout_engine, ctx, root);
+    let root_id = {
+        crate::scope!("layout::build_tree");
+        build_tree(layout_engine, ctx, root)
+    };
 
     // 2) Width phases
-    layout_engine.measure_width(root_id);
-    layout_engine.assign_width(root_id, max_w);
+    {
+        crate::scope!("layout::measure_width");
+        layout_engine.measure_width(root_id);
+    }
+    {
+        crate::scope!("layout::assign_width");
+        layout_engine.assign_width(root_id, max_w);
+    }
 
     // 3) Height phases
     let mut cursor = 0usize;
-    post_width_query(root, layout_engine, ctx, &mut cursor);
+    {
+        crate::scope!("layout::post_width_query");
+        post_width_query(root, layout_engine, ctx, &mut cursor);
+    }
 
-    layout_engine.measure_height(root_id);
-    layout_engine.assign_height(root_id, max_h);
+    {
+        crate::scope!("layout::measure_height");
+        layout_engine.measure_height(root_id);
+    }
+    {
+        crate::scope!("layout::assign_height");
+        layout_engine.assign_height(root_id, max_h);
+    }
 
     // 4) Place everything starting at origin
-    layout_engine.place(root_id, 0, 0);
+    {
+        crate::scope!("layout::place");
+        layout_engine.place(root_id, 0, 0);
+    }
 
     // 5) Write results back to widgets in pre-order
     let mut cursor = 0usize;
-    write_back(root, layout_engine, &mut cursor, 0xCBF2_9CE4_8422_2325u64);
+    {
+        crate::scope!("layout::write_back");
+        write_back(root, layout_engine, &mut cursor, 0xCBF2_9CE4_8422_2325u64);
+    }
     root_id
 }
 
@@ -125,6 +151,7 @@ pub fn paint_tree<M>(
     out: &mut Vec<Instance>,
     parent_clip: Option<[i32; 4]>,
 ) {
+    crate::scope!("layout::paint_tree");
     __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, 0, 0);
 }
 #[allow(clippy::too_many_arguments)]

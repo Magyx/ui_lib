@@ -124,8 +124,8 @@ mod update {
                     let img = img.resize_exact(48, 48, image::imageops::FilterType::Triangle);
                     let rgba = img.to_rgba8();
                     let (w, h) = rgba.dimensions();
-                    #[cfg(feature = "env_logging")]
-                    log::info!(
+                    #[cfg(feature = "tracing")]
+                    tracing::info!(
                         "Loaded icon '{}' with dimensions: {}x{}",
                         path.display(),
                         w,
@@ -135,12 +135,12 @@ mod update {
                     if let Some(handle) = engine.load_texture_into_atlas(&mut atlas, w, h, &rgba) {
                         handles.push(handle);
                     } else {
-                        #[cfg(feature = "env_logging")]
-                        log::warn!("Atlas is full, cannot add icon '{}'", path.display());
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!("Atlas is full, cannot add icon '{}'", path.display());
                     }
                 } else {
-                    #[cfg(feature = "env_logging")]
-                    log::warn!("Couldn't load icon '{}'", path.display());
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("Couldn't load icon '{}'", path.display());
                 }
             }
         }
@@ -162,15 +162,15 @@ mod update {
             let rgba = img.to_rgba8();
             let (w, h) = rgba.dimensions();
 
-            #[cfg(feature = "env_logging")]
-            log::info!("Loaded image with dimensions: {}x{}", w, h);
+            #[cfg(feature = "tracing")]
+            tracing::info!("Loaded image with dimensions: {}x{}", w, h);
 
             let handle = engine.load_texture_rgba8(w, h, rgba.as_raw());
 
             state.background = Some(handle);
         } else {
-            #[cfg(feature = "env_logging")]
-            log::warn!("Couldn't load image!");
+            #[cfg(feature = "tracing")]
+            tracing::warn!("Couldn't load image!");
         }
     }
 

@@ -412,6 +412,7 @@ where
     while !loop_ctl.should_exit() && !st.closed {
         event_queue.blocking_dispatch(&mut st)?;
 
+        let mut any_rendered = false;
         while let Ok(ev) = rx.try_recv() {
             match ev.surface_id() {
                 Some(sid) => {
@@ -453,8 +454,13 @@ where
                 )
             };
             engine.render_if_needed(&tid, need, &view, &mut state);
+            any_rendered |= need;
         }
         st.needs_redraw = false;
+
+        if any_rendered {
+            crate::profile::frame_mark();
+        }
     }
 
     Ok(())

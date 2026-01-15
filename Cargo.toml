@@ -18,10 +18,9 @@ cosmic-text = { version = "0.14.2", default-features = false, features = [
 ] }
 smol_str = { version = "0.3.2", default-features = false }
 
-# Env Logging dependencies
-env_logger = { version = "0.11.8", default-features = false, optional = true }
-log = { version = "0.4.20", default-features = false, optional = true }
+# Logging dependencies
 tracing = { version = "0.1.41", default-features = false, optional = true }
+tracy-client = { version = "0.18.4", default-features = false, optional = true }
 
 # Winit dependencies
 winit = { version = "0.30.12", default-features = false, optional = true }
@@ -43,7 +42,7 @@ default = []
 vulkan = ["wgpu/vulkan"]
 metal = ["wgpu/metal"]
 
-env_logging = ["dep:env_logger", "dep:log", "dep:tracing"]
+tracing = ["dep:tracing"]
 winit = ["dep:winit"]
 sctk = [
   "dep:anyhow",
@@ -52,10 +51,28 @@ sctk = [
   "dep:calloop",
 ]
 
+tracy = [
+  "dep:tracy-client",
+  "tracy-client/enable",
+  "tracy-client/ondemand",
+  "tracy-client/only-localhost",
+]
+tracy_full = [
+  "tracy",
+  "tracy-client/system-tracing",
+  "tracy-client/sampling",
+  "tracy-client/context-switch-tracing",
+]
+tracy_broadcast = ["tracy", "tracy-client/broadcast"]
+tracy_code_transfer = ["tracy", "tracy-client/code-transfer"]
+tracy_widgets = ["tracy"]
+
 [dev-dependencies]
 winit = "0.30.12"
 anyhow = "1.0.100"
 image = { version = "0.25.8", features = ["jpeg"] }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
+tracing-log = "0.2.0"
 
 [[example]]
 name = "winit"

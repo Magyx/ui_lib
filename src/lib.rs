@@ -7,6 +7,7 @@ pub mod graphics;
 pub mod layout;
 pub mod model;
 pub mod primitive;
+pub mod profile;
 pub mod render;
 #[cfg(feature = "sctk")]
 pub mod sctk;

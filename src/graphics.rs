@@ -374,6 +374,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         state: &mut S,
         params: &P,
     ) -> bool {
+        crate::scope!("Engine::poll");
+
         let target = if let Some(t) = self.targets.get_mut(tid) {
             t
         } else {
@@ -386,6 +388,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         target.last_frame_time = now;
         target.globals.time = total.as_secs_f32();
         target.globals.delta_time = dt.as_secs_f32();
+
+        crate::plot!("ui.dt_ms", (target.globals.delta_time as f64) * 1000.0);
 
         let mut require_redraw = false;
 
@@ -427,6 +431,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             return;
         }
 
+        crate::scope!("Engine::render_if_needed");
+
         target.root = Some(view(tid, state));
         let root = target.root.as_mut().expect("root built");
 
@@ -436,18 +442,21 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         )
         .max(Size::new(1, 1));
 
-        let mut layout_ctx = LayoutCtx {
-            globals: &target.globals,
-            ui: &mut target.ctx,
-            text: &mut self.renderer.text,
+        let root_id = {
+            crate::scope!("layout");
+            let mut layout_ctx = LayoutCtx {
+                globals: &target.globals,
+                ui: &mut target.ctx,
+                text: &mut self.renderer.text,
+            };
+            layout::run_layout(
+                &mut self.layout_engine,
+                &mut layout_ctx,
+                root.as_mut(),
+                max.width,
+                max.height,
+            )
         };
-        let root_id = layout::run_layout(
-            &mut self.layout_engine,
-            &mut layout_ctx,
-            root.as_mut(),
-            max.width,
-            max.height,
-        );
 
         let mut event_ctx = EventCtx {
             event: None,
@@ -461,6 +470,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         let mut instances = Vec::new();
         {
+            crate::scope!("paint");
             let mut paint_ctx = PaintCtx {
                 globals: &target.globals,
                 text: &mut self.renderer.text,
@@ -487,6 +497,9 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 screen_clip,
             );
         }
+
+        crate::plot!("ui.instances", instances.len() as f64);
+        crate::plot!("ui.nodes", self.layout_engine.node_count as f64);
 
         target.globals.frame = target.globals.frame.wrapping_add(1);
 

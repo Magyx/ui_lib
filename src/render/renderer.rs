@@ -68,16 +68,20 @@ impl Renderer {
         globals: &Globals,
         instances: &[Instance],
     ) -> Result<(), wgpu::SurfaceError> {
-        let output = match target.surface.get_current_texture() {
-            Ok(o) => o,
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                target.surface.configure(&gpu.device, &target.config);
-                target.surface.get_current_texture()?
+        let output = {
+            crate::scope!("wgpu:get_current_texture");
+            match target.surface.get_current_texture() {
+                Ok(o) => o,
+                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                    target.surface.configure(&gpu.device, &target.config);
+                    target.surface.get_current_texture()?
+                }
+                Err(wgpu::SurfaceError::Timeout) => return Ok(()),
+                Err(e) => return Err(e),
             }
-            Err(wgpu::SurfaceError::Timeout) => return Ok(()),
-            Err(e) => return Err(e),
         };
 
+        crate::scope!("encode+submit");
         let view = &output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -181,6 +185,7 @@ impl Renderer {
             }
         }
 
+        crate::plot!("ui.draw_commands", draw_commands.len() as f64);
         gpu.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 

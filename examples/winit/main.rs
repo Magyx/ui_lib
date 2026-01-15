@@ -35,10 +35,10 @@ fn update<'a>(
 }
 
 fn main() {
-    #[cfg(feature = "env_logging")]
+    #[cfg(feature = "tracing")]
     {
-        env_logger::init();
-        log::info!("Starting winit example");
+        crate::common::trace::init();
+        tracing::info!("Starting winit example");
     }
     let attrs = WindowAttributes::default().with_title("My Test GUI lib");
 
