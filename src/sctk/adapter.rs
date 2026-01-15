@@ -1,11 +1,11 @@
 use super::{erased::SctkErased, handler::SctkHandler, msg::Emit};
+use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
+use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
 use smithay_client_toolkit::session_lock::{
     SessionLock, SessionLockSurface, SessionLockSurfaceConfigure,
 };
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use wayland_client::protocol::wl_output::WlOutput;
-use wayland_client::{Connection, QueueHandle};
 
 pub struct SctkAdapter<H, M, F>
 where

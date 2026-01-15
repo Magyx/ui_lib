@@ -19,13 +19,15 @@ use crate::{
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
-    reexports::client::{Connection, QueueHandle, globals::registry_queue_init},
+    reexports::client::{
+        Connection, Proxy, QueueHandle, globals::registry_queue_init,
+        protocol::wl_surface::WlSurface,
+    },
     registry::RegistryState,
     seat::SeatState,
     session_lock::SessionLockState,
     shell::{wlr_layer::LayerShell, xdg::XdgShell},
 };
-use wayland_client::{Proxy, protocol::wl_surface::WlSurface};
 
 pub use smithay_client_toolkit::shell::{
     wlr_layer::{Anchor, KeyboardInteractivity, Layer},

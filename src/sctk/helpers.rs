@@ -1,14 +1,13 @@
-use smithay_client_toolkit::{output::OutputState, seat::keyboard::Keysym};
+use smithay_client_toolkit::{
+    output::OutputState, reexports::client::protocol::wl_output::WlOutput, seat::keyboard::Keysym,
+};
 use smol_str::ToSmolStr;
 
 use crate::{event::LogicalKey, sctk::OutputSet};
 
 use super::OutputSelector;
 
-pub(super) fn pick_output(
-    outputs: &OutputState,
-    sel: &OutputSelector,
-) -> Option<wayland_client::protocol::wl_output::WlOutput> {
+pub(super) fn pick_output(outputs: &OutputState, sel: &OutputSelector) -> Option<WlOutput> {
     use OutputSelector::*;
 
     match sel {
@@ -39,10 +38,7 @@ pub(super) fn pick_output(
     }
 }
 
-pub(super) fn pick_outputs(
-    outputs: &OutputState,
-    sel: &OutputSet,
-) -> Vec<wayland_client::protocol::wl_output::WlOutput> {
+pub(super) fn pick_outputs(outputs: &OutputState, sel: &OutputSet) -> Vec<WlOutput> {
     match sel {
         OutputSet::All => outputs.outputs().collect(),
         OutputSet::List(list) => list

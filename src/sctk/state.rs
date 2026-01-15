@@ -6,7 +6,19 @@ use smithay_client_toolkit::{
     delegate_registry, delegate_seat, delegate_session_lock, delegate_xdg_shell,
     delegate_xdg_window,
     output::{OutputHandler, OutputState},
-    reexports::calloop::channel as loop_channel,
+    reexports::{
+        calloop::channel as loop_channel,
+        client::{
+            Connection, Proxy, QueueHandle,
+            protocol::{
+                wl_keyboard::WlKeyboard,
+                wl_output::{Transform, WlOutput},
+                wl_pointer::WlPointer,
+                wl_seat::WlSeat,
+                wl_surface::WlSurface,
+            },
+        },
+    },
     registry::{ProvidesRegistryState, RegistryState},
     seat::{
         Capability, SeatHandler, SeatState,
@@ -21,13 +33,6 @@ use smithay_client_toolkit::{
             XdgShell,
             window::{Window, WindowHandler},
         },
-    },
-};
-use wayland_client::{
-    Connection, Proxy, QueueHandle,
-    protocol::{
-        wl_keyboard::WlKeyboard, wl_output::WlOutput, wl_pointer::WlPointer, wl_seat::WlSeat,
-        wl_surface::WlSurface,
     },
 };
 
@@ -457,7 +462,7 @@ impl CompositorHandler for SctkState {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _surface: &WlSurface,
-        _new_transform: wayland_client::protocol::wl_output::Transform,
+        _new_transform: Transform,
     ) {
     }
 }
@@ -790,7 +795,7 @@ impl KeyboardHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _keyboard: &wayland_client::protocol::wl_keyboard::WlKeyboard,
+        _keyboard: &WlKeyboard,
         _serial: u32,
         modifiers: Modifiers,
         _raw_modifiers: RawModifiers,

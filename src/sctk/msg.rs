@@ -1,4 +1,4 @@
-use wayland_backend::smallvec::SmallVec;
+use smithay_client_toolkit::reexports::client::backend::smallvec::SmallVec;
 
 pub enum Emit<M> {
     None,

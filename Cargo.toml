@@ -32,8 +32,7 @@ smithay-client-toolkit = { version = "0.20.0", default-features = false, feature
   "calloop",
   "xkbcommon",
 ], optional = true }
-wayland-client = { version = "0.31", default-features = false, optional = true }
-wayland-backend = { version = "0.3", features = [
+wayland-backend = { version = "0.3", default-features = false, features = [
   "client_system",
 ], optional = true }
 calloop = { version = "0.14", optional = true }
@@ -49,7 +48,6 @@ winit = ["dep:winit"]
 sctk = [
   "dep:anyhow",
   "dep:smithay-client-toolkit",
-  "dep:wayland-client",
   "dep:wayland-backend",
   "dep:calloop",
 ]

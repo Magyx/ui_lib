@@ -1,6 +1,8 @@
+use smithay_client_toolkit::reexports::client::{
+    Connection, QueueHandle, protocol::wl_output::WlOutput,
+};
+
 use super::msg::Emit;
-use wayland_client::protocol::wl_output::WlOutput;
-use wayland_client::{Connection, QueueHandle};
 
 #[allow(
     unused_variables,

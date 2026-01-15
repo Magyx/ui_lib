@@ -1,9 +1,7 @@
-use smithay_client_toolkit::session_lock::{
-    SessionLock, SessionLockSurface, SessionLockSurfaceConfigure,
+use smithay_client_toolkit::{
+    reexports::client::{Connection, QueueHandle, protocol::wl_output::WlOutput},
+    session_lock::{SessionLock, SessionLockSurface, SessionLockSurfaceConfigure},
 };
-// ui/sctk_erased.rs
-use wayland_client::protocol::wl_output::WlOutput;
-use wayland_client::{Connection, QueueHandle};
 
 #[allow(clippy::too_many_arguments)]
 pub trait SctkErased {
