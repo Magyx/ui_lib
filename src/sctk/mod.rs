@@ -117,9 +117,25 @@ impl Default for XdgOptions {
 }
 
 #[derive(Clone, Debug)]
+pub struct LockOptions {
+    pub size: Size<u32>,
+    pub output: Option<OutputSet>,
+}
+
+impl Default for LockOptions {
+    fn default() -> Self {
+        Self {
+            size: Size::new(640, 360),
+            output: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum Options {
     Layer(LayerOptions),
     Xdg(XdgOptions),
+    Lock(LockOptions),
 }
 
 /// Platform event type for the SCTK backend.
@@ -383,6 +399,22 @@ where
                 tx,
             )?
         }
+        Options::Lock(lock_options) => {
+            let mut st = state::SctkState::new(
+                compositor,
+                None,
+                None,
+                outputs,
+                seats,
+                registry,
+                session_lock,
+                sctk_handler,
+                tx,
+            );
+
+            st.lock_session(&qh, lock_options)?;
+            st
+        }
     };
 
     // 4) Create engine and attach surfaces
@@ -442,9 +474,9 @@ where
             }
         }
 
-        for (_, &tid) in sid_to_tid.iter() {
+        for (sid, &tid) in sid_to_tid.iter() {
             let need = if st.needs_redraw {
-                true
+                st.surfaces.get(sid).map(|s| s.configured).unwrap_or(true)
             } else {
                 engine.poll(
                     &tid,
@@ -462,6 +494,10 @@ where
             crate::profile::frame_mark();
         }
     }
+
+    st.unlock_session();
+    conn.flush()?;
+    event_queue.roundtrip(&mut st)?;
 
     Ok(())
 }
@@ -540,6 +576,46 @@ where
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
 
     run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Xdg(opts), move |engine| {
+        for (key, factory) in pipelines.iter().copied() {
+            engine.register_pipeline(crate::render::pipeline::PipelineKey::Other(key), factory);
+        }
+    })
+}
+
+pub fn run_lock<'a, M, S, H, V, U>(
+    state: S,
+    view: V,
+    update: U,
+    opts: LockOptions,
+) -> anyhow::Result<()>
+where
+    M: 'static + std::fmt::Debug + Clone + Send,
+    H: handler::SctkHandler<M> + 'static,
+    V: Fn(&TargetId, &S) -> Element<M> + 'static,
+    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
+        + 'static,
+{
+    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Lock(opts), |_| {})
+}
+
+pub fn run_lock_with<'a, M, S, H, V, U, I>(
+    state: S,
+    view: V,
+    update: U,
+    opts: LockOptions,
+    extra_pipelines: I,
+) -> anyhow::Result<()>
+where
+    M: 'static + std::fmt::Debug + Clone + Send,
+    H: handler::SctkHandler<M> + 'static,
+    V: Fn(&TargetId, &S) -> Element<M> + 'static,
+    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
+        + 'static,
+    I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
+{
+    let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
+
+    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Lock(opts), move |engine| {
         for (key, factory) in pipelines.iter().copied() {
             engine.register_pipeline(crate::render::pipeline::PipelineKey::Other(key), factory);
         }

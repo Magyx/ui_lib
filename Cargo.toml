@@ -85,3 +85,7 @@ required-features = ["sctk"]
 [[example]]
 name = "sctk-window"
 required-features = ["sctk"]
+
+[[example]]
+name = "sctk-lock"
+required-features = ["sctk"]

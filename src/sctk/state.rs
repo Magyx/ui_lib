@@ -38,7 +38,7 @@ use smithay_client_toolkit::{
 
 use crate::{
     model::{Position, Size},
-    sctk::{LayerOptions, OutputSelector, OutputSet, SurfaceId, XdgOptions},
+    sctk::{LayerOptions, LockOptions, OutputSelector, OutputSet, SurfaceId, XdgOptions},
 };
 
 use super::{SctkEvent, erased::SctkErased, helpers};
@@ -51,10 +51,11 @@ enum SurfaceRole {
 }
 
 pub struct SurfaceRec {
+    pub configured: bool,
     pub wl_surface: WlSurface,
+    pub size: Size<u32>,
     role: SurfaceRole,
     _output: WlOutput,
-    pub size: Size<u32>,
 }
 
 pub struct SctkState {
@@ -71,6 +72,7 @@ pub struct SctkState {
     pub surfaces: HashMap<SurfaceId, SurfaceRec>,
     by_surface_id: HashMap<u32, SurfaceId>,
     kbd_focus: Option<SurfaceId>,
+    active_lock: Option<SessionLock>,
 
     // event queue for the generic runner
     handler: Box<dyn SctkErased>,
@@ -104,6 +106,7 @@ impl SctkState {
             surfaces: HashMap::new(),
             by_surface_id: HashMap::new(),
             kbd_focus: None,
+            active_lock: None,
 
             handler,
             event_tx,
@@ -166,10 +169,11 @@ impl SctkState {
             surfaces.insert(
                 sid,
                 SurfaceRec {
+                    configured: false,
                     wl_surface: wl,
+                    size: opts.size,
                     role: SurfaceRole::Layer(layer),
                     _output: out,
-                    size: opts.size,
                 },
             );
         }
@@ -186,6 +190,7 @@ impl SctkState {
             surfaces,
             by_surface_id,
             kbd_focus: None,
+            active_lock: None,
 
             handler,
             event_tx,
@@ -225,14 +230,15 @@ impl SctkState {
         surfaces.insert(
             sid,
             SurfaceRec {
+                configured: false,
                 wl_surface: window.wl_surface().clone(),
+                size: opts.size,
                 role: SurfaceRole::Xdg(window),
                 _output: super::helpers::pick_output(
                     &outputs,
                     &opts.output.unwrap_or(super::OutputSelector::First),
                 )
                 .unwrap_or_else(|| outputs.outputs().next().expect("no outputs")),
-                size: opts.size,
             },
         );
 
@@ -248,6 +254,8 @@ impl SctkState {
             surfaces,
             by_surface_id,
             kbd_focus: None,
+            active_lock: None,
+
             handler,
             event_tx,
             closed: false,
@@ -295,10 +303,11 @@ impl SctkState {
             self.surfaces.insert(
                 sid,
                 SurfaceRec {
+                    configured: false,
                     wl_surface: wl,
+                    size: opts.size,
                     role: SurfaceRole::Layer(layer),
                     _output: outp,
-                    size: opts.size,
                 },
             );
             out.push((sid, opts.size));
@@ -334,41 +343,61 @@ impl SctkState {
         self.surfaces.insert(
             sid,
             SurfaceRec {
+                configured: false,
                 wl_surface: window.wl_surface().clone(),
+                size: opts.size,
                 role: SurfaceRole::Xdg(window),
                 _output: output,
-                size: opts.size,
             },
         );
         (sid, opts.size)
     }
 
-    pub fn enter_lock_mode(
+    pub fn lock_session(
         &mut self,
         qh: &QueueHandle<Self>,
-        size: Size<u32>,
-        outputs_sel: &OutputSet,
-    ) -> anyhow::Result<SessionLock> {
+        opts: LockOptions,
+    ) -> anyhow::Result<()> {
         let lock = self.session_lock.lock(qh)?;
+        let chosen = super::helpers::pick_outputs(
+            &self.outputs,
+            opts.output
+                .as_ref()
+                .unwrap_or(&OutputSet::One(OutputSelector::First)),
+        );
 
-        let chosen = helpers::pick_outputs(&self.outputs, outputs_sel);
+        self.active_lock = Some(lock.clone());
+
         for out in chosen {
             let wl_surface = self._compositor.create_surface(qh);
             let lock_surface = lock.create_lock_surface(wl_surface.clone(), &out, qh);
+
             let sid = SurfaceId(wl_surface.id().protocol_id());
             self.by_surface_id
                 .insert(wl_surface.id().protocol_id(), sid);
             self.surfaces.insert(
                 sid,
                 SurfaceRec {
+                    configured: false,
                     wl_surface,
+                    size: opts.size,
                     role: SurfaceRole::Lock(lock_surface),
                     _output: out,
-                    size,
                 },
             );
         }
-        Ok(lock)
+
+        self.needs_redraw = true;
+        Ok(())
+    }
+
+    /// Be sure to flush and/or let another event cycle happen.
+    pub fn unlock_session(&mut self) {
+        if let Some(lock) = self.active_lock.take()
+            && lock.is_locked()
+        {
+            lock.unlock();
+        }
     }
 }
 
@@ -489,6 +518,8 @@ impl LayerShellHandler for SctkState {
         if let Some(sid) = self.by_surface_id.get(&lid).copied()
             && let Some(rec) = self.surfaces.get_mut(&sid)
         {
+            rec.configured = true;
+
             let (w, h) = configure.new_size;
             if w != 0 && h != 0 {
                 let new_size = Size::new(w, h);
@@ -527,6 +558,8 @@ impl WindowHandler for SctkState {
             && let Some(rec) = self.surfaces.get_mut(&sid)
             && let (Some(w), Some(h)) = configure.new_size
         {
+            rec.configured = true;
+
             let new_size = Size::new(w.get(), h.get());
             if new_size != rec.size {
                 rec.size = new_size;
@@ -558,6 +591,8 @@ impl SessionLockHandler for SctkState {
         qh: &QueueHandle<Self>,
         session_lock: smithay_client_toolkit::session_lock::SessionLock,
     ) {
+        self.active_lock = None;
+
         for (sid, key) in self
             .surfaces
             .iter()
@@ -576,6 +611,7 @@ impl SessionLockHandler for SctkState {
                 self.kbd_focus = None;
             }
         }
+
         self.handler.finished(conn, qh, session_lock);
     }
 
@@ -591,6 +627,8 @@ impl SessionLockHandler for SctkState {
         if let Some(sid) = self.by_surface_id.get(&lid).copied()
             && let Some(rec) = self.surfaces.get_mut(&sid)
         {
+            rec.configured = true;
+
             let (w, h) = configure.new_size;
             if w != 0 && h != 0 {
                 let new_size = Size::new(w, h);
@@ -605,9 +643,8 @@ impl SessionLockHandler for SctkState {
         }
 
         surface.wl_surface().commit();
-        self.needs_redraw = true;
-
         self.handler.configure(conn, qh, surface, configure, serial);
+        self.needs_redraw = true;
     }
 }
 
