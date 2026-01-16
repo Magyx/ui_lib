@@ -38,14 +38,18 @@ pub(super) fn pick_output(outputs: &OutputState, sel: &OutputSelector) -> Option
     }
 }
 
-pub(super) fn pick_outputs(outputs: &OutputState, sel: &OutputSet) -> Vec<WlOutput> {
-    match sel {
-        OutputSet::All => outputs.outputs().collect(),
-        OutputSet::List(list) => list
+pub(super) fn pick_outputs(outputs: &OutputState, set: &OutputSet) -> Vec<Option<WlOutput>> {
+    use OutputSet::*;
+
+    match set {
+        All => outputs.outputs().map(Some).collect(),
+        List(list) => list
             .iter()
             .filter_map(|s| pick_output(outputs, s))
+            .map(Some)
             .collect(),
-        OutputSet::One(s) => pick_output(outputs, s).into_iter().collect(),
+        One(s) => pick_output(outputs, s).into_iter().map(Some).collect(),
+        Active => vec![None],
     }
 }
 

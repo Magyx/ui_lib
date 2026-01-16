@@ -47,6 +47,8 @@ pub mod state;
 pub enum OutputSet {
     /// Use single-output selector
     One(OutputSelector),
+    /// Use the last active output.
+    Active,
     /// Mirror the surface to every compositor output
     All,
     /// Explicit list

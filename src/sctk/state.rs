@@ -55,7 +55,7 @@ pub struct SurfaceRec {
     pub wl_surface: WlSurface,
     pub size: Size<u32>,
     role: SurfaceRole,
-    _output: WlOutput,
+    _output: Option<WlOutput>,
 }
 
 pub struct SctkState {
@@ -116,7 +116,7 @@ impl SctkState {
     }
 
     fn make_surface(
-        out: &WlOutput,
+        out: Option<&WlOutput>,
         compositor: &CompositorState,
         qh: &QueueHandle<Self>,
         opts: &LayerOptions,
@@ -128,7 +128,7 @@ impl SctkState {
             wl_surface.clone(),
             opts.layer,
             opts.namespace.as_ref(),
-            Some(out),
+            out,
         );
         layer_surface.set_anchor(opts.anchors);
         layer_surface.set_size(opts.size.width, opts.size.height);
@@ -153,17 +153,14 @@ impl SctkState {
         handler: Box<dyn SctkErased>,
         event_tx: loop_channel::Sender<SctkEvent>,
     ) -> anyhow::Result<Self> {
-        let chosen = helpers::pick_outputs(
-            &outputs,
-            opts.output
-                .as_ref()
-                .unwrap_or(&OutputSet::One(OutputSelector::First)),
-        );
+        let chosen =
+            helpers::pick_outputs(&outputs, opts.output.as_ref().unwrap_or(&OutputSet::Active));
 
         let mut surfaces = HashMap::new();
         let mut by_surface_id = HashMap::new();
         for out in chosen {
-            let (wl, layer) = Self::make_surface(&out, &compositor, qh, &opts, &layer_shell);
+            let (wl, layer) =
+                Self::make_surface(out.as_ref(), &compositor, qh, &opts, &layer_shell);
             let sid = SurfaceId(wl.id().protocol_id());
             by_surface_id.insert(layer.wl_surface().id().protocol_id(), sid);
             surfaces.insert(
@@ -197,6 +194,41 @@ impl SctkState {
             closed: false,
             needs_redraw: true,
         })
+    }
+
+    pub fn spawn_layer_surfaces(
+        &mut self,
+        qh: &QueueHandle<Self>,
+        opts: LayerOptions,
+    ) -> Vec<(SurfaceId, Size<u32>)> {
+        let layer_shell = self._layer_shell.as_ref().expect("Layer shell not bound");
+        let chosen = super::helpers::pick_outputs(
+            &self.outputs,
+            opts.output
+                .as_ref()
+                .unwrap_or(&OutputSet::One(OutputSelector::First)),
+        );
+
+        let mut surfaces = Vec::new();
+        for out in chosen {
+            let (wl, layer) =
+                Self::make_surface(out.as_ref(), &self._compositor, qh, &opts, layer_shell);
+            let sid = SurfaceId(wl.id().protocol_id());
+            self.by_surface_id
+                .insert(layer.wl_surface().id().protocol_id(), sid);
+            self.surfaces.insert(
+                sid,
+                SurfaceRec {
+                    configured: false,
+                    wl_surface: wl,
+                    size: opts.size,
+                    role: SurfaceRole::Layer(layer),
+                    _output: out,
+                },
+            );
+            surfaces.push((sid, opts.size));
+        }
+        surfaces
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -237,8 +269,7 @@ impl SctkState {
                 _output: super::helpers::pick_output(
                     &outputs,
                     &opts.output.unwrap_or(super::OutputSelector::First),
-                )
-                .unwrap_or_else(|| outputs.outputs().next().expect("no outputs")),
+                ),
             },
         );
 
@@ -261,58 +292,6 @@ impl SctkState {
             closed: false,
             needs_redraw: true,
         })
-    }
-
-    fn emit_event(&self, ev: SctkEvent) {
-        let _ = self.event_tx.send(ev);
-    }
-
-    fn remove_surface_by_wl(&mut self, wl_surface: &WlSurface) {
-        let key = wl_surface.id().protocol_id();
-        self.remove_surface_by_surface_id(SurfaceId(key));
-    }
-
-    pub fn remove_surface_by_surface_id(&mut self, sid: SurfaceId) {
-        if let Some(sid) = self.by_surface_id.remove(&sid.0) {
-            self.surfaces.remove(&sid);
-            if self.kbd_focus == Some(sid) {
-                self.kbd_focus = None;
-            }
-        }
-    }
-
-    pub fn spawn_layer_surfaces(
-        &mut self,
-        qh: &QueueHandle<Self>,
-        opts: LayerOptions,
-    ) -> Vec<(SurfaceId, Size<u32>)> {
-        let layer_shell = self._layer_shell.as_ref().expect("Layer shell not bound");
-        let chosen = super::helpers::pick_outputs(
-            &self.outputs,
-            opts.output
-                .as_ref()
-                .unwrap_or(&OutputSet::One(OutputSelector::First)),
-        );
-
-        let mut out = Vec::new();
-        for outp in chosen {
-            let (wl, layer) = Self::make_surface(&outp, &self._compositor, qh, &opts, layer_shell);
-            let sid = SurfaceId(wl.id().protocol_id());
-            self.by_surface_id
-                .insert(layer.wl_surface().id().protocol_id(), sid);
-            self.surfaces.insert(
-                sid,
-                SurfaceRec {
-                    configured: false,
-                    wl_surface: wl,
-                    size: opts.size,
-                    role: SurfaceRole::Layer(layer),
-                    _output: outp,
-                },
-            );
-            out.push((sid, opts.size));
-        }
-        out
     }
 
     pub fn spawn_window(
@@ -338,8 +317,7 @@ impl SctkState {
         let output = super::helpers::pick_output(
             &self.outputs,
             &opts.output.take().unwrap_or(OutputSelector::First),
-        )
-        .unwrap_or_else(|| self.outputs.outputs().next().expect("no outputs"));
+        );
         self.surfaces.insert(
             sid,
             SurfaceRec {
@@ -353,18 +331,38 @@ impl SctkState {
         (sid, opts.size)
     }
 
+    fn emit_event(&self, ev: SctkEvent) {
+        let _ = self.event_tx.send(ev);
+    }
+
+    fn remove_surface_by_wl(&mut self, wl_surface: &WlSurface) {
+        let key = wl_surface.id().protocol_id();
+        self.remove_surface_by_surface_id(SurfaceId(key));
+    }
+
+    pub fn remove_surface_by_surface_id(&mut self, sid: SurfaceId) {
+        if let Some(sid) = self.by_surface_id.remove(&sid.0) {
+            self.surfaces.remove(&sid);
+            if self.kbd_focus == Some(sid) {
+                self.kbd_focus = None;
+            }
+        }
+    }
+
     pub fn lock_session(
         &mut self,
         qh: &QueueHandle<Self>,
         opts: LockOptions,
     ) -> anyhow::Result<()> {
         let lock = self.session_lock.lock(qh)?;
-        let chosen = super::helpers::pick_outputs(
+        let chosen: Vec<WlOutput> = super::helpers::pick_outputs(
             &self.outputs,
-            opts.output
-                .as_ref()
-                .unwrap_or(&OutputSet::One(OutputSelector::First)),
-        );
+            opts.output.as_ref().unwrap_or(&OutputSet::Active),
+        )
+        .iter()
+        .flatten()
+        .cloned()
+        .collect();
 
         self.active_lock = Some(lock.clone());
 
@@ -382,7 +380,7 @@ impl SctkState {
                     wl_surface,
                     size: opts.size,
                     role: SurfaceRole::Lock(lock_surface),
-                    _output: out,
+                    _output: Some(out),
                 },
             );
         }
