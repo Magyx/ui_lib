@@ -182,13 +182,28 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             .create_surface(target.clone())
             .expect("wgpu: failed to create surface (window/display handle mismatch?)");
 
+        // TODO: should add configurability
         let surface_caps = surface.get_capabilities(&self.gpu.adapter);
-        let surface_format = surface_caps
+        let format = surface_caps
             .formats
             .iter()
             .find(|f| f.is_srgb())
             .copied()
-            .unwrap_or(surface_caps.formats[0]);
+            .unwrap_or(wgpu::TextureFormat::Bgra8UnormSrgb);
+
+        let present_mode = if surface_caps
+            .present_modes
+            .contains(&wgpu::PresentMode::AutoVsync)
+        {
+            wgpu::PresentMode::AutoVsync
+        } else {
+            surface_caps
+                .present_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::PresentMode::Fifo)
+        };
+
         let alpha_mode = if surface_caps
             .alpha_modes
             .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
@@ -200,14 +215,19 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         {
             wgpu::CompositeAlphaMode::Inherit
         } else {
-            surface_caps.alpha_modes[0]
+            surface_caps
+                .alpha_modes
+                .first()
+                .copied()
+                .unwrap_or(wgpu::CompositeAlphaMode::PreMultiplied)
         };
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
+            format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode,
             alpha_mode,
             view_formats: vec![],
             desired_maximum_frame_latency: 1,
