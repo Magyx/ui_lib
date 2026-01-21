@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use ui::{
     event::{KeyEvent, KeyState, LogicalKey},
@@ -90,6 +90,7 @@ pub struct State {
     pub background: Option<ui::render::texture::TextureHandle>,
     pub icon_atlas: Option<ui::render::texture::Atlas>,
     pub icons: Vec<ui::render::texture::TextureHandle>,
+    pub svg_icons: Vec<PathBuf>,
 }
 
 mod update {
@@ -103,8 +104,11 @@ mod update {
             return;
         }
 
-        let mut atlas = engine.create_atlas(1024, 1024);
+        const MAX_DEMO_ICONS: usize = 16;
+
+        let mut atlas = engine.create_atlas(512, 512);
         let mut handles = Vec::new();
+        let mut svg_paths = Vec::with_capacity(MAX_DEMO_ICONS);
 
         if let Ok(entries) = std::fs::read_dir("assets/open-iconic/png/") {
             for entry in entries.flatten() {
@@ -126,7 +130,7 @@ mod update {
                     let (w, h) = rgba.dimensions();
                     #[cfg(feature = "tracing")]
                     tracing::info!(
-                        "Loaded icon '{}' with dimensions: {}x{}",
+                        "Loaded png icon '{}' with dimensions: {}x{}",
                         path.display(),
                         w,
                         h
@@ -134,6 +138,9 @@ mod update {
 
                     if let Some(handle) = engine.load_texture_into_atlas(&mut atlas, w, h, &rgba) {
                         handles.push(handle);
+                        if handles.len() >= MAX_DEMO_ICONS {
+                            break;
+                        }
                     } else {
                         #[cfg(feature = "tracing")]
                         tracing::warn!("Atlas is full, cannot add icon '{}'", path.display());
@@ -145,8 +152,24 @@ mod update {
             }
         }
 
+        if let Ok(entries) = std::fs::read_dir("assets/open-iconic/svg/") {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("svg") {
+                    continue;
+                }
+                #[cfg(feature = "tracing")]
+                tracing::info!("Loaded svg icon '{}'", path.display(),);
+                svg_paths.push(path);
+                if svg_paths.len() >= MAX_DEMO_ICONS {
+                    break;
+                }
+            }
+        }
+
         state.icon_atlas = Some(atlas);
         state.icons = handles;
+        state.svg_icons = svg_paths;
     }
 
     fn ensure_background_loaded<'a>(

@@ -36,6 +36,9 @@ wayland-backend = { version = "0.3", default-features = false, features = [
 ], optional = true }
 calloop = { version = "0.14", optional = true }
 
+# svg widget
+resvg = { version = "0.46.0", default-features = false, optional = true }
+
 [features]
 default = []
 
@@ -66,6 +69,14 @@ tracy_full = [
 tracy_broadcast = ["tracy", "tracy-client/broadcast"]
 tracy_code_transfer = ["tracy", "tracy-client/code-transfer"]
 tracy_widgets = ["tracy"]
+
+svg = [
+  "dep:resvg",
+  "resvg/text",
+  "resvg/system-fonts",
+  "resvg/memmap-fonts",
+  "resvg/raster-images",
+]
 
 [dev-dependencies]
 winit = "0.30.12"

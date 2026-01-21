@@ -441,6 +441,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         view: &impl Fn(&TargetId, &S) -> Element<M>,
         state: &mut S,
     ) {
+        // TODO: need to invalidate and cleanup target.view_state
         let target = if let Some(t) = self.targets.get_mut(tid) {
             t
         } else {

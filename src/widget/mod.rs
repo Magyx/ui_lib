@@ -134,3 +134,8 @@ pub use text_input::{TextArea, TextColors, TextField};
 
 mod scroll;
 pub use scroll::Scrollable;
+
+#[cfg(feature = "svg")]
+mod svg;
+#[cfg(feature = "svg")]
+pub use svg::Svg;
