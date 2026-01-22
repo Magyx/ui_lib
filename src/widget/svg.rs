@@ -102,10 +102,11 @@ impl SvgState {
             return;
         };
 
-        let opt = usvg::Options {
+        let mut opt = usvg::Options {
             resources_dir: path.parent().map(|p| p.to_path_buf()),
             ..Default::default()
         };
+        opt.fontdb_mut().load_system_fonts();
 
         match usvg::Tree::from_str(text, &opt) {
             Ok(t) => self.tree = Some(t),
