@@ -85,6 +85,7 @@ pub mod interaction {
         let slider_value = format!("Slider value: {:>5.1}", target.slider);
         let slider_row = Row::new(el![
             Text::new(slider_value, 16.0)
+                .wrap(cosmic_text::Wrap::None)
                 .size(Size::new(Fit, Fixed(36)))
                 .color(Color::BLACK),
             Spacer::new(Size::new(Fixed(12), Fixed(1))),
