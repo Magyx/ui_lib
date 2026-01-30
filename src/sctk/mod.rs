@@ -478,7 +478,7 @@ where
 
         for (sid, &tid) in sid_to_tid.iter() {
             let need = if st.needs_redraw {
-                st.surfaces.get(sid).map(|s| s.configured).unwrap_or(true)
+                st.surfaces.get(sid).map(|s| s.configured).unwrap_or(false)
             } else {
                 engine.poll(
                     &tid,
@@ -487,8 +487,10 @@ where
                     &loop_ctl,
                 )
             };
-            engine.render_if_needed(&tid, need, &view, &mut state);
-            any_rendered |= need;
+            if st.surfaces.contains_key(sid) {
+                engine.render_if_needed(&tid, need, &view, &mut state);
+                any_rendered |= need;
+            }
         }
         st.needs_redraw = false;
 

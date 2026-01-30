@@ -500,8 +500,10 @@ impl LayerShellHandler for SctkState {
     fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
         self.remove_surface_by_wl(layer.wl_surface());
 
-        self.emit_event(SctkEvent::Closed);
-        self.closed = true;
+        if self.surfaces.is_empty() {
+            self.emit_event(SctkEvent::Closed);
+            self.closed = true;
+        }
     }
 
     fn configure(
@@ -539,8 +541,10 @@ impl WindowHandler for SctkState {
     fn request_close(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, window: &Window) {
         self.remove_surface_by_wl(window.wl_surface());
 
-        self.emit_event(SctkEvent::Closed);
-        self.closed = true;
+        if self.surfaces.is_empty() {
+            self.emit_event(SctkEvent::Closed);
+            self.closed = true;
+        }
     }
 
     fn configure(
