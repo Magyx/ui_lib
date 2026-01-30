@@ -250,7 +250,7 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
     let target = state.per_target.entry(tid).or_default();
     match event {
         crate::Event::RedrawRequested => {
-            let dt = engine.globals(tid).unwrap().delta_time;
+            let dt = engine.globals(&tid).unwrap().delta_time;
             target.fps[target.fps_idx] = 1.0 / dt;
             target.fps_idx = (target.fps_idx + 1) % 5;
             false

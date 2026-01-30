@@ -308,8 +308,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         self.layout_engine.toggle_debug();
     }
 
-    pub fn globals(&self, tid: TargetId) -> Option<&Globals> {
-        self.targets.get(&tid).map(|t| &t.globals)
+    pub fn globals(&self, tid: &TargetId) -> Option<&Globals> {
+        self.targets.get(tid).map(|t| &t.globals)
     }
 
     pub fn attach_target<T>(&mut self, target: Arc<T>, size: Size<u32>) -> TargetId
