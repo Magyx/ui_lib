@@ -204,9 +204,7 @@ impl SctkState {
         let layer_shell = self._layer_shell.as_ref().expect("Layer shell not bound");
         let chosen = super::helpers::pick_outputs(
             &self.outputs,
-            opts.output
-                .as_ref()
-                .unwrap_or(&OutputSet::One(OutputSelector::First)),
+            opts.output.as_ref().unwrap_or(&OutputSet::Active),
         );
 
         let mut surfaces = Vec::new();
