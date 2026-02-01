@@ -55,14 +55,14 @@ pub struct SurfaceRec {
     pub wl_surface: WlSurface,
     pub size: Size<u32>,
     role: SurfaceRole,
-    _output: Option<WlOutput>,
+    pub output: Option<WlOutput>,
 }
 
 pub struct SctkState {
     // sctk state objects
     registry: RegistryState,
     _compositor: CompositorState,
-    outputs: OutputState,
+    pub outputs: OutputState,
     seats: SeatState,
     _layer_shell: Option<LayerShell>,
     _xdg_shell: Option<XdgShell>,
@@ -170,7 +170,7 @@ impl SctkState {
                     wl_surface: wl,
                     size: opts.size,
                     role: SurfaceRole::Layer(layer),
-                    _output: out,
+                    output: out,
                 },
             );
         }
@@ -221,7 +221,7 @@ impl SctkState {
                     wl_surface: wl,
                     size: opts.size,
                     role: SurfaceRole::Layer(layer),
-                    _output: out,
+                    output: out,
                 },
             );
             surfaces.push((sid, opts.size));
@@ -264,7 +264,7 @@ impl SctkState {
                 wl_surface: window.wl_surface().clone(),
                 size: opts.size,
                 role: SurfaceRole::Xdg(window),
-                _output: super::helpers::pick_output(
+                output: super::helpers::pick_output(
                     &outputs,
                     &opts.output.unwrap_or(super::OutputSelector::First),
                 ),
@@ -323,7 +323,7 @@ impl SctkState {
                 wl_surface: window.wl_surface().clone(),
                 size: opts.size,
                 role: SurfaceRole::Xdg(window),
-                _output: output,
+                output,
             },
         );
         (sid, opts.size)
@@ -378,7 +378,7 @@ impl SctkState {
                     wl_surface,
                     size: opts.size,
                     role: SurfaceRole::Lock(lock_surface),
-                    _output: Some(out),
+                    output: Some(out),
                 },
             );
         }
