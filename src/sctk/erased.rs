@@ -284,7 +284,7 @@ where
     Box::new(SctkAdapter::<H, M, _>::new(sink))
 }
 
-pub(crate) struct SctkMuxAdapter<H, M, FU, FR>
+pub(super) struct SctkMuxAdapter<H, M, FU, FR>
 where
     H: SctkHandler<M>,
     FU: FnMut(M),
@@ -461,7 +461,7 @@ where
     }
 }
 
-pub(crate) fn erase_with_runner<H, M, FU, FR>(user_sink: FU, runner_sink: FR) -> Box<dyn SctkErased>
+pub(super) fn erase_with_runner<H, M, FU, FR>(user_sink: FU, runner_sink: FR) -> Box<dyn SctkErased>
 where
     H: SctkHandler<M> + 'static,
     M: 'static + std::fmt::Debug,

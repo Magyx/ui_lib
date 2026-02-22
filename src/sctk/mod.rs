@@ -34,7 +34,7 @@ pub use smithay_client_toolkit::shell::{
     xdg::window::WindowDecorations,
 };
 
-mod erased;
+pub mod erased;
 pub mod handler;
 mod helpers;
 pub mod state;
