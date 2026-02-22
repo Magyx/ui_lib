@@ -1,8 +1,9 @@
-use smithay_client_toolkit::reexports::client::{
-    Connection, QueueHandle, protocol::wl_output::WlOutput,
-};
+use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
 
-use super::msg::Emit;
+pub enum Emit<M> {
+    None,
+    One(M),
+}
 
 #[allow(
     unused_variables,
@@ -13,7 +14,7 @@ use super::msg::Emit;
     clippy::missing_panics_doc
 )]
 pub trait SctkHandler<M> {
-    // Registry/globals
+    // ProvidesRegistryState
     fn runtime_add_global(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
@@ -21,108 +22,113 @@ pub trait SctkHandler<M> {
         interface: &str,
         version: u32,
     ) -> Emit<M> {
-        Emit::none()
+        Emit::None
     }
-
     fn runtime_remove_global(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
         name: u32,
         interface: &str,
     ) -> Emit<M> {
-        Emit::none()
+        Emit::None
     }
 
-    // Outputs
+    // OutputHandler
     fn new_output(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
-        output: WlOutput,
+        output: smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
     ) -> Emit<M> {
-        Emit::none()
+        Emit::None
     }
-
     fn update_output(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
-        output: WlOutput,
+        output: smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
     ) -> Emit<M> {
-        Emit::none()
+        Emit::None
     }
-
     fn output_destroyed(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
-        output: WlOutput,
+        output: smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
     ) -> Emit<M> {
-        Emit::none()
+        Emit::None
     }
 
-    // Session Lock
+    // CompositorHandler
+    fn frame(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: &smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+        time: u32,
+    ) -> Emit<M> {
+        Emit::None
+    }
+    fn surface_enter(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: &smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+        output: &smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+    ) -> Emit<M> {
+        Emit::None
+    }
+    fn surface_leave(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: &smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+        output: &smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+    ) -> Emit<M> {
+        Emit::None
+    }
+    fn scale_factor_changed(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: &smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+        new_factor: i32,
+    ) -> Emit<M> {
+        Emit::None
+    }
+    fn transform_changed(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: &smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface,
+        new_transform: smithay_client_toolkit::reexports::client::protocol::wl_output::Transform,
+    ) -> Emit<M> {
+        Emit::None
+    }
+
+    // LayerShellHandler
+    fn closed(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        layer: &smithay_client_toolkit::shell::wlr_layer::LayerSurface,
+    ) -> Emit<M> {
+        Emit::None
+    }
+
+    // WindowHandler
+    fn request_close(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        window: &smithay_client_toolkit::shell::xdg::window::Window,
+    ) -> Emit<M> {
+        Emit::None
+    }
+
+    // SessionLockHandler
     fn locked(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
         session_lock: smithay_client_toolkit::session_lock::SessionLock,
     ) -> Emit<M> {
-        Emit::none()
+        Emit::None
     }
-
     fn finished(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
         session_lock: smithay_client_toolkit::session_lock::SessionLock,
     ) -> Emit<M> {
-        Emit::none()
-    }
-
-    fn configure(
-        conn: &Connection,
-        qh: &QueueHandle<super::state::SctkState>,
-        surface: smithay_client_toolkit::session_lock::SessionLockSurface,
-        configure: smithay_client_toolkit::session_lock::SessionLockSurfaceConfigure,
-        serial: u32,
-    ) -> Emit<M> {
-        Emit::none()
-    }
-
-    // Keyboard
-    fn key(
-        seat_id: u32,
-        keysym_raw: u32,
-        pressed: bool,
-        utf8: Option<&str>,
-        mods_serialized: u32,
-        serial: u32,
-        time_msec: u32,
-    ) -> Emit<M> {
-        Emit::none()
-    }
-
-    // Pointer
-    fn pointer_motion(seat_id: u32, dx: f64, dy: f64, serial: u32, time_msec: u32) -> Emit<M> {
-        Emit::none()
-    }
-    fn pointer_button(
-        seat_id: u32,
-        button: u32,
-        pressed: bool,
-        serial: u32,
-        time_msec: u32,
-    ) -> Emit<M> {
-        Emit::none()
-    }
-    fn pointer_axis(seat_id: u32, h: f64, v: f64, serial: u32, time_msec: u32) -> Emit<M> {
-        Emit::none()
-    }
-
-    // Surface/lifecycle
-    fn frame() -> Emit<M> {
-        Emit::none()
-    }
-    fn focus_changed(focused: bool) -> Emit<M> {
-        Emit::none()
-    }
-    fn close_requested() -> Emit<M> {
-        Emit::none()
+        Emit::None
     }
 }

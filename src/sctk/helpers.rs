@@ -7,10 +7,39 @@ use crate::{event::LogicalKey, sctk::OutputSet};
 
 use super::OutputSelector;
 
-pub(super) fn pick_output(outputs: &OutputState, sel: &OutputSelector) -> Option<WlOutput> {
+pub(super) enum PickedOutput {
+    Active,
+    Output(WlOutput),
+}
+
+impl PickedOutput {
+    pub fn as_wl_output(&self) -> Option<&WlOutput> {
+        match self {
+            PickedOutput::Active => None,
+            PickedOutput::Output(o) => Some(o),
+        }
+    }
+
+    pub fn into_option(self) -> Option<WlOutput> {
+        match self {
+            PickedOutput::Active => None,
+            PickedOutput::Output(o) => Some(o),
+        }
+    }
+}
+
+pub(super) enum OutputPickError {
+    NoOutputs,
+    NoMatch,
+}
+
+pub(super) fn pick_output(
+    outputs: &OutputState,
+    sel: &OutputSelector,
+) -> Result<WlOutput, OutputPickError> {
     use OutputSelector::*;
 
-    match sel {
+    let out = match sel {
         First => outputs.outputs().next(),
         Index(i) => outputs.outputs().nth(*i),
         NamePrefix(prefix) => outputs.outputs().find(|o| {
@@ -35,21 +64,50 @@ pub(super) fn pick_output(outputs: &OutputState, sel: &OutputSelector) -> Option
         HighestScale => outputs
             .outputs()
             .max_by_key(|o| outputs.info(o).map(|i| i.scale_factor).unwrap_or(1)),
-    }
+    };
+
+    out.ok_or_else(|| {
+        if outputs.outputs().next().is_none() {
+            OutputPickError::NoOutputs
+        } else {
+            OutputPickError::NoMatch
+        }
+    })
 }
 
-pub(super) fn pick_outputs(outputs: &OutputState, set: &OutputSet) -> Vec<Option<WlOutput>> {
+pub(super) fn pick_outputs(outputs: &OutputState, set: &OutputSet) -> Vec<PickedOutput> {
     use OutputSet::*;
 
     match set {
-        All => outputs.outputs().map(Some).collect(),
-        List(list) => list
-            .iter()
-            .filter_map(|s| pick_output(outputs, s))
-            .map(Some)
-            .collect(),
-        One(s) => pick_output(outputs, s).into_iter().map(Some).collect(),
-        Active => vec![None],
+        Active => vec![PickedOutput::Active],
+
+        All => {
+            let outs: Vec<_> = outputs.outputs().map(PickedOutput::Output).collect();
+            if outs.is_empty() {
+                vec![PickedOutput::Active]
+            } else {
+                outs
+            }
+        }
+
+        One(sel) => match pick_output(outputs, sel) {
+            Ok(o) => vec![PickedOutput::Output(o)],
+            Err(_) => vec![PickedOutput::Active],
+        },
+
+        List(list) => {
+            let outs: Vec<_> = list
+                .iter()
+                .filter_map(|s| pick_output(outputs, s).ok())
+                .map(PickedOutput::Output)
+                .collect();
+
+            if outs.is_empty() {
+                vec![PickedOutput::Active]
+            } else {
+                outs
+            }
+        }
     }
 }
 

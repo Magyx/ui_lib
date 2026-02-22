@@ -19,7 +19,7 @@ use smithay_client_toolkit::{
             },
         },
     },
-    registry::{ProvidesRegistryState, RegistryState},
+    registry::{ProvidesRegistryState, RegistryHandler, RegistryState},
     seat::{
         Capability, SeatHandler, SeatState,
         keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
@@ -77,8 +77,6 @@ pub struct SctkState {
     // event queue for the generic runner
     handler: Box<dyn SctkErased>,
     event_tx: loop_channel::Sender<SctkEvent>,
-    pub closed: bool,
-    pub needs_redraw: bool,
 }
 
 impl SctkState {
@@ -110,8 +108,14 @@ impl SctkState {
 
             handler,
             event_tx,
-            closed: false,
-            needs_redraw: true,
+        }
+    }
+
+    fn same_output(a: Option<&WlOutput>, b: Option<&WlOutput>) -> bool {
+        match (a, b) {
+            (None, None) => true,
+            (Some(a), Some(b)) => a.id().protocol_id() == b.id().protocol_id(),
+            _ => false,
         }
     }
 
@@ -160,7 +164,7 @@ impl SctkState {
         let mut by_surface_id = HashMap::new();
         for out in chosen {
             let (wl, layer) =
-                Self::make_surface(out.as_ref(), &compositor, qh, &opts, &layer_shell);
+                Self::make_surface(out.as_wl_output(), &compositor, qh, &opts, &layer_shell);
             let sid = SurfaceId(wl.id().protocol_id());
             by_surface_id.insert(layer.wl_surface().id().protocol_id(), sid);
             surfaces.insert(
@@ -170,7 +174,7 @@ impl SctkState {
                     wl_surface: wl,
                     size: opts.size,
                     role: SurfaceRole::Layer(layer),
-                    output: out,
+                    output: out.into_option(),
                 },
             );
         }
@@ -191,8 +195,6 @@ impl SctkState {
 
             handler,
             event_tx,
-            closed: false,
-            needs_redraw: true,
         })
     }
 
@@ -209,8 +211,13 @@ impl SctkState {
 
         let mut surfaces = Vec::new();
         for out in chosen {
-            let (wl, layer) =
-                Self::make_surface(out.as_ref(), &self._compositor, qh, &opts, layer_shell);
+            let (wl, layer) = Self::make_surface(
+                out.as_wl_output(),
+                &self._compositor,
+                qh,
+                &opts,
+                layer_shell,
+            );
             let sid = SurfaceId(wl.id().protocol_id());
             self.by_surface_id
                 .insert(layer.wl_surface().id().protocol_id(), sid);
@@ -221,12 +228,56 @@ impl SctkState {
                     wl_surface: wl,
                     size: opts.size,
                     role: SurfaceRole::Layer(layer),
-                    output: out,
+                    output: out.into_option(),
                 },
             );
             surfaces.push((sid, opts.size));
         }
         surfaces
+    }
+
+    pub fn ensure_layer_surfaces(
+        &mut self,
+        qh: &QueueHandle<Self>,
+        opts: &LayerOptions,
+    ) -> Vec<(SurfaceId, Size<u32>)> {
+        let layer_shell = self._layer_shell.as_ref().expect("Layer shell not bound");
+        let desired = helpers::pick_outputs(
+            &self.outputs,
+            opts.output.as_ref().unwrap_or(&OutputSet::Active),
+        );
+
+        let mut created = Vec::new();
+
+        for out in desired {
+            let exists = self.surfaces.values().any(|rec| {
+                matches!(rec.role, SurfaceRole::Layer(_))
+                    && Self::same_output(rec.output.as_ref(), out.as_wl_output())
+            });
+            if exists {
+                continue;
+            }
+
+            let (wl, layer) =
+                Self::make_surface(out.as_wl_output(), &self._compositor, qh, opts, layer_shell);
+            let sid = SurfaceId(wl.id().protocol_id());
+            self.by_surface_id
+                .insert(layer.wl_surface().id().protocol_id(), sid);
+            self.surfaces.insert(
+                sid,
+                SurfaceRec {
+                    configured: false,
+                    wl_surface: wl,
+                    size: opts.size,
+                    role: SurfaceRole::Layer(layer),
+                    output: out.into_option(),
+                },
+            );
+
+            created.push((sid, opts.size));
+        }
+
+        created
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -253,6 +304,12 @@ impl SctkState {
         window.set_max_size(None);
         window.commit();
 
+        let output = super::helpers::pick_output(
+            &outputs,
+            &opts.output.unwrap_or(super::OutputSelector::First),
+        )
+        .ok();
+
         let mut surfaces = HashMap::with_capacity(1);
         let mut by_surface_id = HashMap::with_capacity(1);
         let sid = SurfaceId(window.wl_surface().id().protocol_id());
@@ -264,10 +321,7 @@ impl SctkState {
                 wl_surface: window.wl_surface().clone(),
                 size: opts.size,
                 role: SurfaceRole::Xdg(window),
-                output: super::helpers::pick_output(
-                    &outputs,
-                    &opts.output.unwrap_or(super::OutputSelector::First),
-                ),
+                output,
             },
         );
 
@@ -287,8 +341,6 @@ impl SctkState {
 
             handler,
             event_tx,
-            closed: false,
-            needs_redraw: true,
         })
     }
 
@@ -309,13 +361,15 @@ impl SctkState {
         window.set_max_size(None);
         window.commit();
 
-        let sid = SurfaceId(window.wl_surface().id().protocol_id());
-        self.by_surface_id
-            .insert(window.wl_surface().id().protocol_id(), sid);
         let output = super::helpers::pick_output(
             &self.outputs,
             &opts.output.take().unwrap_or(OutputSelector::First),
-        );
+        )
+        .ok();
+
+        let sid = SurfaceId(window.wl_surface().id().protocol_id());
+        self.by_surface_id
+            .insert(window.wl_surface().id().protocol_id(), sid);
         self.surfaces.insert(
             sid,
             SurfaceRec {
@@ -331,11 +385,6 @@ impl SctkState {
 
     fn emit_event(&self, ev: SctkEvent) {
         let _ = self.event_tx.send(ev);
-    }
-
-    fn remove_surface_by_wl(&mut self, wl_surface: &WlSurface) {
-        let key = wl_surface.id().protocol_id();
-        self.remove_surface_by_surface_id(SurfaceId(key));
     }
 
     pub fn remove_surface_by_surface_id(&mut self, sid: SurfaceId) {
@@ -357,9 +406,8 @@ impl SctkState {
             &self.outputs,
             opts.output.as_ref().unwrap_or(&OutputSet::Active),
         )
-        .iter()
-        .flatten()
-        .cloned()
+        .into_iter()
+        .filter_map(|o| o.into_option())
         .collect();
 
         self.active_lock = Some(lock.clone());
@@ -383,8 +431,67 @@ impl SctkState {
             );
         }
 
-        self.needs_redraw = true;
         Ok(())
+    }
+
+    pub fn ensure_lock_surfaces(
+        &mut self,
+        qh: &QueueHandle<Self>,
+        opts: &LockOptions,
+    ) -> anyhow::Result<Vec<(SurfaceId, Size<u32>)>> {
+        let Some(lock) = self.active_lock.clone() else {
+            return Ok(Vec::new());
+        };
+        if !lock.is_locked() {
+            return Ok(Vec::new());
+        }
+
+        let desired: Vec<WlOutput> = super::helpers::pick_outputs(
+            &self.outputs,
+            opts.output.as_ref().unwrap_or(&OutputSet::Active),
+        )
+        .into_iter()
+        .filter_map(|o| o.into_option())
+        .collect();
+
+        let mut created = Vec::new();
+
+        for out in desired {
+            let out_id = out.id().protocol_id();
+
+            let exists = self.surfaces.values().any(|rec| {
+                matches!(rec.role, SurfaceRole::Lock(_))
+                    && rec
+                        .output
+                        .as_ref()
+                        .is_some_and(|o| o.id().protocol_id() == out_id)
+            });
+            if exists {
+                continue;
+            }
+
+            let wl_surface = self._compositor.create_surface(qh);
+            let lock_surface = lock.create_lock_surface(wl_surface.clone(), &out, qh);
+
+            let sid = SurfaceId(wl_surface.id().protocol_id());
+            self.by_surface_id
+                .insert(wl_surface.id().protocol_id(), sid);
+
+            self.surfaces.insert(
+                sid,
+                SurfaceRec {
+                    configured: false,
+                    wl_surface,
+                    size: opts.size,
+                    role: SurfaceRole::Lock(lock_surface),
+                    output: Some(out),
+                },
+            );
+
+            created.push((sid, opts.size));
+        }
+
+        Ok(created)
     }
 
     /// Be sure to flush and/or let another event cycle happen.
@@ -412,6 +519,11 @@ impl ProvidesRegistryState for SctkState {
         interface: &str,
         version: u32,
     ) {
+        <OutputState as RegistryHandler<Self>>::new_global(
+            self, conn, qh, name, interface, version,
+        );
+        <SeatState as RegistryHandler<Self>>::new_global(self, conn, qh, name, interface, version);
+
         self.handler
             .runtime_add_global(conn, qh, name, interface, version);
     }
@@ -423,6 +535,9 @@ impl ProvidesRegistryState for SctkState {
         name: u32,
         interface: &str,
     ) {
+        <OutputState as RegistryHandler<Self>>::remove_global(self, conn, qh, name, interface);
+        <SeatState as RegistryHandler<Self>>::remove_global(self, conn, qh, name, interface);
+
         self.handler
             .runtime_remove_global(conn, qh, name, interface);
     }
@@ -448,60 +563,56 @@ impl OutputHandler for SctkState {
 }
 
 impl CompositorHandler for SctkState {
-    fn frame(
-        &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _time: u32,
-    ) {
+    fn frame(&mut self, conn: &Connection, qh: &QueueHandle<Self>, surface: &WlSurface, time: u32) {
+        self.handler.frame(conn, qh, surface, time);
     }
 
     fn surface_enter(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _output: &WlOutput,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        output: &WlOutput,
     ) {
+        self.handler.surface_enter(conn, qh, surface, output);
     }
 
     fn surface_leave(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _output: &WlOutput,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        output: &WlOutput,
     ) {
+        self.handler.surface_leave(conn, qh, surface, output);
     }
 
     fn scale_factor_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _new_factor: i32,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        new_factor: i32,
     ) {
+        self.handler
+            .scale_factor_changed(conn, qh, surface, new_factor);
     }
 
     fn transform_changed(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
-        _surface: &WlSurface,
-        _new_transform: Transform,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
+        surface: &WlSurface,
+        new_transform: Transform,
     ) {
+        self.handler
+            .transform_changed(conn, qh, surface, new_transform);
     }
 }
 
 impl LayerShellHandler for SctkState {
-    fn closed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, layer: &LayerSurface) {
-        self.remove_surface_by_wl(layer.wl_surface());
-
-        if self.surfaces.is_empty() {
-            self.emit_event(SctkEvent::Closed);
-            self.closed = true;
-        }
+    fn closed(&mut self, conn: &Connection, qh: &QueueHandle<Self>, layer: &LayerSurface) {
+        self.handler.closed(conn, qh, layer);
     }
 
     fn configure(
@@ -531,18 +642,13 @@ impl LayerShellHandler for SctkState {
             }
         }
 
-        self.needs_redraw = true;
+        layer.wl_surface().commit();
     }
 }
 
 impl WindowHandler for SctkState {
-    fn request_close(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, window: &Window) {
-        self.remove_surface_by_wl(window.wl_surface());
-
-        if self.surfaces.is_empty() {
-            self.emit_event(SctkEvent::Closed);
-            self.closed = true;
-        }
+    fn request_close(&mut self, conn: &Connection, qh: &QueueHandle<Self>, window: &Window) {
+        self.handler.request_close(conn, qh, window);
     }
 
     fn configure(
@@ -571,7 +677,6 @@ impl WindowHandler for SctkState {
         }
 
         window.wl_surface().commit();
-        self.needs_redraw = true;
     }
 }
 
@@ -617,11 +722,11 @@ impl SessionLockHandler for SctkState {
 
     fn configure(
         &mut self,
-        conn: &Connection,
-        qh: &QueueHandle<Self>,
+        _conn: &Connection,
+        _qh: &QueueHandle<Self>,
         surface: smithay_client_toolkit::session_lock::SessionLockSurface,
         configure: smithay_client_toolkit::session_lock::SessionLockSurfaceConfigure,
-        serial: u32,
+        _serial: u32,
     ) {
         let lid = surface.wl_surface().id().protocol_id();
         if let Some(sid) = self.by_surface_id.get(&lid).copied()
@@ -643,8 +748,6 @@ impl SessionLockHandler for SctkState {
         }
 
         surface.wl_surface().commit();
-        self.handler.configure(conn, qh, surface, configure, serial);
-        self.needs_redraw = true;
     }
 }
 

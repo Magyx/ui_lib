@@ -26,7 +26,7 @@ use smithay_client_toolkit::{
     registry::RegistryState,
     seat::SeatState,
     session_lock::SessionLockState,
-    shell::{wlr_layer::LayerShell, xdg::XdgShell},
+    shell::{WaylandSurface, wlr_layer::LayerShell, xdg::XdgShell},
 };
 
 pub use smithay_client_toolkit::shell::{
@@ -34,11 +34,9 @@ pub use smithay_client_toolkit::shell::{
     xdg::window::WindowDecorations,
 };
 
-pub mod adapter;
 mod erased;
 pub mod handler;
 mod helpers;
-pub mod msg;
 pub mod state;
 
 // === Public API ================================================================================
@@ -284,6 +282,12 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct SurfaceId(u32);
 
+impl SurfaceId {
+    pub fn new(id: u32) -> Self {
+        Self(id)
+    }
+}
+
 #[derive(Default)]
 pub struct SctkLoop {
     exit: AtomicBool,
@@ -301,10 +305,6 @@ impl SctkLoop {
         self.exit.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
-
-pub struct DefaultHandler;
-
-impl<M> handler::SctkHandler<M> for DefaultHandler {}
 
 #[derive(Clone, Debug)]
 pub struct RawWaylandHandles {
@@ -336,6 +336,68 @@ impl wgpu::rwh::HasDisplayHandle for RawWaylandHandles {
     }
 }
 
+pub struct DefaultHandler;
+
+impl<M> handler::SctkHandler<M> for DefaultHandler {}
+
+enum RunnerEvent {
+    SurfaceDestroyed(u32),
+    OutputCreated,
+    LockFinished,
+}
+
+struct RunnerHandler;
+
+impl handler::SctkHandler<RunnerEvent> for RunnerHandler {
+    fn new_output(
+        _conn: &Connection,
+        _qh: &QueueHandle<self::state::SctkState>,
+        _output: smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+    ) -> handler::Emit<RunnerEvent> {
+        handler::Emit::One(RunnerEvent::OutputCreated)
+    }
+    fn update_output(
+        _conn: &Connection,
+        _qh: &QueueHandle<self::state::SctkState>,
+        _output: smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+    ) -> handler::Emit<RunnerEvent> {
+        handler::Emit::One(RunnerEvent::OutputCreated)
+    }
+    fn closed(
+        _conn: &Connection,
+        _qh: &QueueHandle<self::state::SctkState>,
+        layer: &smithay_client_toolkit::shell::wlr_layer::LayerSurface,
+    ) -> handler::Emit<RunnerEvent> {
+        handler::Emit::One(RunnerEvent::SurfaceDestroyed(
+            layer.wl_surface().id().protocol_id(),
+        ))
+    }
+
+    fn request_close(
+        _conn: &Connection,
+        _qh: &QueueHandle<self::state::SctkState>,
+        window: &smithay_client_toolkit::shell::xdg::window::Window,
+    ) -> handler::Emit<RunnerEvent> {
+        handler::Emit::One(RunnerEvent::SurfaceDestroyed(
+            window.wl_surface().id().protocol_id(),
+        ))
+    }
+
+    fn finished(
+        _conn: &Connection,
+        _qh: &QueueHandle<self::state::SctkState>,
+        _session_lock: smithay_client_toolkit::session_lock::SessionLock,
+    ) -> handler::Emit<RunnerEvent> {
+        handler::Emit::One(RunnerEvent::LockFinished)
+    }
+}
+
+#[derive(Clone)]
+enum OutputHotplugCfg {
+    Layer(LayerOptions),
+    Lock(LockOptions),
+}
+
 fn run_app_core<'a, M, S, V, U, H, F>(
     mut state: S,
     view: V,
@@ -363,13 +425,27 @@ where
     let seats = SeatState::new(&globals, &qh);
     let session_lock = SessionLockState::new(&globals, &qh);
 
-    let (tx, rx) = calloop::channel::channel();
-    let handler_tx = tx.clone();
-    let sctk_handler = adapter::erase::<H, M, _>(move |m| {
-        let _ = handler_tx.send(SctkEvent::message(m));
-    });
+    let (tx_sctk, rx_sctk) = calloop::channel::channel::<SctkEvent>();
+    let (tx_runner, rx_runner) = calloop::channel::channel::<RunnerEvent>();
+    let sctk_handler = erased::erase_with_runner::<H, M, _, _>(
+        {
+            let t = tx_sctk.clone();
+            move |m| {
+                let _ = t.send(SctkEvent::message(m));
+            }
+        },
+        move |re| {
+            let _ = tx_runner.send(re);
+        },
+    );
 
     // 3) Concrete SCTK state
+    let hotplug_cfg = match opts.clone() {
+        Options::Layer(o) => Some(OutputHotplugCfg::Layer(o)),
+        Options::Lock(o) => Some(OutputHotplugCfg::Lock(o)),
+        _ => None,
+    };
+
     let mut st = match opts {
         Options::Layer(layer_options) => {
             let layer_shell = LayerShell::bind(&globals, &qh)?;
@@ -383,7 +459,7 @@ where
                 registry,
                 session_lock,
                 sctk_handler,
-                tx,
+                tx_sctk,
             )?
         }
         Options::Xdg(xdg_options) => {
@@ -398,7 +474,7 @@ where
                 registry,
                 session_lock,
                 sctk_handler,
-                tx,
+                tx_sctk,
             )?
         }
         Options::Lock(lock_options) => {
@@ -411,7 +487,7 @@ where
                 registry,
                 session_lock,
                 sctk_handler,
-                tx,
+                tx_sctk,
             );
 
             st.lock_session(&qh, lock_options)?;
@@ -443,11 +519,51 @@ where
     let loop_ctl = SctkLoop::default();
 
     // 5) Main loop
-    while !loop_ctl.should_exit() && !st.closed {
+    while !loop_ctl.should_exit() {
         event_queue.blocking_dispatch(&mut st)?;
 
         let mut any_rendered = false;
-        while let Ok(ev) = rx.try_recv() {
+
+        while let Ok(re) = rx_runner.try_recv() {
+            match re {
+                RunnerEvent::SurfaceDestroyed(sid) => {
+                    let sid = SurfaceId(sid);
+
+                    st.remove_surface_by_surface_id(sid);
+                    if let Some(tid) = sid_to_tid.remove(&sid) {
+                        engine.detach_target(&tid);
+                    }
+
+                    if sid_to_tid.is_empty() {
+                        loop_ctl.exit();
+                    }
+                }
+                RunnerEvent::OutputCreated => {
+                    let Some(cfg) = &hotplug_cfg else { continue };
+
+                    let new_surfaces = match cfg {
+                        OutputHotplugCfg::Layer(layer_opts) => {
+                            st.ensure_layer_surfaces(&qh, layer_opts)
+                        }
+                        OutputHotplugCfg::Lock(lock_opts) => {
+                            st.ensure_lock_surfaces(&qh, lock_opts).unwrap_or_default()
+                        }
+                    };
+
+                    for (sid, size) in new_surfaces {
+                        let target =
+                            Arc::new(RawWaylandHandles::new(&conn, &st.surfaces[&sid].wl_surface));
+                        let tid = engine.attach_target(target, size);
+                        sid_to_tid.insert(sid, tid);
+                    }
+                }
+                RunnerEvent::LockFinished => {
+                    loop_ctl.exit();
+                }
+            }
+        }
+
+        while let Ok(ev) = rx_sctk.try_recv() {
             match ev.surface_id() {
                 Some(sid) => {
                     if let Some(tid) = sid_to_tid.get(&sid).copied() {
@@ -477,22 +593,20 @@ where
         }
 
         for (sid, &tid) in sid_to_tid.iter() {
-            let need = if st.needs_redraw {
-                st.surfaces.get(sid).map(|s| s.configured).unwrap_or(false)
-            } else {
-                engine.poll(
+            if !st.surfaces.contains_key(sid) {
+                continue;
+            }
+
+            let need = st.surfaces.get(sid).map(|s| s.configured).unwrap_or(false)
+                && engine.poll(
                     &tid,
                     &mut |eng, e, s, ctl| update(tid, eng, e, s, ctl),
                     &mut state,
                     &loop_ctl,
-                )
-            };
-            if st.surfaces.contains_key(sid) {
-                engine.render_if_needed(&tid, need, &view, &mut state);
-                any_rendered |= need;
-            }
+                );
+            engine.render_if_needed(&tid, need, &view, &mut state);
+            any_rendered |= need;
         }
-        st.needs_redraw = false;
 
         if any_rendered {
             crate::profile::frame_mark();
