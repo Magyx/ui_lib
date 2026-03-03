@@ -8,7 +8,6 @@ use smol_str::ToSmolStr;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    error::EventLoopError,
     event::{MouseButton as WMouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     keyboard::{Key as WKey, KeyLocation as WLoc, PhysicalKey as WPhys},
@@ -355,7 +354,7 @@ fn run_app_core<'a, M, S, V, U>(
     update: U,
     window_attrs: WindowAttributes,
     extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
-) -> Result<(), EventLoopError>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug,
     V: Fn(&TargetId, &S) -> Element<M> + 'static,
@@ -369,10 +368,10 @@ where
         + 'static,
 {
     crate::profile::set_thread_name("ui-main");
-    let event_loop = EventLoop::new()?;
+    let event_loop = EventLoop::new().map_err(crate::Error::Winit)?;
     let mut app =
         WinitApp::<'a, M, S, V, U>::new(state, view, update, window_attrs, extra_pipelines);
-    event_loop.run_app(&mut app)
+    event_loop.run_app(&mut app).map_err(crate::Error::Winit)
 }
 
 pub fn run_app<'a, M, S, V, U>(
@@ -380,7 +379,7 @@ pub fn run_app<'a, M, S, V, U>(
     view: V,
     update: U,
     window_attrs: WindowAttributes,
-) -> Result<(), EventLoopError>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug,
     V: Fn(&TargetId, &S) -> Element<M> + 'static,
@@ -402,7 +401,7 @@ pub fn run_app_with<'a, M, S, V, U, I>(
     update: U,
     window_attrs: WindowAttributes,
     extra_pipelines: I,
-) -> Result<(), EventLoopError>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug,
     V: Fn(&TargetId, &S) -> Element<M> + 'static,

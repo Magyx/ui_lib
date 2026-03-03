@@ -34,7 +34,7 @@ fn update<'a>(
     }
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() -> ui::Result<()> {
     #[cfg(feature = "tracing")]
     {
         crate::common::trace::init();

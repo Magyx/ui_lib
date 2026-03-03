@@ -156,7 +156,7 @@ impl SctkState {
         session_lock: SessionLockState,
         handler: Box<dyn SctkErased>,
         event_tx: loop_channel::Sender<SctkEvent>,
-    ) -> anyhow::Result<Self> {
+    ) -> crate::Result<Self> {
         let chosen =
             helpers::pick_outputs(&outputs, opts.output.as_ref().unwrap_or(&OutputSet::Active));
 
@@ -289,7 +289,7 @@ impl SctkState {
         session_lock: SessionLockState,
         handler: Box<dyn SctkErased>,
         event_tx: loop_channel::Sender<SctkEvent>,
-    ) -> anyhow::Result<Self> {
+    ) -> crate::Result<Self> {
         let wl_surface = compositor.create_surface(qh);
         let window = xdg_shell.create_window(wl_surface, opts.decorations, qh);
 
@@ -397,8 +397,11 @@ impl SctkState {
         &mut self,
         qh: &QueueHandle<Self>,
         opts: LockOptions,
-    ) -> anyhow::Result<Vec<SurfaceId>> {
-        let lock = self.session_lock.lock(qh)?;
+    ) -> crate::Result<Vec<SurfaceId>> {
+        let lock = self
+            .session_lock
+            .lock(qh)
+            .map_err(crate::error::SctkError::session_lock)?;
         let chosen: Vec<WlOutput> = super::helpers::pick_outputs(
             &self.outputs,
             opts.output.as_ref().unwrap_or(&OutputSet::Active),
@@ -436,7 +439,7 @@ impl SctkState {
         &mut self,
         qh: &QueueHandle<Self>,
         opts: &LockOptions,
-    ) -> anyhow::Result<Vec<(SurfaceId, Size<u32>)>> {
+    ) -> crate::Result<Vec<(SurfaceId, Size<u32>)>> {
         let Some(lock) = self.active_lock.clone() else {
             return Ok(Vec::new());
         };

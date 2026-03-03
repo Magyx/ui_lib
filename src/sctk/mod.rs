@@ -392,13 +392,14 @@ enum OutputHotplugCfg {
     Lock(LockOptions),
 }
 
+// TODO: collect error results for further diagnosis
 fn run_app_core<'a, M, S, V, U, H, F>(
     mut state: S,
     view: V,
     mut update: U,
     opts: Options,
     post_engine_init: F,
-) -> anyhow::Result<()>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     V: Fn(&TargetId, &S) -> Element<M> + 'static,
@@ -408,13 +409,17 @@ where
     F: FnOnce(&mut Engine<'a, M>),
 {
     // 1) Wayland connection + queue
-    let conn = Connection::connect_to_env()?;
-    let (globals, mut event_queue) = registry_queue_init(&conn)?;
+    let conn = Connection::connect_to_env().map_err(crate::error::SctkError::connect)?;
+    let (globals, mut event_queue) =
+        registry_queue_init(&conn).map_err(crate::error::SctkError::registry_init)?;
+
     let qh: QueueHandle<state::SctkState> = event_queue.handle();
 
     // 2) Bind globals
     let registry = RegistryState::new(&globals);
-    let compositor = CompositorState::bind(&globals, &qh)?;
+    let compositor =
+        CompositorState::bind(&globals, &qh).map_err(crate::error::SctkError::bind_global)?;
+
     let outputs = OutputState::new(&globals, &qh);
     let seats = SeatState::new(&globals, &qh);
     let session_lock = SessionLockState::new(&globals, &qh);
@@ -442,7 +447,9 @@ where
 
     let mut st = match opts {
         Options::Layer(layer_options) => {
-            let layer_shell = LayerShell::bind(&globals, &qh)?;
+            let layer_shell =
+                LayerShell::bind(&globals, &qh).map_err(crate::error::SctkError::bind_global)?;
+
             state::SctkState::new_for_layer(
                 &qh,
                 layer_options,
@@ -457,7 +464,9 @@ where
             )?
         }
         Options::Xdg(xdg_options) => {
-            let xdg_shell = XdgShell::bind(&globals, &qh)?;
+            let xdg_shell =
+                XdgShell::bind(&globals, &qh).map_err(crate::error::SctkError::bind_global)?;
+
             state::SctkState::new_for_window(
                 &qh,
                 xdg_options,
@@ -514,7 +523,9 @@ where
 
     // 5) Main loop
     while !loop_ctl.should_exit() {
-        event_queue.blocking_dispatch(&mut st)?;
+        event_queue
+            .blocking_dispatch(&mut st)
+            .map_err(crate::error::SctkError::dispatch)?;
 
         let mut any_rendered = false;
 
@@ -608,8 +619,11 @@ where
     }
 
     st.unlock_session();
-    conn.flush()?;
-    event_queue.roundtrip(&mut st)?;
+    conn.flush().map_err(crate::error::SctkError::flush)?;
+
+    event_queue
+        .roundtrip(&mut st)
+        .map_err(crate::error::SctkError::roundtrip)?;
 
     Ok(())
 }
@@ -619,7 +633,7 @@ pub fn run_layer<'a, M, S, H, V, U>(
     view: V,
     update: U,
     opts: LayerOptions,
-) -> anyhow::Result<()>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
@@ -636,7 +650,7 @@ pub fn run_layer_with<'a, M, S, H, V, U, I>(
     update: U,
     opts: LayerOptions,
     extra_pipelines: I,
-) -> anyhow::Result<()>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
@@ -659,7 +673,7 @@ pub fn run_app<'a, M, S, H, V, U>(
     view: V,
     update: U,
     opts: XdgOptions,
-) -> anyhow::Result<()>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
@@ -676,7 +690,7 @@ pub fn run_app_with<'a, M, S, H, V, U, I>(
     update: U,
     opts: XdgOptions,
     extra_pipelines: I,
-) -> anyhow::Result<()>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
@@ -699,7 +713,7 @@ pub fn run_lock<'a, M, S, H, V, U>(
     view: V,
     update: U,
     opts: LockOptions,
-) -> anyhow::Result<()>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
@@ -716,7 +730,7 @@ pub fn run_lock_with<'a, M, S, H, V, U, I>(
     update: U,
     opts: LockOptions,
     extra_pipelines: I,
-) -> anyhow::Result<()>
+) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,

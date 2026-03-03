@@ -1,8 +1,10 @@
 #[allow(unused)]
 use crate::model::*;
+pub use error::{Error, Result};
 
 pub(crate) mod consts;
 pub mod context;
+pub mod error;
 pub mod event;
 pub mod graphics;
 pub mod layout;

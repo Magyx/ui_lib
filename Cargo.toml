@@ -26,7 +26,6 @@ tracy-client = { version = "0.18.4", default-features = false, optional = true }
 winit = { version = "0.30.12", default-features = false, optional = true }
 
 # SCTK dependencies
-anyhow = { version = "1.0.100", default-features = false, optional = true }
 smithay-client-toolkit = { version = "0.20.0", default-features = false, features = [
   "calloop",
   "xkbcommon",
@@ -47,12 +46,7 @@ metal = ["wgpu/metal"]
 
 tracing = ["dep:tracing"]
 winit = ["dep:winit"]
-sctk = [
-  "dep:anyhow",
-  "dep:smithay-client-toolkit",
-  "dep:wayland-backend",
-  "dep:calloop",
-]
+sctk = ["dep:smithay-client-toolkit", "dep:wayland-backend", "dep:calloop"]
 
 tracy = [
   "dep:tracy-client",
@@ -80,7 +74,6 @@ svg = [
 
 [dev-dependencies]
 winit = "0.30.12"
-anyhow = "1.0.100"
 image = { version = "0.25.8", features = ["jpeg"] }
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
 tracing-log = "0.2.0"
