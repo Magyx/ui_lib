@@ -208,6 +208,8 @@ where
     window_attrs: WindowAttributes,
     next_frame: Instant,
     frame_interval: Duration,
+
+    startup_error: Option<crate::Error>,
 }
 
 impl<'a, M, S, V, U> WinitApp<'a, M, S, V, U>
@@ -241,6 +243,8 @@ where
             window_attrs,
             next_frame: Instant::now(),
             frame_interval: Duration::from_millis(16),
+
+            startup_error: None,
         }
     }
 }
@@ -260,11 +264,14 @@ where
 {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
-            let window = Arc::new(
-                event_loop
-                    .create_window(self.window_attrs.clone())
-                    .expect("Failed to create window"),
-            );
+            let window = match event_loop.create_window(self.window_attrs.clone()) {
+                Ok(w) => Arc::new(w),
+                Err(e) => {
+                    self.startup_error = Some(e.into());
+                    event_loop.exit();
+                    return;
+                }
+            };
             let size = window.inner_size().into();
             let (target, mut engine) = Engine::new_for(window.clone(), size);
             if let Some(pipelines) = self.extra_pipelines.take() {
@@ -368,10 +375,15 @@ where
         + 'static,
 {
     crate::profile::set_thread_name("ui-main");
-    let event_loop = EventLoop::new().map_err(crate::Error::Winit)?;
+    let event_loop = EventLoop::new()?;
     let mut app =
         WinitApp::<'a, M, S, V, U>::new(state, view, update, window_attrs, extra_pipelines);
-    event_loop.run_app(&mut app).map_err(crate::Error::Winit)
+    event_loop.run_app(&mut app)?;
+
+    if let Some(err) = app.startup_error.take() {
+        return Err(err);
+    }
+    Ok(())
 }
 
 pub fn run_app<'a, M, S, V, U>(

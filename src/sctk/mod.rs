@@ -501,11 +501,9 @@ where
     // 4) Create engine and attach surfaces
     let mut sid_to_tid = HashMap::new();
     let mut engine = {
-        let sid = st
-            .surfaces
-            .keys()
-            .next()
-            .expect("At least one surface required");
+        let Some(sid) = st.surfaces.keys().next() else {
+            return Err(crate::error::SctkError::SurfaceSetup.into());
+        };
         let target = Arc::new(RawWaylandHandles::new(&conn, &st.surfaces[sid].wl_surface));
         let (tid, mut engine) = Engine::new_for(target, st.surfaces[sid].size);
         post_engine_init(&mut engine);
