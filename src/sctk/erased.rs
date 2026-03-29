@@ -80,6 +80,14 @@ pub trait SctkErased {
     );
 
     // LayerShellHandler
+    fn layer_configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        layer: &smithay_client_toolkit::shell::wlr_layer::LayerSurface,
+        configure: smithay_client_toolkit::shell::wlr_layer::LayerSurfaceConfigure,
+        serial: u32,
+    );
     fn closed(
         &mut self,
         conn: &Connection,
@@ -88,6 +96,14 @@ pub trait SctkErased {
     );
 
     // WindowHandler
+    fn window_configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        window: &smithay_client_toolkit::shell::xdg::window::Window,
+        configure: smithay_client_toolkit::shell::xdg::window::WindowConfigure,
+        serial: u32,
+    );
     fn request_close(
         &mut self,
         conn: &Connection,
@@ -96,6 +112,14 @@ pub trait SctkErased {
     );
 
     // SessionLockHandler
+    fn lock_configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: smithay_client_toolkit::session_lock::SessionLockSurface,
+        configure: smithay_client_toolkit::session_lock::SessionLockSurfaceConfigure,
+        serial: u32,
+    );
     fn locked(
         &mut self,
         conn: &Connection,
@@ -238,6 +262,16 @@ where
         self.flush(H::transform_changed(conn, qh, surface, new_transform));
     }
 
+    fn layer_configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        layer: &smithay_client_toolkit::shell::wlr_layer::LayerSurface,
+        configure: smithay_client_toolkit::shell::wlr_layer::LayerSurfaceConfigure,
+        serial: u32,
+    ) {
+        self.flush(H::layer_configure(conn, qh, layer, configure, serial));
+    }
     fn closed(
         &mut self,
         conn: &Connection,
@@ -247,6 +281,16 @@ where
         self.flush(H::closed(conn, qh, layer));
     }
 
+    fn window_configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        window: &smithay_client_toolkit::shell::xdg::window::Window,
+        configure: smithay_client_toolkit::shell::xdg::window::WindowConfigure,
+        serial: u32,
+    ) {
+        self.flush(H::window_configure(conn, qh, window, configure, serial));
+    }
     fn request_close(
         &mut self,
         conn: &Connection,
@@ -256,6 +300,16 @@ where
         self.flush(H::request_close(conn, qh, window));
     }
 
+    fn lock_configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: smithay_client_toolkit::session_lock::SessionLockSurface,
+        configure: smithay_client_toolkit::session_lock::SessionLockSurfaceConfigure,
+        serial: u32,
+    ) {
+        self.flush(H::lock_configure(conn, qh, surface, configure, serial));
+    }
     fn locked(
         &mut self,
         conn: &Connection,
@@ -421,6 +475,19 @@ where
             .transform_changed(conn, qh, surface, new_transform);
     }
 
+    fn layer_configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        layer: &smithay_client_toolkit::shell::wlr_layer::LayerSurface,
+        configure: smithay_client_toolkit::shell::wlr_layer::LayerSurfaceConfigure,
+        serial: u32,
+    ) {
+        self.user
+            .layer_configure(conn, qh, layer, configure.clone(), serial);
+        self.runner
+            .layer_configure(conn, qh, layer, configure, serial);
+    }
     fn closed(
         &mut self,
         conn: &Connection,
@@ -431,6 +498,19 @@ where
         self.runner.closed(conn, qh, layer);
     }
 
+    fn window_configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        window: &smithay_client_toolkit::shell::xdg::window::Window,
+        configure: smithay_client_toolkit::shell::xdg::window::WindowConfigure,
+        serial: u32,
+    ) {
+        self.user
+            .window_configure(conn, qh, window, configure.clone(), serial);
+        self.runner
+            .window_configure(conn, qh, window, configure, serial);
+    }
     fn request_close(
         &mut self,
         conn: &Connection,
@@ -441,6 +521,19 @@ where
         self.runner.request_close(conn, qh, window);
     }
 
+    fn lock_configure(
+        &mut self,
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: smithay_client_toolkit::session_lock::SessionLockSurface,
+        configure: smithay_client_toolkit::session_lock::SessionLockSurfaceConfigure,
+        serial: u32,
+    ) {
+        self.user
+            .lock_configure(conn, qh, surface.clone(), configure.clone(), serial);
+        self.runner
+            .lock_configure(conn, qh, surface, configure, serial);
+    }
     fn locked(
         &mut self,
         conn: &Connection,

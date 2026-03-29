@@ -617,11 +617,11 @@ impl LayerShellHandler for SctkState {
 
     fn configure(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
         layer: &LayerSurface,
         configure: LayerSurfaceConfigure,
-        _serial: u32,
+        serial: u32,
     ) {
         let lid = layer.wl_surface().id().protocol_id();
         if let Some(sid) = self.by_surface_id.get(&lid).copied()
@@ -640,6 +640,9 @@ impl LayerShellHandler for SctkState {
                     });
                 }
             }
+
+            self.handler
+                .layer_configure(conn, qh, layer, configure, serial);
         }
 
         layer.wl_surface().commit();
@@ -653,11 +656,11 @@ impl WindowHandler for SctkState {
 
     fn configure(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
         window: &Window,
         configure: smithay_client_toolkit::shell::xdg::window::WindowConfigure,
-        _serial: u32,
+        serial: u32,
     ) {
         let wid = window.wl_surface().id().protocol_id();
         if let Some(sid) = self.by_surface_id.get(&wid).copied()
@@ -674,6 +677,9 @@ impl WindowHandler for SctkState {
                     size: new_size,
                 });
             }
+
+            self.handler
+                .window_configure(conn, qh, window, configure, serial);
         }
 
         window.wl_surface().commit();
@@ -722,11 +728,11 @@ impl SessionLockHandler for SctkState {
 
     fn configure(
         &mut self,
-        _conn: &Connection,
-        _qh: &QueueHandle<Self>,
+        conn: &Connection,
+        qh: &QueueHandle<Self>,
         surface: smithay_client_toolkit::session_lock::SessionLockSurface,
         configure: smithay_client_toolkit::session_lock::SessionLockSurfaceConfigure,
-        _serial: u32,
+        serial: u32,
     ) {
         let lid = surface.wl_surface().id().protocol_id();
         if let Some(sid) = self.by_surface_id.get(&lid).copied()
@@ -748,6 +754,13 @@ impl SessionLockHandler for SctkState {
         }
 
         surface.wl_surface().commit();
+
+        if let Some(sid) = self.by_surface_id.get(&lid).copied()
+            && self.surfaces.get_mut(&sid).is_some()
+        {
+            self.handler
+                .lock_configure(conn, qh, surface.clone(), configure, serial);
+        }
     }
 }
 

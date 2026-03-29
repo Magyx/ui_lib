@@ -99,6 +99,15 @@ pub trait SctkHandler<M> {
     }
 
     // LayerShellHandler
+    fn layer_configure(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        layer: &smithay_client_toolkit::shell::wlr_layer::LayerSurface,
+        configure: smithay_client_toolkit::shell::wlr_layer::LayerSurfaceConfigure,
+        serial: u32,
+    ) -> Emit<M> {
+        Emit::None
+    }
     fn closed(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
@@ -108,6 +117,16 @@ pub trait SctkHandler<M> {
     }
 
     // WindowHandler
+    fn window_configure(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        window: &smithay_client_toolkit::shell::xdg::window::Window,
+        configure: smithay_client_toolkit::shell::xdg::window::WindowConfigure,
+        serial: u32,
+    ) -> Emit<M> {
+        Emit::None
+    }
+
     fn request_close(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
@@ -117,6 +136,16 @@ pub trait SctkHandler<M> {
     }
 
     // SessionLockHandler
+    fn lock_configure(
+        conn: &Connection,
+        qh: &QueueHandle<super::state::SctkState>,
+        surface: smithay_client_toolkit::session_lock::SessionLockSurface,
+        configure: smithay_client_toolkit::session_lock::SessionLockSurfaceConfigure,
+        serial: u32,
+    ) -> Emit<M> {
+        Emit::None
+    }
+
     fn locked(
         conn: &Connection,
         qh: &QueueHandle<super::state::SctkState>,
