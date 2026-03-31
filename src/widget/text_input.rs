@@ -2,9 +2,10 @@ use std::any::{Any, TypeId};
 use std::marker::PhantomData;
 use std::{borrow::Cow, collections::HashMap};
 
+use cosmic_text::{Attrs, Buffer, Metrics, Shaping};
+
 use super::*;
 use crate::event::{KeyState, LogicalKey, MouseButton, UiEventRef};
-use cosmic_text::{Attrs, Buffer, Metrics, Shaping, Wrap};
 
 pub struct TextInputViewState {
     buffer: Buffer,

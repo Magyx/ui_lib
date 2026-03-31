@@ -1,7 +1,8 @@
 use std::{any::Any, borrow::Cow, collections::HashMap};
 
+use cosmic_text::{Attrs, Buffer, Metrics, Shaping};
+
 use super::*;
-use cosmic_text::{Attrs, Buffer, Family, Metrics, Shaping, Style, Weight, Wrap};
 
 struct TextViewState {
     buffer: Buffer,

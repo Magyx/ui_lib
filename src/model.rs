@@ -285,3 +285,5 @@ impl Color {
         ((self.0 & 0xFF_00_00_00) >> 24) as u8
     }
 }
+
+pub use cosmic_text::{Family, Style, Weight, Wrap};
