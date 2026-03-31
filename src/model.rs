@@ -286,4 +286,25 @@ impl Color {
     }
 }
 
-pub use cosmic_text::{Family, Style, Weight, Wrap};
+use std::borrow::Cow;
+
+pub use cosmic_text::{Style, Weight, Wrap};
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Family {
+    Monospace,
+    SansSerif,
+    Serif,
+    Name(Cow<'static, str>),
+}
+
+impl Family {
+    pub(crate) fn as_cosmic(&self) -> cosmic_text::Family<'_> {
+        match self {
+            Self::Monospace => cosmic_text::Family::Monospace,
+            Self::SansSerif => cosmic_text::Family::SansSerif,
+            Self::Serif => cosmic_text::Family::Serif,
+            Self::Name(name) => cosmic_text::Family::Name(name.as_ref()),
+        }
+    }
+}

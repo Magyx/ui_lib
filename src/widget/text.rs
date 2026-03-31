@@ -8,7 +8,7 @@ struct TextViewState {
     buffer: Buffer,
 }
 
-pub struct Text<'a> {
+pub struct Text {
     x: i32,
     y: i32,
     w: i32,
@@ -18,7 +18,10 @@ pub struct Text<'a> {
     text: Cow<'static, str>,
     font_size: f32,
     line_height: f32,
-    attrs: Attrs<'a>,
+    family: Option<Family>,
+    style: Option<Style>,
+    weight: Option<Weight>,
+    color_opt: Option<Color>,
     wrap: Wrap,
 
     size: Size<Length>,
@@ -26,7 +29,7 @@ pub struct Text<'a> {
     max: Size<i32>,
 }
 
-impl<'a> Text<'a> {
+impl Text {
     pub fn new<S: Into<Cow<'static, str>>>(content: S, font_size: f32) -> Self {
         Self {
             x: 0,
@@ -37,32 +40,30 @@ impl<'a> Text<'a> {
             text: content.into(),
             font_size,
             line_height: 1.2,
-            attrs: Attrs::new(),
+            family: None,
+            style: None,
+            weight: None,
+            color_opt: None,
             wrap: Wrap::Word,
             size: Size::new(Length::Grow, Length::Fit),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
         }
     }
-    pub fn family(mut self, family: Family<'a>) -> Self {
-        self.attrs.family = family;
+    pub fn family(mut self, family: Family) -> Self {
+        self.family = Some(family);
         self
     }
     pub fn style(mut self, style: Style) -> Self {
-        self.attrs.style = style;
+        self.style = Some(style);
         self
     }
     pub fn weight(mut self, weight: Weight) -> Self {
-        self.attrs.weight = weight;
+        self.weight = Some(weight);
         self
     }
     pub fn color(mut self, color: Color) -> Self {
-        self.attrs.color_opt = Some(cosmic_text::Color::rgba(
-            color.r(),
-            color.g(),
-            color.b(),
-            color.a(),
-        ));
+        self.color_opt = Some(color);
         self
     }
     pub fn line_height(mut self, line_height: f32) -> Self {
@@ -86,6 +87,27 @@ impl<'a> Text<'a> {
         self
     }
 
+    fn attrs(&self) -> Attrs<'_> {
+        let mut attrs = Attrs::new();
+
+        if let Some(family) = &self.family {
+            attrs = attrs.family(family.as_cosmic());
+        }
+
+        if let Some(style) = self.style {
+            attrs = attrs.style(style);
+        }
+
+        if let Some(weight) = self.weight {
+            attrs = attrs.weight(weight);
+        }
+
+        if let Some(color) = self.color_opt {
+            attrs = attrs.color(cosmic_text::Color(color.0));
+        }
+
+        attrs
+    }
     fn ensure_buffer<'b>(
         &self,
         view_state: &'b mut HashMap<Id, Box<dyn Any>>,
@@ -114,9 +136,9 @@ impl<'a> Text<'a> {
     }
 }
 
-impl<'a> IntoElement for Text<'a> {}
+impl IntoElement for Text {}
 
-impl<'a, M> Widget<M> for Text<'a> {
+impl<M> Widget<M> for Text {
     fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
         let wrap = self.wrap;
 
@@ -126,7 +148,7 @@ impl<'a, M> Widget<M> for Text<'a> {
 
             // (a) Unwrapped measurement
             b.set_wrap(fs, Wrap::None);
-            b.set_text(fs, &self.text, &self.attrs, Shaping::Basic);
+            b.set_text(fs, &self.text, &self.attrs(), Shaping::Basic);
             b.set_size(fs, None, None);
             b.shape_until_scroll(fs, false);
 
@@ -147,7 +169,7 @@ impl<'a, M> Widget<M> for Text<'a> {
                 let mut longest = 0.0f32;
                 for piece in self.text.split_whitespace().filter(|s| !s.is_empty()) {
                     b.set_wrap(fs, Wrap::None);
-                    b.set_text(fs, piece, &self.attrs, Shaping::Basic);
+                    b.set_text(fs, piece, &self.attrs(), Shaping::Basic);
                     b.set_size(fs, None, None);
                     b.shape_until_scroll(fs, false);
                     for run in b.layout_runs() {
@@ -186,7 +208,7 @@ impl<'a, M> Widget<M> for Text<'a> {
 
         let b = self.ensure_buffer(&mut ctx.ui.view_state, fs);
         b.set_wrap(fs, self.wrap);
-        b.set_text(fs, &self.text, &self.attrs, Shaping::Basic);
+        b.set_text(fs, &self.text, &self.attrs(), Shaping::Basic);
         b.set_size(fs, Some(width.max(1) as f32), None);
         b.shape_until_scroll(fs, false);
 
@@ -229,7 +251,7 @@ impl<'a, M> Widget<M> for Text<'a> {
         let fs = ctx.text.font_system_mut();
         let buf = self.ensure_buffer(ctx.view_state, fs);
         buf.set_wrap(fs, self.wrap);
-        buf.set_text(fs, &self.text, &self.attrs, Shaping::Basic);
+        buf.set_text(fs, &self.text, &self.attrs(), Shaping::Basic);
         buf.set_size(fs, Some(self.w.max(1) as f32), None);
         buf.shape_until_scroll(fs, false);
 
