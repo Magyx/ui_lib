@@ -387,6 +387,10 @@ impl SctkState {
         let _ = self.event_tx.send(ev);
     }
 
+    pub fn surface_id_by_protocol_id(&self, id: u32) -> Option<&SurfaceId> {
+        self.by_surface_id.get(&id)
+    }
+
     pub fn remove_surface_by_surface_id(&mut self, sid: SurfaceId) {
         if let Some(sid) = self.by_surface_id.remove(&sid.0) {
             self.surfaces.remove(&sid);

@@ -282,12 +282,6 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct SurfaceId(u32);
 
-impl SurfaceId {
-    pub fn new(id: u32) -> Self {
-        Self(id)
-    }
-}
-
 #[derive(Default)]
 pub struct SctkLoop {
     exit: AtomicBool,
