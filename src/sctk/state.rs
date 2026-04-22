@@ -489,6 +489,10 @@ impl SctkState {
         Ok(created)
     }
 
+    pub fn has_active_lock(&self) -> bool {
+        self.active_lock.is_some()
+    }
+
     /// Be sure to flush and/or let another event cycle happen.
     pub fn unlock_session(&mut self) {
         if let Some(lock) = self.active_lock.take()
