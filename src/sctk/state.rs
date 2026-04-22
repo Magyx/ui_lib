@@ -202,7 +202,7 @@ impl SctkState {
         &mut self,
         qh: &QueueHandle<Self>,
         opts: LayerOptions,
-    ) -> Vec<(SurfaceId, Size<u32>)> {
+    ) -> Vec<SurfaceId> {
         let layer_shell = self._layer_shell.as_ref().expect("Layer shell not bound");
         let chosen = super::helpers::pick_outputs(
             &self.outputs,
@@ -231,7 +231,7 @@ impl SctkState {
                     output: out.into_option(),
                 },
             );
-            surfaces.push((sid, opts.size));
+            surfaces.push(sid);
         }
         surfaces
     }
@@ -248,7 +248,6 @@ impl SctkState {
         );
 
         let mut created = Vec::new();
-
         for out in desired {
             let exists = self.surfaces.values().any(|rec| {
                 matches!(rec.role, SurfaceRole::Layer(_))
@@ -273,10 +272,8 @@ impl SctkState {
                     output: out.into_option(),
                 },
             );
-
             created.push((sid, opts.size));
         }
-
         created
     }
 
@@ -344,11 +341,7 @@ impl SctkState {
         })
     }
 
-    pub fn spawn_window(
-        &mut self,
-        qh: &QueueHandle<Self>,
-        mut opts: XdgOptions,
-    ) -> (SurfaceId, Size<u32>) {
+    pub fn spawn_window(&mut self, qh: &QueueHandle<Self>, mut opts: XdgOptions) -> SurfaceId {
         let xdg = self._xdg_shell.as_ref().expect("XDG shell not bound");
         let wl_surface = self._compositor.create_surface(qh);
         let window = xdg.create_window(wl_surface.clone(), opts.decorations, qh);
@@ -380,7 +373,7 @@ impl SctkState {
                 output,
             },
         );
-        (sid, opts.size)
+        sid
     }
 
     fn emit_event(&self, ev: SctkEvent) {
@@ -404,7 +397,7 @@ impl SctkState {
         &mut self,
         qh: &QueueHandle<Self>,
         opts: LockOptions,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<SurfaceId>> {
         let lock = self.session_lock.lock(qh)?;
         let chosen: Vec<WlOutput> = super::helpers::pick_outputs(
             &self.outputs,
@@ -416,6 +409,7 @@ impl SctkState {
 
         self.active_lock = Some(lock.clone());
 
+        let mut created = Vec::new();
         for out in chosen {
             let wl_surface = self._compositor.create_surface(qh);
             let lock_surface = lock.create_lock_surface(wl_surface.clone(), &out, qh);
@@ -433,9 +427,9 @@ impl SctkState {
                     output: Some(out),
                 },
             );
+            created.push(sid);
         }
-
-        Ok(())
+        Ok(created)
     }
 
     pub fn ensure_lock_surfaces(
@@ -459,7 +453,6 @@ impl SctkState {
         .collect();
 
         let mut created = Vec::new();
-
         for out in desired {
             let out_id = out.id().protocol_id();
 
@@ -491,10 +484,8 @@ impl SctkState {
                     output: Some(out),
                 },
             );
-
             created.push((sid, opts.size));
         }
-
         Ok(created)
     }
 
