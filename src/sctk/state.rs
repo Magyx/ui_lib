@@ -757,8 +757,6 @@ impl SessionLockHandler for SctkState {
             }
         }
 
-        surface.wl_surface().commit();
-
         if let Some(sid) = self.by_surface_id.get(&lid).copied()
             && self.surfaces.get_mut(&sid).is_some()
         {
