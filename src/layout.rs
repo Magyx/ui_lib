@@ -460,9 +460,7 @@ impl LayoutEngine {
                 Length::Fixed(w) => w,
                 Length::Fit => self.nodes[id].current_size.width,
             };
-            let target_w = max(target_w, self.nodes[id].min.width)
-                .min(self.nodes[id].max.width)
-                .min(parent_width);
+            let target_w = max(target_w, self.nodes[id].min.width).min(self.nodes[id].max.width);
             self.nodes[id].current_size.width = target_w;
             let inner_w = (target_w
                 - pad.left
@@ -599,9 +597,7 @@ impl LayoutEngine {
                 Length::Fixed(w) => w,
                 Length::Fit => self.nodes[id].current_size.width,
             };
-            let final_w = max(target_w, self.nodes[id].min.width)
-                .min(self.nodes[id].max.width)
-                .min(parent_width);
+            let final_w = max(target_w, self.nodes[id].min.width).min(self.nodes[id].max.width);
             self.nodes[id].current_size.width = final_w;
         }
     }
@@ -680,9 +676,7 @@ impl LayoutEngine {
                 Length::Fixed(h) => h,
                 Length::Fit => self.nodes[id].current_size.height,
             };
-            let target_h = max(target_h, self.nodes[id].min.height)
-                .min(self.nodes[id].max.height)
-                .min(parent_height);
+            let target_h = max(target_h, self.nodes[id].min.height).min(self.nodes[id].max.height);
             self.nodes[id].current_size.height = target_h;
 
             let inner_h = (target_h
@@ -814,9 +808,7 @@ impl LayoutEngine {
                 Length::Fixed(h) => h,
                 Length::Fit => self.nodes[id].current_size.height,
             };
-            let final_h = max(target_h, self.nodes[id].min.height)
-                .min(self.nodes[id].max.height)
-                .min(parent_height);
+            let final_h = max(target_h, self.nodes[id].min.height).min(self.nodes[id].max.height);
             self.nodes[id].current_size.height = final_h;
         }
     }
