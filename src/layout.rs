@@ -297,7 +297,7 @@ fn write_back<M>(
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct __Node {
     pub size: Size<Length>,
     pub min: Size<i32>,
@@ -318,7 +318,31 @@ pub struct __Node {
     pub(crate) next_sibling: Option<usize>,
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+impl Default for __Node {
+    fn default() -> Self {
+        Self {
+            size: Default::default(),
+            min: Default::default(),
+            max: Size::splat(i32::MAX),
+            layout_dir: Default::default(),
+            padding: Default::default(),
+            spacing: Default::default(),
+            clip_children: Default::default(),
+            is_absolute: Default::default(),
+            offset_pos: Default::default(),
+
+            pos: Default::default(),
+            current_size: Default::default(),
+            content_size: Default::default(),
+
+            parent: Default::default(),
+            first_child: Default::default(),
+            next_sibling: Default::default(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct Node {
     pub size: Size<Length>,
     pub min: Size<i32>,
@@ -329,6 +353,22 @@ pub struct Node {
     pub clip_children: bool,
     pub is_absolute: bool,
     pub offset_pos: Position<i32>,
+}
+
+impl Default for Node {
+    fn default() -> Self {
+        Self {
+            size: Default::default(),
+            min: Default::default(),
+            max: Size::splat(i32::MAX),
+            layout_dir: Default::default(),
+            padding: Default::default(),
+            spacing: Default::default(),
+            clip_children: Default::default(),
+            is_absolute: Default::default(),
+            offset_pos: Default::default(),
+        }
+    }
 }
 
 pub struct LayoutEngine {
