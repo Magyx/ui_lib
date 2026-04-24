@@ -308,3 +308,150 @@ impl Family {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vec4_new_and_fields() {
+        let v = Vec4::new(1, 2, 3, 4);
+        assert_eq!(v.x, 1);
+        assert_eq!(v.y, 2);
+        assert_eq!(v.z, 3);
+        assert_eq!(v.w, 4);
+    }
+
+    #[test]
+    fn vec4_splat() {
+        let v = Vec4::splat(7);
+        assert_eq!(v, Vec4::new(7, 7, 7, 7));
+    }
+
+    #[test]
+    fn vec4_add_sub() {
+        let a = Vec4::new(1, 2, 3, 4);
+        let b = Vec4::new(10, 20, 30, 40);
+        assert_eq!(a + b, Vec4::new(11, 22, 33, 44));
+        assert_eq!(b - a, Vec4::new(9, 18, 27, 36));
+    }
+
+    #[test]
+    fn vec4_add_assign() {
+        let mut a = Vec4::new(1, 1, 1, 1);
+        a += Vec4::new(2, 3, 4, 5);
+        assert_eq!(a, Vec4::new(3, 4, 5, 6));
+    }
+
+    #[test]
+    fn vec4_neg() {
+        let a = Vec4::new(1i32, -2, 3, -4);
+        assert_eq!(-a, Vec4::new(-1, 2, -3, 4));
+    }
+
+    #[test]
+    fn vec4_scalar_add() {
+        let a = Vec4::new(1, 2, 3, 4);
+        assert_eq!(a + 10, Vec4::new(11, 12, 13, 14));
+    }
+
+    #[test]
+    fn vec4_as_slice_roundtrip() {
+        let v = Vec4::new(5u32, 6, 7, 8);
+        assert_eq!(v.as_slice(), &[5, 6, 7, 8]);
+        let arr: [u32; 4] = v.into();
+        assert_eq!(arr, [5, 6, 7, 8]);
+        let back: Vec4<u32> = arr.into();
+        assert_eq!(back, v);
+    }
+
+    #[test]
+    fn vec4_as_slice_mut_mutates_fields() {
+        let mut v = Vec4::new(0, 0, 0, 0);
+        for (i, slot) in v.as_slice_mut().iter_mut().enumerate() {
+            *slot = i as i32 + 1;
+        }
+        assert_eq!(v, Vec4::new(1, 2, 3, 4));
+    }
+
+    #[test]
+    fn size_min_max() {
+        let a = Size::new(10, 20);
+        let b = Size::new(15, 5);
+        assert_eq!(a.max(b), Size::new(15, 20));
+        assert_eq!(a.min(b), Size::new(10, 5));
+    }
+
+    #[test]
+    fn size_from_tuple() {
+        let s: Size<i32> = (3, 4).into();
+        assert_eq!(s, Size::new(3, 4));
+    }
+
+    #[test]
+    fn position_plus_size() {
+        let p = Position::new(10, 20);
+        let s = Size::new(3, 4);
+        assert_eq!(p + s, Position::new(13, 24));
+        assert_eq!(p - s, Position::new(7, 16));
+    }
+
+    #[test]
+    fn position_plus_size_assign() {
+        let mut p = Position::new(1, 1);
+        p += Size::new(10, 20);
+        assert_eq!(p, Position::new(11, 21));
+        p -= Size::new(1, 1);
+        assert_eq!(p, Position::new(10, 20));
+    }
+
+    #[test]
+    fn color_constants() {
+        assert_eq!(Color::TRANSPARENT.as_rgba(), [0, 0, 0, 0]);
+        assert_eq!(Color::WHITE.as_rgba(), [255, 255, 255, 255]);
+        assert_eq!(Color::BLACK.as_rgba(), [0, 0, 0, 255]);
+        assert_eq!(Color::RED.as_rgba(), [255, 0, 0, 255]);
+        assert_eq!(Color::GREEN.as_rgba(), [0, 255, 0, 255]);
+        assert_eq!(Color::BLUE.as_rgba(), [0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn color_rgb_defaults_alpha_to_ff() {
+        let c = Color::rgb(10, 20, 30);
+        assert_eq!(c.a(), 0xFF);
+        assert_eq!(c.r(), 10);
+        assert_eq!(c.g(), 20);
+        assert_eq!(c.b(), 30);
+    }
+
+    #[test]
+    fn color_rgba_channel_order_is_abgr_packed_u32() {
+        // r | g<<8 | b<<16 | a<<24
+        let c = Color::rgba(0x11, 0x22, 0x33, 0x44);
+        assert_eq!(c.0, 0x44_33_22_11);
+        assert_eq!(c.as_rgba_tuple(), (0x11, 0x22, 0x33, 0x44));
+    }
+
+    #[test]
+    fn color_splat() {
+        let c = Color::splat(0xAB);
+        assert_eq!(c.as_rgba(), [0xAB, 0xAB, 0xAB, 0xAB]);
+    }
+
+    #[test]
+    fn color_channel_extraction_at_boundaries() {
+        let c = Color::rgba(0, 255, 0, 255);
+        assert_eq!(c.r(), 0);
+        assert_eq!(c.g(), 255);
+        assert_eq!(c.b(), 0);
+        assert_eq!(c.a(), 255);
+    }
+
+    #[test]
+    fn family_as_cosmic_maps_builtin_variants() {
+        let _ = Family::Monospace.as_cosmic();
+        let _ = Family::SansSerif.as_cosmic();
+        let _ = Family::Serif.as_cosmic();
+        let _ = Family::Name(std::borrow::Cow::Borrowed("Comic Sans")).as_cosmic();
+    }
+}

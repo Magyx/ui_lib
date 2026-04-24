@@ -135,3 +135,205 @@ pub struct EventCtx<'a, M> {
     pub ui: &'a mut Context<M>,
     pub event: Option<UiEventRef<'a>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event::MouseButton;
+
+    // Context is generic over message type M. We use a simple enum here.
+    #[derive(Debug, PartialEq, Clone)]
+    enum Msg {
+        A,
+        B(i32),
+    }
+
+    #[test]
+    fn context_new_defaults_are_empty() {
+        let ctx: Context<Msg> = Context::new();
+        assert_eq!(ctx.mouse_pos.x, 0.0);
+        assert_eq!(ctx.mouse_pos.y, 0.0);
+        assert_eq!(ctx.mouse_buttons_down, 0);
+        assert_eq!(ctx.mouse_buttons_pressed, 0);
+        assert_eq!(ctx.mouse_buttons_released, 0);
+        assert!(ctx.hot_item.is_none());
+        assert!(ctx.active_item.is_none());
+        assert!(ctx.kbd_focus_item.is_none());
+    }
+
+    #[test]
+    fn is_button_down_reads_bitfield() {
+        let mut ctx: Context<Msg> = Context::new();
+        ctx.mouse_buttons_down = 1 << MouseButton::Left.bit();
+        assert!(ctx.is_button_down(MouseButton::Left));
+        assert!(!ctx.is_button_down(MouseButton::Right));
+    }
+
+    #[test]
+    fn is_button_pressed_and_released_read_respective_fields() {
+        let mut ctx: Context<Msg> = Context::new();
+        ctx.mouse_buttons_pressed = 1 << MouseButton::Right.bit();
+        ctx.mouse_buttons_released = 1 << MouseButton::Middle.bit();
+
+        assert!(ctx.is_button_pressed(MouseButton::Right));
+        assert!(!ctx.is_button_pressed(MouseButton::Middle));
+
+        assert!(ctx.is_button_released(MouseButton::Middle));
+        assert!(!ctx.is_button_released(MouseButton::Right));
+
+        // Down field is independent.
+        assert!(!ctx.is_button_down(MouseButton::Right));
+    }
+
+    #[test]
+    fn multiple_buttons_coexist_in_bitfield() {
+        let mut ctx: Context<Msg> = Context::new();
+        ctx.mouse_buttons_down = (1 << MouseButton::Left.bit()) | (1 << MouseButton::Right.bit());
+        assert!(ctx.is_button_down(MouseButton::Left));
+        assert!(ctx.is_button_down(MouseButton::Right));
+        assert!(!ctx.is_button_down(MouseButton::Middle));
+    }
+
+    #[test]
+    fn emit_and_take_round_trips_messages_in_order() {
+        let mut ctx: Context<Msg> = Context::new();
+        ctx.emit(Msg::A);
+        ctx.emit(Msg::B(42));
+        ctx.emit(Msg::A);
+
+        let taken = ctx.take();
+        assert_eq!(taken, vec![Msg::A, Msg::B(42), Msg::A]);
+
+        // Take drains the queue.
+        assert!(ctx.take().is_empty());
+    }
+
+    #[test]
+    fn take_on_empty_returns_empty_vec() {
+        let mut ctx: Context<Msg> = Context::new();
+        assert!(ctx.take().is_empty());
+    }
+
+    #[test]
+    fn request_redraw_is_consumed_by_take_redraw() {
+        let mut ctx: Context<Msg> = Context::new();
+        assert!(!ctx.take_redraw(), "initial take_redraw should be false");
+
+        ctx.request_redraw();
+        assert!(
+            ctx.take_redraw(),
+            "after request_redraw, take should be true"
+        );
+        assert!(
+            !ctx.take_redraw(),
+            "second take after a single request should be false"
+        );
+    }
+
+    #[test]
+    fn multiple_request_redraw_calls_only_need_one_take() {
+        let mut ctx: Context<Msg> = Context::new();
+        ctx.request_redraw();
+        ctx.request_redraw();
+        ctx.request_redraw();
+        assert!(ctx.take_redraw());
+        assert!(!ctx.take_redraw());
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct DummyState {
+        counter: u32,
+        label: &'static str,
+    }
+
+    #[test]
+    fn view_state_starts_empty() {
+        let ctx: Context<Msg> = Context::new();
+        assert!(ctx.view_state.is_empty());
+    }
+
+    #[test]
+    fn view_state_insert_and_downcast_mut() {
+        use std::any::Any;
+
+        let mut ctx: Context<Msg> = Context::new();
+        let id: crate::context::Id = 42;
+
+        // Widget-typical pattern: or_insert_with + downcast_mut.
+        let st = ctx
+            .view_state
+            .entry(id)
+            .or_insert_with(|| {
+                Box::new(DummyState {
+                    counter: 0,
+                    label: "init",
+                }) as Box<dyn Any>
+            })
+            .downcast_mut::<DummyState>()
+            .expect("downcast failed");
+        st.counter += 1;
+        st.label = "touched";
+
+        // Second access sees the prior state.
+        let again = ctx
+            .view_state
+            .get_mut(&id)
+            .and_then(|b| b.downcast_mut::<DummyState>())
+            .unwrap();
+        assert_eq!(again.counter, 1);
+        assert_eq!(again.label, "touched");
+    }
+
+    #[test]
+    fn view_state_different_ids_are_independent() {
+        use std::any::Any;
+
+        let mut ctx: Context<Msg> = Context::new();
+
+        for id in [1u64, 2, 99, 1_000_000] {
+            ctx.view_state.entry(id).or_insert_with(|| {
+                Box::new(DummyState {
+                    counter: id as u32,
+                    label: "x",
+                }) as Box<dyn Any>
+            });
+        }
+
+        for id in [1u64, 2, 99, 1_000_000] {
+            let st = ctx
+                .view_state
+                .get_mut(&id)
+                .and_then(|b| b.downcast_mut::<DummyState>())
+                .unwrap();
+            assert_eq!(st.counter, id as u32);
+        }
+    }
+
+    #[test]
+    fn view_state_wrong_type_downcast_returns_none() {
+        // If a widget tries to downcast to the wrong type (e.g. two
+        // widgets collide on an Id), downcast_mut returns None rather
+        // than corrupting memory. Widgets in this codebase `.expect()`
+        // the downcast, which will panic — but the panic is a safer
+        // failure mode than UB.
+        use std::any::Any;
+
+        let mut ctx: Context<Msg> = Context::new();
+        let id: crate::context::Id = 7;
+
+        ctx.view_state.insert(id, Box::new(123u32) as Box<dyn Any>);
+
+        let as_dummy = ctx
+            .view_state
+            .get_mut(&id)
+            .and_then(|b| b.downcast_mut::<DummyState>());
+        assert!(as_dummy.is_none(), "wrong-type downcast must be None");
+
+        let as_u32 = ctx
+            .view_state
+            .get_mut(&id)
+            .and_then(|b| b.downcast_mut::<u32>())
+            .copied();
+        assert_eq!(as_u32, Some(123));
+    }
+}

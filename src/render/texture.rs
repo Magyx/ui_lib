@@ -464,3 +464,276 @@ impl TextureRegistry {
         atlas.generation = self.gens[idx];
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ========================================================
+    // pack_unorm2x16 / pack_unorm4x8
+    // ========================================================
+    //
+    // These are the GPU-format contracts used to pack atlas UV
+    // offsets/scales and content-fit ratios into u32. A rounding bug
+    // here silently corrupts UVs on screen — worth careful coverage.
+
+    #[test]
+    fn pack_unorm2x16_corners() {
+        assert_eq!(pack_unorm2x16([0.0, 0.0]), 0);
+        // 1.0 * 65535 + 0.5 -> 65535.5, floor -> 65535 = 0xFFFF.
+        assert_eq!(pack_unorm2x16([1.0, 1.0]), 0xFFFF_FFFF);
+        // x only: low 16 bits set.
+        assert_eq!(pack_unorm2x16([1.0, 0.0]), 0x0000_FFFF);
+        // y only: high 16 bits set.
+        assert_eq!(pack_unorm2x16([0.0, 1.0]), 0xFFFF_0000);
+    }
+
+    #[test]
+    fn pack_unorm2x16_halfway() {
+        // 0.5 * 65535 + 0.5 = 32768.0, floor = 32768 = 0x8000.
+        let p = pack_unorm2x16([0.5, 0.5]);
+        assert_eq!(p & 0xFFFF, 0x8000);
+        assert_eq!(p >> 16, 0x8000);
+    }
+
+    #[test]
+    fn pack_unorm2x16_clamps_out_of_range_inputs() {
+        // Negative values clamp to 0.
+        assert_eq!(pack_unorm2x16([-1.0, -100.0]), 0);
+        // Values above 1.0 clamp to 1.0 -> 0xFFFF each.
+        assert_eq!(pack_unorm2x16([2.0, 1_000.0]), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn pack_unorm4x8_corners() {
+        assert_eq!(pack_unorm4x8([0.0, 0.0, 0.0, 0.0]), 0);
+        // 1.0 * 255 + 0.5 = 255.5, floor = 255.
+        assert_eq!(pack_unorm4x8([1.0, 1.0, 1.0, 1.0]), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn pack_unorm4x8_each_channel_independent() {
+        // Only low byte.
+        assert_eq!(pack_unorm4x8([1.0, 0.0, 0.0, 0.0]), 0x0000_00FF);
+        // Only second byte.
+        assert_eq!(pack_unorm4x8([0.0, 1.0, 0.0, 0.0]), 0x0000_FF00);
+        // Only third byte.
+        assert_eq!(pack_unorm4x8([0.0, 0.0, 1.0, 0.0]), 0x00FF_0000);
+        // Only high byte.
+        assert_eq!(pack_unorm4x8([0.0, 0.0, 0.0, 1.0]), 0xFF00_0000);
+    }
+
+    #[test]
+    fn pack_unorm4x8_clamps_out_of_range_inputs() {
+        assert_eq!(pack_unorm4x8([-0.5, -1.0, -10.0, -100.0]), 0);
+        assert_eq!(pack_unorm4x8([2.0, 3.0, 100.0, f32::INFINITY]), 0xFFFF_FFFF);
+    }
+
+    // ========================================================
+    // pack_slot_gen / unpack_slot_gen
+    // ========================================================
+    //
+    // The encoding stores (slot + 1) in the low SLOT_BITS and the
+    // generation in the upper bits. Note the +1/-1 offset: slot 0 is
+    // encoded as 1 in the low bits, which lets a fully-zero packed
+    // value mean "no texture".
+
+    #[test]
+    fn slot_gen_roundtrip_slot_zero() {
+        let packed = pack_slot_gen(0, 0);
+        assert_eq!(
+            packed, 1,
+            "slot 0 + gen 0 should encode as 1 (zero means unset)"
+        );
+        let (slot, r#gen) = unpack_slot_gen(packed);
+        assert_eq!((slot, r#gen), (0, 0));
+    }
+
+    #[test]
+    fn slot_gen_roundtrip_named_slots() {
+        for slot in [0, 1, 7, 255, 1000, SLOT_MASK as usize - 1] {
+            for r#gen in [0u32, 1, 42, 1_000_000] {
+                let packed = pack_slot_gen(slot, r#gen);
+                let (s, g) = unpack_slot_gen(packed);
+                assert_eq!(
+                    (s, g),
+                    (slot, r#gen),
+                    "roundtrip failed for slot={slot} gen={gen}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn slot_gen_layout_is_low_slot_bits_for_slot() {
+        // Generation bits should not leak into the slot portion.
+        let packed = pack_slot_gen(5, 0xABCD);
+        assert_eq!(packed & SLOT_MASK, 5 + 1);
+        assert_eq!(packed >> SLOT_BITS, 0xABCD);
+    }
+
+    #[test]
+    fn slot_gen_max_slot_fits_in_slot_bits() {
+        // SLOT_MASK - 1 is the largest slot index whose (slot + 1)
+        // still fits in SLOT_BITS (because (SLOT_MASK - 1) + 1 == SLOT_MASK).
+        let max_slot = (SLOT_MASK as usize) - 1;
+        let packed = pack_slot_gen(max_slot, 0);
+        let (s, _) = unpack_slot_gen(packed);
+        assert_eq!(s, max_slot);
+    }
+
+    // ========================================================
+    // Atlas::alloc - shelf packing state machine
+    // ========================================================
+
+    fn fresh_atlas(w: u32, h: u32) -> Atlas {
+        // Atlas::new is private; we're in the same module, so this works
+        // from inside `mod tests` only.
+        Atlas::new(0, 0, Size::new(w, h))
+    }
+
+    #[test]
+    fn alloc_single_fits_at_origin() {
+        let mut a = fresh_atlas(256, 256);
+        let r = a.alloc(32, 16).expect("should fit");
+        assert_eq!((r.x, r.y, r.w, r.h), (0, 0, 32, 16));
+    }
+
+    #[test]
+    fn alloc_second_fits_next_to_first_on_same_row() {
+        let mut a = fresh_atlas(256, 256);
+        let r1 = a.alloc(32, 16).unwrap();
+        let r2 = a.alloc(24, 16).unwrap();
+        assert_eq!((r1.x, r1.y), (0, 0));
+        assert_eq!(
+            (r2.x, r2.y),
+            (32, 0),
+            "second rect starts where first ended on x"
+        );
+    }
+
+    #[test]
+    fn alloc_row_h_tracks_tallest_on_current_row() {
+        // Pack: [10x5][10x20][10x5] — row height should be 20 by the end.
+        let mut a = fresh_atlas(100, 100);
+        let _ = a.alloc(10, 5).unwrap();
+        let _ = a.alloc(10, 20).unwrap(); // bumps row_h to 20
+        let _ = a.alloc(10, 5).unwrap();
+
+        // Now force a wrap. The next rect should land at y = 20 (the
+        // tallest row so far), not y = 5.
+        // Fill the rest of row 1 (width 100, we used 30, so 70 left).
+        let _ = a.alloc(70, 1).unwrap();
+        // Next alloc of any size triggers the wrap.
+        let wrap = a.alloc(5, 5).unwrap();
+        assert_eq!(
+            wrap.y, 20,
+            "new row should start below the tallest on prev row"
+        );
+        assert_eq!(wrap.x, 0, "new row starts at x=0");
+    }
+
+    #[test]
+    fn alloc_wraps_to_new_row_when_current_row_full() {
+        // 10-wide atlas, first row holds one 6x4 rect. Next 6x4 needs to wrap.
+        let mut a = fresh_atlas(10, 20);
+        let _ = a.alloc(6, 4).unwrap();
+        let r = a.alloc(6, 4).unwrap();
+        assert_eq!(r.x, 0);
+        assert_eq!(r.y, 4, "second row starts at row_h of first");
+    }
+
+    #[test]
+    fn alloc_rejects_rect_larger_than_atlas() {
+        let mut a = fresh_atlas(32, 32);
+        assert!(a.alloc(33, 10).is_none(), "too wide");
+        assert!(a.alloc(10, 33).is_none(), "too tall");
+        assert!(a.alloc(100, 100).is_none(), "both");
+    }
+
+    #[test]
+    fn alloc_rejects_when_vertical_space_exhausted() {
+        // A tiny atlas that fits exactly one row of 5x5.
+        let mut a = fresh_atlas(5, 5);
+        let _ = a.alloc(5, 5).unwrap();
+        // Next request needs to wrap to y=5 but the atlas ends at y=5.
+        assert!(a.alloc(1, 1).is_none());
+    }
+
+    #[test]
+    fn alloc_exactly_fits_atlas_width_on_single_row() {
+        let mut a = fresh_atlas(100, 50);
+        let r = a.alloc(100, 50).expect("exact-fit should succeed");
+        assert_eq!((r.x, r.y, r.w, r.h), (0, 0, 100, 50));
+        // Next alloc has nowhere to go.
+        assert!(a.alloc(1, 1).is_none());
+    }
+
+    #[test]
+    fn alloc_zero_sized_rect_succeeds_and_does_not_advance_cursor() {
+        // `w > self.size_px.width` is the only rejection, so zero is allowed.
+        // Zero-width also means the x cursor doesn't move.
+        let mut a = fresh_atlas(100, 100);
+        let r = a.alloc(0, 0).expect("zero-sized alloc should succeed");
+        assert_eq!((r.w, r.h), (0, 0));
+
+        // A subsequent real alloc should still start at x=0 because
+        // cursor_x only advances by w, and w was 0.
+        let r2 = a.alloc(10, 10).unwrap();
+        assert_eq!((r2.x, r2.y), (0, 0));
+    }
+
+    #[test]
+    fn alloc_many_small_rects_fills_multiple_rows() {
+        // 40x40 atlas filled with 10x10 rects should pack 4x4 = 16 rects.
+        let mut a = fresh_atlas(40, 40);
+        let mut allocated = 0;
+        while a.alloc(10, 10).is_some() {
+            allocated += 1;
+        }
+        assert_eq!(allocated, 16, "a 40x40 atlas should fit 16 10x10 tiles");
+        // One more attempt must still fail.
+        assert!(a.alloc(10, 10).is_none());
+    }
+
+    #[test]
+    fn alloc_mixed_heights_waste_vertical_space() {
+        // Shelf packers waste space below short rects in a tall row.
+        // Verify this is the behaviour (regression guard in case we
+        // later switch to a smarter packer).
+        let mut a = fresh_atlas(100, 100);
+        let _ = a.alloc(100, 80).unwrap(); // row_h becomes 80
+        // Force wrap.
+        let r = a.alloc(1, 1).unwrap();
+        assert_eq!(r.y, 80, "gap below short rects is still 80 tall");
+    }
+
+    // ========================================================
+    // TextureHandle
+    // ========================================================
+
+    #[test]
+    fn texture_handle_default_is_all_zero() {
+        // slot_gen == 0 is the sentinel for "no texture" — relied on by
+        // TextSystem::upload_glyph which returns TextureHandle::default()
+        // for oversized or zero-size glyphs.
+        let h = TextureHandle::default();
+        assert_eq!(h.slot_gen, 0);
+        assert_eq!(h.scale_packed, 0);
+        assert_eq!(h.offset_packed, 0);
+        assert_eq!(h.size_px, Size::new(0, 0));
+    }
+
+    #[test]
+    fn texture_handle_copy_and_eq() {
+        let h1 = TextureHandle {
+            slot_gen: pack_slot_gen(3, 7),
+            scale_packed: pack_unorm2x16([1.0, 1.0]),
+            offset_packed: pack_unorm2x16([0.25, 0.5]),
+            size_px: Size::new(32, 32),
+        };
+        let h2 = h1; // Copy
+        assert_eq!(h1, h2);
+        assert_ne!(h1, TextureHandle::default());
+    }
+}
