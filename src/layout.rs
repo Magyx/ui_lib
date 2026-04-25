@@ -257,6 +257,7 @@ fn __paint_tree<M>(
     }
 
     let overlay_begin = out.len();
+    ctx.__set_current_node(id);
     w.paint_overlay(ctx, out);
 
     if eng.debug {
