@@ -108,6 +108,12 @@ impl Text {
 
         attrs
     }
+    fn get_buffer<'b>(&self, view_state: &'b HashMap<Id, Box<dyn Any>>) -> Option<&'b Buffer> {
+        view_state
+            .get(&self.id)
+            .and_then(|e| e.downcast_ref::<TextViewState>())
+            .map(|s| &s.buffer)
+    }
     fn ensure_buffer<'b>(
         &self,
         view_state: &'b mut HashMap<Id, Box<dyn Any>>,
@@ -245,9 +251,8 @@ impl<M> Widget<M> for Text {
         unreachable!()
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        const BASE_COLOR: Color = Color::rgba(255, 255, 255, 255);
-
+    // TODO: cache shape and compare to avoid reshaping every (re)paint
+    fn prepare(&mut self, ctx: &mut PrepareCtx) {
         let fs = ctx.text.font_system_mut();
         let buf = self.ensure_buffer(ctx.view_state, fs);
         buf.set_wrap(fs, self.wrap);
@@ -255,13 +260,29 @@ impl<M> Widget<M> for Text {
         buf.set_size(fs, Some(self.w.max(1) as f32), None);
         buf.shape_until_scroll(fs, false);
 
+        for key in buf.layout_runs().flat_map(|r| r.glyphs) {
+            if let Some((_, size, key)) = ctx.text.prepare_glyph_data(key) {
+                let _ = ctx
+                    .text
+                    .upload_glyph(ctx.gpu, ctx.texture, key, size.width, size.height);
+            }
+        }
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        const BASE_COLOR: Color = Color::rgba(255, 255, 255, 255);
+
+        let Some(buf) = self.get_buffer(ctx.view_state) else {
+            return;
+        };
+
         for run in buf.layout_runs() {
             for glyph in run.glyphs {
-                let (Position { x: left, y: top }, Size { width, height }, cache_key) =
-                    match ctx.text.get_glyph_data(glyph) {
-                        Some(v) => v,
-                        None => continue,
-                    };
+                let Some((Position { x: left, y: top }, Size { width, height }, cache_key)) =
+                    ctx.text.get_glyph_data(glyph)
+                else {
+                    continue;
+                };
 
                 let top_left = Position::new(
                     (self.x as f32 + glyph.x).round() as i32 + left,
@@ -273,14 +294,9 @@ impl<M> Widget<M> for Text {
                     .map(|c| Color::rgba(c.r(), c.g(), c.b(), c.a()))
                     .unwrap_or(BASE_COLOR);
 
-                let handle =
-                    match ctx
-                        .text
-                        .upload_glyph(ctx.gpu, ctx.texture, cache_key, width, height)
-                    {
-                        Some(h) => h,
-                        None => continue,
-                    };
+                let Some(handle) = ctx.text.lookup_glyph_handle(cache_key) else {
+                    continue;
+                };
 
                 instances.push(Instance::ui_tex(
                     top_left,

@@ -90,7 +90,7 @@ impl TextSystem {
         &mut self.swash_cache
     }
 
-    pub fn get_glyph_data(
+    pub fn prepare_glyph_data(
         &mut self,
         glyph: &LayoutGlyph,
     ) -> Option<(Position<i32>, Size<u32>, CacheKey)> {
@@ -110,6 +110,28 @@ impl TextSystem {
         Some((
             Position::new(img.placement.left, img.placement.top),
             Size::new(gw, gh),
+            phys.cache_key,
+        ))
+    }
+
+    pub fn get_glyph_data(
+        &self,
+        glyph: &LayoutGlyph,
+    ) -> Option<(Position<i32>, Size<u32>, CacheKey)> {
+        let phys = glyph.physical((0.0, 0.0), 1.0);
+        let img = self
+            .swash_cache
+            .image_cache
+            .get(&phys.cache_key)?
+            .as_ref()?;
+
+        if img.placement.width == 0 || img.placement.height == 0 {
+            return None;
+        }
+
+        Some((
+            Position::new(img.placement.left, img.placement.top),
+            Size::new(img.placement.width, img.placement.height),
             phys.cache_key,
         ))
     }
@@ -198,5 +220,9 @@ impl TextSystem {
         }
 
         Some(TextureHandle::default())
+    }
+
+    pub fn lookup_glyph_handle(&self, key: CacheKey) -> Option<TextureHandle> {
+        self.glyph_map.get(&key).map(|&(handle, _)| handle)
     }
 }

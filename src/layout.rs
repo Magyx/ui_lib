@@ -2,7 +2,7 @@
 use std::cmp::{max, min};
 
 use crate::{
-    context::{Id, LayoutCtx, PaintCtx},
+    context::{Id, LayoutCtx, PaintCtx, PrepareCtx},
     model::{Color, Position, Size},
     primitive::Instance,
     widget::{Axis, Length, Padding, Widget},
@@ -141,6 +141,36 @@ fn post_width_query<'a, M>(
     for i in 0..count {
         post_width_query(w.child_mut(i), eng, ctx, cursor);
     }
+}
+
+pub fn prepare_tree<M>(
+    w: &mut dyn crate::widget::Widget<M>,
+    ctx: &mut PrepareCtx,
+    cursor: &mut usize,
+) {
+    crate::scope!("layout::prepare_tree");
+    __prepare_tree(w, ctx, cursor);
+}
+
+fn __prepare_tree<M>(
+    w: &mut dyn crate::widget::Widget<M>,
+    ctx: &mut PrepareCtx,
+    cursor: &mut usize,
+) {
+    let id = *cursor;
+    ctx.__set_current_node(id);
+
+    w.prepare(ctx);
+    *cursor += 1;
+
+    let child_count = w.child_count();
+    for i in 0..child_count {
+        let child = w.child_mut(i);
+        __prepare_tree(child, ctx, cursor);
+    }
+
+    ctx.__set_current_node(id);
+    w.prepare_overlay(ctx);
 }
 
 pub fn paint_tree<M>(

@@ -50,6 +50,8 @@ pub trait Widget<M>: IntoElement {
     fn children_offset(&self, _view_state: &mut HashMap<Id, Box<dyn Any>>) -> (i32, i32) {
         (0, 0)
     }
+    fn prepare(&mut self, _ctx: &mut PrepareCtx) {}
+    fn prepare_overlay(&mut self, _ctx: &mut PrepareCtx) {}
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
     fn paint_overlay(&mut self, _ctx: &mut PaintCtx, _instancess: &mut Vec<Instance>) {}
 

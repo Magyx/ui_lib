@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use crate::{
     consts::*,
-    context::{Context, EventCtx, LayoutCtx, PaintCtx},
+    context::{Context, EventCtx, LayoutCtx, PaintCtx, PrepareCtx},
     event::{Event, KeyState, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
@@ -479,24 +479,36 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             )
         };
 
+        // TODO: split handle in other steps so we don't need to force a take_redraw
         let mut event_ctx = EventCtx {
-            event: None,
             globals: &target.globals,
             ui: &mut target.ctx,
+            event: None,
         };
-
-        // TODO: split handle into prepare and other steps so we don't need to force a take_redraw
         root.as_mut().handle(&mut event_ctx);
         target.ctx.take_redraw();
+
+        {
+            crate::scope!("prepare");
+            let mut prepare_ctx = PrepareCtx {
+                globals: &target.globals,
+                text: &mut self.renderer.text,
+                gpu: &self.gpu.clone(),
+                texture: &mut self.renderer.textures,
+                view_state: &mut target.ctx.view_state,
+                layout: &self.layout_engine,
+                current_node: root_id,
+            };
+            let mut cursor = root_id;
+            layout::prepare_tree(root.as_mut(), &mut prepare_ctx, &mut cursor);
+        }
 
         let mut instances = Vec::new();
         {
             crate::scope!("paint");
             let mut paint_ctx = PaintCtx {
                 globals: &target.globals,
-                text: &mut self.renderer.text,
-                gpu: &self.gpu.clone(),
-                texture: &mut self.renderer.textures,
+                text: &self.renderer.text,
                 view_state: &mut target.ctx.view_state,
                 layout: &self.layout_engine,
                 current_node: root_id,

@@ -12,6 +12,7 @@ pub struct TextInputViewState {
     value: String,
     width: i32,
     caret: usize,
+    caret_rect: Option<(i32, i32, i32)>,
 }
 
 impl TextInputViewState {
@@ -21,6 +22,7 @@ impl TextInputViewState {
             value: String::new(),
             width: 0,
             caret: 0,
+            caret_rect: None,
         }
     }
 }
@@ -240,7 +242,14 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             .downcast_mut::<TextInputViewState>()
             .expect("View state was wrong type")
     }
-
+    fn state<'b>(
+        &self,
+        view_state: &'b HashMap<Id, Box<dyn Any>>,
+    ) -> Option<&'b TextInputViewState> {
+        view_state
+            .get(&self.id)?
+            .downcast_ref::<TextInputViewState>()
+    }
     fn state_mut<'b>(
         &self,
         view_state: &'b mut HashMap<Id, Box<dyn Any>>,
@@ -250,27 +259,14 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             .downcast_mut::<TextInputViewState>()
     }
 
-    fn paint_text_and_caret(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        let border_color = if self.focused {
-            self.colors.focus_border
-        } else {
-            self.colors.border
-        };
-        instances.push(Instance::ui(
-            Position::new(self.x, self.y),
-            Size::new(self.w, self.h),
-            border_color,
-        ));
-        instances.push(Instance::ui(
-            Position::new(self.x + 1, self.y + 1),
-            Size::new(self.w - 2, self.h - 2),
-            self.colors.bg,
-        ));
-
+    fn prepare_text_and_caret(&mut self, ctx: &mut PrepareCtx) {
         let (l, t, r, _b) = self.inner_bounds();
         let available_w = (r - l).max(1) as f32;
 
-        let st = self.ensure_state(ctx.view_state, ctx.text.font_system_mut());
+        // Shape the main buffer and collect glyph cache keys.
+        let fs = ctx.text.font_system_mut();
+        let st = self.ensure_state(ctx.view_state, fs);
+
         let show_placeholder = st.value.is_empty();
         let text = if show_placeholder {
             self.placeholder.as_deref().unwrap_or("")
@@ -295,8 +291,8 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             ));
         }
 
+        // Shape the main buffer.
         {
-            let fs = ctx.text.font_system_mut();
             let b = &mut st.buffer;
             if st.width != self.w {
                 st.width = self.w;
@@ -307,15 +303,91 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             b.shape_until_scroll(fs, false);
         }
 
+        // Compute caret rect if focused and not placeholder.
+        let caret_rect = if self.focused && !show_placeholder {
+            let prefix = &st.value[..st.caret];
+            let mut pb = Buffer::new(fs, Metrics::relative(self.font_size, self.line_height));
+            pb.set_wrap(fs, Mode::wrap());
+            pb.set_text(fs, prefix, &self.attrs, Shaping::Basic);
+            pb.set_size(fs, Some(available_w), None);
+            pb.shape_until_scroll(fs, false);
+
+            let mut x_advance = 0.0f32;
+            let mut last_line_y: Option<f32> = None;
+            for run in pb.layout_runs() {
+                last_line_y = Some(run.line_y);
+                for g in run.glyphs {
+                    x_advance = g.x + g.w;
+                }
+            }
+
+            let line_advance = self.font_size * self.line_height;
+            let mut baseline = last_line_y
+                .or_else(|| st.buffer.layout_runs().next().map(|r| r.line_y))
+                .unwrap_or(line_advance);
+
+            if prefix.ends_with('\n') {
+                baseline += line_advance;
+                x_advance = 0.0;
+            }
+
+            let caret_x = (l as f32 + x_advance).round() as i32;
+            let caret_h = (self.font_size * 1.1) as i32;
+            let caret_y = (t as f32 + baseline - self.font_size * 0.9).round() as i32;
+            Some((caret_x, caret_y, caret_h))
+        } else {
+            None
+        };
+
+        // Upload glyphs.
+        for glyph in st.buffer.layout_runs().flat_map(|r| r.glyphs) {
+            if let Some((_, size, key)) = ctx.text.prepare_glyph_data(glyph) {
+                let _ = ctx
+                    .text
+                    .upload_glyph(ctx.gpu, ctx.texture, key, size.width, size.height);
+            }
+        }
+
+        // Store caret rect in state for paint to read.
+        if let Some(st) = self.state_mut(ctx.view_state) {
+            st.caret_rect = caret_rect;
+        }
+    }
+
+    fn paint_text_and_caret(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        // Border and background.
+        let border_color = if self.focused {
+            self.colors.focus_border
+        } else {
+            self.colors.border
+        };
+        instances.push(Instance::ui(
+            Position::new(self.x, self.y),
+            Size::new(self.w, self.h),
+            border_color,
+        ));
+        instances.push(Instance::ui(
+            Position::new(self.x + 1, self.y + 1),
+            Size::new(self.w - 2, self.h - 2),
+            self.colors.bg,
+        ));
+
+        let (l, t, _r, _b) = self.inner_bounds();
+
+        // Pure state access.
+        let Some(st) = self.state(ctx.view_state) else {
+            return;
+        };
+
         const BASE_COLOR: Color = Color::rgba(255, 255, 255, 255);
 
         for run in st.buffer.layout_runs() {
             for glyph in run.glyphs {
-                let (Position { x: left, y: top }, Size { width, height }, cache_key) =
-                    match ctx.text.get_glyph_data(glyph) {
-                        Some(v) => v,
-                        None => continue,
-                    };
+                let Some((Position { x: left, y: top }, size, cache_key)) =
+                    ctx.text.get_glyph_data(glyph)
+                else {
+                    continue;
+                };
 
                 let top_left = Position::new(
                     (l as f32 + glyph.x).round() as i32 + left,
@@ -327,62 +399,24 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
                     .map(|c| Color::rgba(c.r(), c.g(), c.b(), c.a()))
                     .unwrap_or(BASE_COLOR);
 
-                let handle =
-                    match ctx
-                        .text
-                        .upload_glyph(ctx.gpu, ctx.texture, cache_key, width, height)
-                    {
-                        Some(h) => h,
-                        None => continue,
-                    };
+                let Some(handle) = ctx.text.lookup_glyph_handle(cache_key) else {
+                    continue;
+                };
 
                 instances.push(Instance::ui_tex(
                     top_left,
-                    Size::new(width as i32, height as i32),
+                    Size::new(size.width as i32, size.height as i32),
                     tint,
                     handle,
                 ));
             }
         }
 
-        if self.focused && !show_placeholder {
-            let (caret_x, caret_y, caret_h) = {
-                let fs = ctx.text.font_system_mut();
-                let prefix = &st.value[..st.caret];
-                let mut pb = Buffer::new(fs, Metrics::relative(self.font_size, self.line_height));
-                pb.set_wrap(fs, Mode::wrap());
-                pb.set_text(fs, prefix, &self.attrs, Shaping::Basic);
-                pb.set_size(fs, Some(available_w), None);
-                pb.shape_until_scroll(fs, false);
-
-                let mut x_advance = 0.0f32;
-                let mut last_line_y: Option<f32> = None;
-                for run in pb.layout_runs() {
-                    last_line_y = Some(run.line_y);
-                    for g in run.glyphs {
-                        x_advance = g.x + g.w;
-                    }
-                }
-
-                let line_advance = self.font_size * self.line_height;
-                let mut baseline = last_line_y
-                    .or_else(|| st.buffer.layout_runs().next().map(|r| r.line_y))
-                    .unwrap_or(line_advance);
-
-                if prefix.ends_with('\n') {
-                    baseline += line_advance;
-                    x_advance = 0.0;
-                }
-
-                let caret_x = (l as f32 + x_advance).round() as i32;
-                let caret_h = (self.font_size * 1.1) as i32;
-                let caret_y = (t as f32 + baseline - self.font_size * 0.9).round() as i32;
-                (caret_x, caret_y, caret_h)
-            };
-
+        // Caret.
+        if let Some((cx, cy, ch)) = st.caret_rect {
             instances.push(Instance::ui(
-                Position::new(caret_x, caret_y),
-                Size::new(1, caret_h),
+                Position::new(cx, cy),
+                Size::new(1, ch),
                 self.colors.caret,
             ));
         }
@@ -427,6 +461,10 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     }
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
         unreachable!()
+    }
+
+    fn prepare(&mut self, ctx: &mut PrepareCtx) {
+        self.prepare_text_and_caret(ctx);
     }
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         self.paint_text_and_caret(ctx, instances);

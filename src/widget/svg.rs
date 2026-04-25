@@ -72,6 +72,8 @@ struct SvgState {
     // GPU cache
     handle: Option<TextureHandle>,
     raster_px: Size<u32>,
+
+    draw_rect: Option<(i32, i32, i32, i32)>,
 }
 
 impl SvgState {
@@ -186,23 +188,22 @@ impl<M> Widget<M> for Svg {
         panic!("Svg has no children")
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        // Grab / init view state
+    fn prepare(&mut self, ctx: &mut PrepareCtx) {
         let entry = ctx
             .view_state
             .entry(self.id)
             .or_insert_with(|| Box::new(SvgState::default()));
-
         let state = entry
             .downcast_mut::<SvgState>()
             .expect("SvgState type mismatch in view_state");
 
-        // Nothing to draw
+        // Default: nothing to draw unless we complete prepare successfully.
+        state.draw_rect = None;
+
         if self.w <= 0 || self.h <= 0 || self.tint.a() == 0 {
             return;
         }
 
-        // Ensure we have a parsed tree
         state.ensure_tree(&self.path, ctx.texture, ctx.gpu);
         let Some(tree) = state.tree.as_ref() else {
             return;
@@ -212,37 +213,28 @@ impl<M> Widget<M> for Svg {
         let svg_w = svg_size.width();
         let svg_h = svg_size.height();
 
-        // Compute draw rect based on ContentFit (like Image)
         let (dx, dy, dw, dh) = fit_rect(self.x, self.y, self.w, self.h, svg_w, svg_h, &self.fit);
         if dw <= 0 || dh <= 0 {
             return;
         }
 
         let raster = Size::new(dw as u32, dh as u32);
-
-        // (Re)rasterize if needed
         let need_rerender = state.handle.is_none() || state.raster_px != raster;
+
         if need_rerender {
             let Some(mut pixmap) = tiny_skia::Pixmap::new(raster.width, raster.height) else {
                 return;
             };
-
-            // Scale tree into pixmap
             let sx = raster.width as f32 / svg_w;
             let sy = raster.height as f32 / svg_h;
             let transform = tiny_skia::Transform::from_scale(sx, sy);
-
             let mut pixmap_mut = pixmap.as_mut();
-            // resvg::render outputs sRGB pixels
             resvg::render(tree, transform, &mut pixmap_mut);
-
             let pixels: &[u8] = pixmap.data();
 
-            // Upload/update GPU texture
             match state.handle {
                 Some(handle) if handle.size_px == raster => {
                     ctx.texture.update_rgba8(ctx.gpu, handle, pixels);
-                    state.handle = Some(handle);
                 }
                 Some(handle) => {
                     ctx.texture.unload(ctx.gpu, handle);
@@ -258,18 +250,33 @@ impl<M> Widget<M> for Svg {
                     state.handle = Some(new_h);
                 }
             }
-
             state.raster_px = raster;
         }
 
-        // Emit draw instance
-        if let Some(handle) = state.handle {
-            out.push(Instance::ui_tex(
-                Position::new(dx, dy),
-                Size::new(dw, dh),
-                self.tint,
-                handle,
-            ));
-        }
+        state.draw_rect = Some((dx, dy, dw, dh));
+    }
+
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+        let Some(state) = ctx
+            .view_state
+            .get(&self.id)
+            .and_then(|e| e.downcast_ref::<SvgState>())
+        else {
+            return;
+        };
+
+        let Some(handle) = state.handle else {
+            return;
+        };
+        let Some((dx, dy, dw, dh)) = state.draw_rect else {
+            return;
+        };
+
+        out.push(Instance::ui_tex(
+            Position::new(dx, dy),
+            Size::new(dw, dh),
+            self.tint,
+            handle,
+        ));
     }
 }

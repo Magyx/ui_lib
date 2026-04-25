@@ -98,11 +98,38 @@ pub struct LayoutCtx<'a, M> {
     pub text: &'a mut TextSystem,
 }
 
-pub struct PaintCtx<'a> {
+pub struct PrepareCtx<'a> {
     pub globals: &'a Globals,
     pub text: &'a mut TextSystem,
     pub gpu: &'a Gpu,
     pub texture: &'a mut TextureRegistry,
+    pub(crate) layout: &'a LayoutEngine,
+    pub(crate) current_node: usize,
+    pub view_state: &'a mut HashMap<Id, Box<dyn Any>>,
+}
+
+impl<'a> PrepareCtx<'a> {
+    pub(crate) fn __set_current_node(&mut self, id: usize) {
+        self.current_node = id;
+    }
+    pub fn current_node_id(&self) -> usize {
+        self.current_node
+    }
+    pub fn first_child_node(&self) -> Option<usize> {
+        self.layout.nodes[self.current_node].first_child
+    }
+    pub fn child_content_height(&self) -> i32 {
+        if let Some(cid) = self.first_child_node() {
+            self.layout.nodes[cid].content_size.height.max(0)
+        } else {
+            0
+        }
+    }
+}
+
+pub struct PaintCtx<'a> {
+    pub globals: &'a Globals,
+    pub text: &'a TextSystem,
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
     pub view_state: &'a mut HashMap<Id, Box<dyn Any>>,
