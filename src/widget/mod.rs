@@ -1,5 +1,3 @@
-use std::{any::Any, collections::HashMap, fmt::Debug};
-
 use crate::{context::*, layout::Node, model::*, primitive::Instance};
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -47,7 +45,7 @@ pub trait Widget<M>: IntoElement {
     }
 
     /* ----- paint ----- */
-    fn children_offset(&self, _view_state: &mut HashMap<Id, Box<dyn Any>>) -> (i32, i32) {
+    fn children_offset(&self, _view_state: &mut ViewState) -> (i32, i32) {
         (0, 0)
     }
     fn prepare(&mut self, _ctx: &mut PrepareCtx) {}

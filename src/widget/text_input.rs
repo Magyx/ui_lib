@@ -1,6 +1,6 @@
-use std::any::{Any, TypeId};
+use std::any::TypeId;
+use std::borrow::Cow;
 use std::marker::PhantomData;
-use std::{borrow::Cow, collections::HashMap};
 
 use cosmic_text::{Attrs, Buffer, Cursor, Metrics, Motion, Shaping};
 
@@ -223,49 +223,30 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
     fn ensure_state<'b>(
         &self,
-        view_state: &'b mut HashMap<Id, Box<dyn Any>>,
+        view_state: &'b mut ViewState,
         fs: &mut cosmic_text::FontSystem,
     ) -> &'b mut TextInputViewState {
         let desired = Metrics::relative(self.font_size, self.line_height);
 
-        view_state
-            .entry(self.id)
-            .and_modify(|e| {
-                if let Some(TextInputViewState { buffer, .. }) =
-                    e.downcast_mut::<TextInputViewState>()
-                    && (buffer.metrics().font_size != desired.font_size
-                        || buffer.metrics().line_height != desired.line_height)
-                {
-                    buffer.set_metrics(fs, desired);
-                }
-            })
-            .or_insert_with(|| {
-                Box::new(TextInputViewState::new(
-                    fs,
-                    self.font_size,
-                    self.line_height,
-                ))
-            })
-            .downcast_mut::<TextInputViewState>()
-            .expect("View state was wrong type")
+        let state = view_state.ensure(self.id, || {
+            TextInputViewState::new(fs, self.font_size, self.line_height)
+        });
+
+        if state.buffer.metrics().font_size != desired.font_size
+            || state.buffer.metrics().line_height != desired.line_height
+        {
+            state.buffer.set_metrics(fs, desired);
+        }
+
+        state
     }
 
-    fn state<'b>(
-        &self,
-        view_state: &'b HashMap<Id, Box<dyn Any>>,
-    ) -> Option<&'b TextInputViewState> {
-        view_state
-            .get(&self.id)?
-            .downcast_ref::<TextInputViewState>()
+    fn state<'b>(&self, view_state: &'b ViewState) -> Option<&'b TextInputViewState> {
+        view_state.get::<TextInputViewState>(&self.id)
     }
 
-    fn state_mut<'b>(
-        &self,
-        view_state: &'b mut HashMap<Id, Box<dyn Any>>,
-    ) -> Option<&'b mut TextInputViewState> {
-        view_state
-            .get_mut(&self.id)?
-            .downcast_mut::<TextInputViewState>()
+    fn state_mut<'b>(&self, view_state: &'b mut ViewState) -> Option<&'b mut TextInputViewState> {
+        view_state.get_mut::<TextInputViewState>(&self.id)
     }
 
     /// Compute the pixel (x, y, height) of the cursor by finding the glyph at cursor.index
@@ -497,7 +478,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
     /// Returns true if the cursor actually moved.
     fn apply_motion(
         &self,
-        view_state: &mut HashMap<Id, Box<dyn Any>>,
+        view_state: &mut ViewState,
         fs: &mut cosmic_text::FontSystem,
         motion: Motion,
     ) -> bool {

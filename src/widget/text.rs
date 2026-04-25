@@ -1,4 +1,4 @@
-use std::{any::Any, borrow::Cow, collections::HashMap};
+use std::borrow::Cow;
 
 use cosmic_text::{Attrs, Buffer, Metrics, Shaping};
 
@@ -108,37 +108,26 @@ impl Text {
 
         attrs
     }
-    fn get_buffer<'b>(&self, view_state: &'b HashMap<Id, Box<dyn Any>>) -> Option<&'b Buffer> {
-        view_state
-            .get(&self.id)
-            .and_then(|e| e.downcast_ref::<TextViewState>())
-            .map(|s| &s.buffer)
+    fn get_buffer<'b>(&self, view_state: &'b ViewState) -> Option<&'b Buffer> {
+        view_state.get::<TextViewState>(&self.id).map(|s| &s.buffer)
     }
     fn ensure_buffer<'b>(
         &self,
-        view_state: &'b mut HashMap<Id, Box<dyn Any>>,
+        view_state: &'b mut ViewState,
         fs: &mut cosmic_text::FontSystem,
     ) -> &'b mut Buffer {
         let desired = Metrics::relative(self.font_size, self.line_height);
+        let state = view_state.ensure(self.id, || TextViewState {
+            buffer: Buffer::new(fs, desired),
+        });
 
-        let b = view_state
-            .entry(self.id)
-            .and_modify(|e| {
-                if let Some(TextViewState { buffer, .. }) = e.downcast_mut::<TextViewState>()
-                    && (buffer.metrics().font_size != desired.font_size
-                        || buffer.metrics().line_height != desired.line_height)
-                {
-                    buffer.set_metrics(fs, desired);
-                }
-            })
-            .or_insert_with(|| {
-                Box::new(TextViewState {
-                    buffer: Buffer::new(fs, desired),
-                })
-            })
-            .downcast_mut::<TextViewState>()
-            .expect("View state was wrong type");
-        &mut b.buffer
+        if state.buffer.metrics().font_size != desired.font_size
+            || state.buffer.metrics().line_height != desired.line_height
+        {
+            state.buffer.set_metrics(fs, desired);
+        }
+
+        &mut state.buffer
     }
 }
 

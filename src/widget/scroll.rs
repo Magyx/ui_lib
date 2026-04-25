@@ -1,5 +1,3 @@
-use std::{any::Any, collections::HashMap};
-
 use super::*;
 use crate::{
     event::{MouseButton, ScrollUnits, UiEventRef},
@@ -121,15 +119,8 @@ impl<M: 'static> Scrollable<M> {
         Some((tx, thumb_y, tw, thumb_h))
     }
 
-    fn ensure_state<'b>(
-        &self,
-        view_state: &'b mut HashMap<Id, Box<dyn Any>>,
-    ) -> &'b mut ScrollViewState {
-        view_state
-            .entry(self.id)
-            .or_insert_with(|| Box::new(ScrollViewState { y: 0, grab: None }))
-            .downcast_mut::<ScrollViewState>()
-            .expect("View state was wrong type")
+    fn ensure_state<'b>(&self, view_state: &'b mut ViewState) -> &'b mut ScrollViewState {
+        view_state.ensure(self.id, || ScrollViewState { y: 0, grab: None })
     }
 }
 
@@ -163,7 +154,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
         self.child.as_mut()
     }
-    fn children_offset<'a>(&self, view_state: &mut HashMap<Id, Box<dyn Any>>) -> (i32, i32) {
+    fn children_offset<'a>(&self, view_state: &mut ViewState) -> (i32, i32) {
         (0, -self.ensure_state(view_state).y)
     }
 

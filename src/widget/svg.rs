@@ -189,14 +189,7 @@ impl<M> Widget<M> for Svg {
     }
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
-        let entry = ctx
-            .view_state
-            .entry(self.id)
-            .or_insert_with(|| Box::new(SvgState::default()));
-        let state = entry
-            .downcast_mut::<SvgState>()
-            .expect("SvgState type mismatch in view_state");
-
+        let state = ctx.view_state.ensure(self.id, SvgState::default);
         state.draw_rect = None;
 
         if self.w <= 0 || self.h <= 0 || self.tint.a() == 0 {
@@ -253,11 +246,7 @@ impl<M> Widget<M> for Svg {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        let Some(state) = ctx
-            .view_state
-            .get(&self.id)
-            .and_then(|e| e.downcast_ref::<SvgState>())
-        else {
+        let Some(state) = ctx.view_state.get::<SvgState>(&self.id) else {
             return;
         };
 

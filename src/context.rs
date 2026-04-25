@@ -20,6 +20,41 @@ pub type Id = u64;
 //     NEXT_ID.store(1, Ordering::Relaxed);
 // }
 
+type ViewStateInner = HashMap<Id, Box<dyn Any>>;
+
+#[derive(Default)]
+pub struct ViewState {
+    inner: ViewStateInner,
+}
+
+impl ViewState {
+    pub fn map(&self) -> &ViewStateInner {
+        &self.inner
+    }
+    pub fn map_mut(&mut self) -> &mut ViewStateInner {
+        &mut self.inner
+    }
+
+    pub fn get<T: 'static>(&self, id: &Id) -> Option<&T> {
+        self.inner.get(id)?.downcast_ref::<T>()
+    }
+    pub fn get_mut<T: 'static>(&mut self, id: &Id) -> Option<&mut T> {
+        self.inner.get_mut(id)?.downcast_mut::<T>()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    pub fn ensure<T: 'static>(&mut self, id: Id, default: impl FnOnce() -> T) -> &mut T {
+        self.inner
+            .entry(id)
+            .or_insert_with(|| Box::new(default()))
+            .downcast_mut::<T>()
+            .expect("ViewState type mismatch")
+    }
+}
+
 pub struct Context<M> {
     pub mouse_pos: Position<f32>,
     pub mouse_buttons_down: u32,
@@ -33,7 +68,7 @@ pub struct Context<M> {
     messages: Vec<M>,
     redraw_requested: bool,
 
-    pub view_state: HashMap<Id, Box<dyn Any>>,
+    pub view_state: ViewState,
 }
 
 impl<M> Default for Context<M> {
@@ -57,7 +92,7 @@ impl<M> Context<M> {
             messages: Vec::new(),
             redraw_requested: false,
 
-            view_state: HashMap::new(),
+            view_state: ViewState::default(),
         }
     }
     #[inline]
@@ -105,7 +140,7 @@ pub struct PrepareCtx<'a> {
     pub texture: &'a mut TextureRegistry,
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
-    pub view_state: &'a mut HashMap<Id, Box<dyn Any>>,
+    pub view_state: &'a mut ViewState,
 }
 
 impl<'a> PrepareCtx<'a> {
@@ -132,7 +167,7 @@ pub struct PaintCtx<'a> {
     pub text: &'a TextSystem,
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
-    pub view_state: &'a mut HashMap<Id, Box<dyn Any>>,
+    pub view_state: &'a mut ViewState,
 }
 
 impl<'a> PaintCtx<'a> {
@@ -282,57 +317,36 @@ mod tests {
 
     #[test]
     fn view_state_insert_and_downcast_mut() {
-        use std::any::Any;
-
         let mut ctx: Context<Msg> = Context::new();
         let id: crate::context::Id = 42;
 
         // Widget-typical pattern: or_insert_with + downcast_mut.
-        let st = ctx
-            .view_state
-            .entry(id)
-            .or_insert_with(|| {
-                Box::new(DummyState {
-                    counter: 0,
-                    label: "init",
-                }) as Box<dyn Any>
-            })
-            .downcast_mut::<DummyState>()
-            .expect("downcast failed");
+        let st = ctx.view_state.ensure(id, || DummyState {
+            counter: 0,
+            label: "init",
+        });
         st.counter += 1;
         st.label = "touched";
 
         // Second access sees the prior state.
-        let again = ctx
-            .view_state
-            .get_mut(&id)
-            .and_then(|b| b.downcast_mut::<DummyState>())
-            .unwrap();
+        let again = ctx.view_state.get_mut::<DummyState>(&id).unwrap();
         assert_eq!(again.counter, 1);
         assert_eq!(again.label, "touched");
     }
 
     #[test]
     fn view_state_different_ids_are_independent() {
-        use std::any::Any;
-
         let mut ctx: Context<Msg> = Context::new();
 
         for id in [1u64, 2, 99, 1_000_000] {
-            ctx.view_state.entry(id).or_insert_with(|| {
-                Box::new(DummyState {
-                    counter: id as u32,
-                    label: "x",
-                }) as Box<dyn Any>
+            ctx.view_state.ensure(id, || DummyState {
+                counter: id as u32,
+                label: "x",
             });
         }
 
         for id in [1u64, 2, 99, 1_000_000] {
-            let st = ctx
-                .view_state
-                .get_mut(&id)
-                .and_then(|b| b.downcast_mut::<DummyState>())
-                .unwrap();
+            let st = ctx.view_state.get_mut::<DummyState>(&id).unwrap();
             assert_eq!(st.counter, id as u32);
         }
     }
@@ -344,24 +358,16 @@ mod tests {
         // than corrupting memory. Widgets in this codebase `.expect()`
         // the downcast, which will panic — but the panic is a safer
         // failure mode than UB.
-        use std::any::Any;
 
         let mut ctx: Context<Msg> = Context::new();
         let id: crate::context::Id = 7;
 
-        ctx.view_state.insert(id, Box::new(123u32) as Box<dyn Any>);
+        ctx.view_state.ensure(id, || 123u32);
 
-        let as_dummy = ctx
-            .view_state
-            .get_mut(&id)
-            .and_then(|b| b.downcast_mut::<DummyState>());
+        let as_dummy = ctx.view_state.get_mut::<DummyState>(&id);
         assert!(as_dummy.is_none(), "wrong-type downcast must be None");
 
-        let as_u32 = ctx
-            .view_state
-            .get_mut(&id)
-            .and_then(|b| b.downcast_mut::<u32>())
-            .copied();
+        let as_u32 = ctx.view_state.get_mut::<u32>(&id).copied();
         assert_eq!(as_u32, Some(123));
     }
 }
