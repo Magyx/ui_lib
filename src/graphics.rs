@@ -7,7 +7,7 @@ use crate::{
     event::{Event, KeyState, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
-    primitive::{Primitive, Vertex},
+    primitive::{Instance, Primitive, Vertex},
     render::{
         pipeline::PipelineRegistry,
         renderer::Renderer,
@@ -64,6 +64,8 @@ pub struct Target<'a, M> {
 pub struct TargetId(u32);
 
 pub struct Engine<'a, M> {
+    instance_buf: Vec<Instance>,
+    primitive_buf: Vec<Primitive>,
     layout_engine: LayoutEngine,
 
     gpu: Arc<Gpu>,
@@ -132,6 +134,8 @@ impl<'a, M> Default for Engine<'a, M> {
 
         Self {
             layout_engine: LayoutEngine::new(),
+            instance_buf: Vec::new(),
+            primitive_buf: Vec::new(),
 
             gpu: Arc::new(gpu),
             target_alloc,
@@ -442,21 +446,19 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         view: &impl Fn(&TargetId, &S) -> Element<M>,
         state: &mut S,
     ) {
-        // TODO: need to invalidate and cleanup target.view_state
-        let target = if let Some(t) = self.targets.get_mut(tid) {
-            t
-        } else {
-            return; // TODO: maybe return a result instead
-        };
-
         if !need {
             return;
         }
 
-        crate::scope!("Engine::render_if_needed");
+        // TODO: need to invalidate and cleanup target.view_state
+        let Some(target) = self.targets.get_mut(tid) else {
+            return; // TODO: maybe return a result instead
+        };
+
+        crate::scope!("Engine::render");
 
         target.root = Some(view(tid, state));
-        let root = target.root.as_mut().expect("root built");
+        let root = target.root.as_mut().unwrap();
 
         let max = Size::new(
             target.globals.window_size[0] as i32,
@@ -505,7 +507,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             layout::prepare_tree(root.as_mut(), &mut prepare_ctx, &mut cursor);
         }
 
-        let mut instances = Vec::new();
         {
             crate::scope!("paint");
             let mut paint_ctx = PaintCtx {
@@ -523,17 +524,22 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 target.globals.window_size[0] as i32,
                 target.globals.window_size[1] as i32,
             ]);
+            self.instance_buf.clear();
             layout::paint_tree(
                 root.as_mut(),
                 &mut paint_ctx,
                 &self.layout_engine,
                 &mut cursor,
-                &mut instances,
+                &mut self.instance_buf,
                 screen_clip,
             );
+
+            self.primitive_buf.clear();
+            self.primitive_buf
+                .extend(self.instance_buf.iter().map(|i| i.primitive));
         }
 
-        crate::plot!("ui.instances", instances.len() as f64);
+        crate::plot!("ui.instances", self.instance_buf.len() as f64);
         crate::plot!("ui.nodes", self.layout_engine.node_count as f64);
 
         target.globals.frame = target.globals.frame.wrapping_add(1);
@@ -543,7 +549,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             target,
             &mut self.pipeline_registry,
             &target.globals,
-            &instances,
+            &self.instance_buf,
+            &self.primitive_buf,
         );
     }
     pub fn handle_platform_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(

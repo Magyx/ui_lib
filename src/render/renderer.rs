@@ -67,6 +67,7 @@ impl Renderer {
         pipeline_registry: &mut PipelineRegistry,
         globals: &Globals,
         instances: &[Instance],
+        primitives: &[Primitive],
     ) -> Result<(), wgpu::SurfaceError> {
         let output = {
             crate::scope!("wgpu:get_current_texture");
@@ -94,18 +95,15 @@ impl Renderer {
 
         let sw = target.config.width;
         let sh = target.config.height;
-        let defaul_clip = [0, 0, sw, sh];
+        let default_clip = [0, 0, sw, sh];
 
-        let mut draw_commands = Vec::<DrawCommand>::new();
-        let mut primitives = Vec::<Primitive>::with_capacity(instances.len());
+        let mut draw_commands = Vec::new();
 
         let mut base = 0u32;
         let mut current_key: Option<&PipelineKey> = None;
-        let mut current_clip = defaul_clip;
+        let mut current_clip = default_clip;
         for (i, instance) in instances.iter().enumerate() {
-            primitives.push(instance.to_primitive());
-
-            let mut clip = instance.scissor().unwrap_or(defaul_clip);
+            let mut clip = instance.scissor().unwrap_or(default_clip);
             clip[0] = clip[0].min(sw.saturating_sub(1));
             clip[1] = clip[1].min(sh.saturating_sub(1));
             let max_w = sw.saturating_sub(clip[0]);
@@ -142,11 +140,8 @@ impl Renderer {
             });
         }
 
-        gpu.queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            bytemuck::cast_slice(primitives.as_slice()),
-        );
+        gpu.queue
+            .write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(primitives));
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -168,7 +163,7 @@ impl Renderer {
             pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
-            for command in draw_commands.iter() {
+            for command in &draw_commands {
                 pipeline_registry.apply_pipeline(
                     command.pipe,
                     globals,
