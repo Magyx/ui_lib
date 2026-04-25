@@ -49,16 +49,9 @@ mod widget_slider {
             "expected exactly one Changed message, got {msgs:?}"
         );
         // Pull the inner f32 out of TopMsg::Any -> Msg::Changed(f).
-        match &msgs[0] {
-            TopMsg::Any(arc) => {
-                let m = arc
-                    .as_any()
-                    .downcast_ref::<Msg>()
-                    .expect("message is not the local Msg type");
-                match *m {
-                    Msg::Changed(v) => v,
-                }
-            }
+        let msg = msgs[0].get().expect("message is not the local Msg type");
+        match *msg {
+            Msg::Changed(v) => v,
         }
     }
 

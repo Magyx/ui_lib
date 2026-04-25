@@ -26,36 +26,36 @@ impl<T: Any + PartialEq + fmt::Debug> TestEvent for T {
     }
 }
 
-pub enum TopMsg {
-    Any(Arc<dyn TestEvent>),
+pub struct TopMsg {
+    inner: Arc<dyn TestEvent>,
 }
 
 impl TopMsg {
     pub fn from<T: 'static + PartialEq + fmt::Debug>(w: T) -> Self {
-        TopMsg::Any(Arc::new(w))
+        TopMsg { inner: Arc::new(w) }
+    }
+
+    pub fn get<T: 'static + PartialEq + fmt::Debug>(&self) -> Option<&T> {
+        self.inner.as_any().downcast_ref::<T>()
     }
 }
 
 impl fmt::Debug for TopMsg {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Any(arg0) => arg0.fmt(f),
-        }
+        self.inner.fmt(f)
     }
 }
 
 impl PartialEq for TopMsg {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Any(a), Self::Any(b)) => a.eq_any(b.as_any()),
-        }
+        self.inner.eq_any(other.inner.as_any())
     }
 }
 
 impl Clone for TopMsg {
     fn clone(&self) -> Self {
-        match self {
-            Self::Any(arg0) => Self::Any(Arc::clone(arg0)),
+        Self {
+            inner: self.inner.clone(),
         }
     }
 }
