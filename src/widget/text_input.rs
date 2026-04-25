@@ -679,7 +679,15 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                             needs_redraw = true;
                         }
 
-                        Character(ref s) if !s.is_empty() => {
+                        Character(_) | Space => {
+                            let s = match k.logical_key {
+                                Space => " ",
+                                Character(ref s) => s,
+                                _ => unreachable!(),
+                            };
+                            if s.is_empty() {
+                                return;
+                            }
                             let mut changed = false;
                             {
                                 if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
