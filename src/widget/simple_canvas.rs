@@ -70,8 +70,8 @@ impl<M> Widget<M> for SimpleCanvas<M> {
     fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         out.push(Instance::new(
             PipelineKey::Other(self.key),
-            Position::new(self.x, self.y),
-            Size::new(self.w, self.h),
+            Position::new(self.x as f32, self.y as f32),
+            Size::new(self.w as f32, self.h as f32),
             [0, 0, 0, 0],
             [0, 0, 0, 0],
         ));

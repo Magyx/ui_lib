@@ -285,8 +285,8 @@ impl<M> Widget<M> for Text {
                 };
 
                 let top_left = Position::new(
-                    (self.x as f32 + glyph.x).round() as i32 + left,
-                    (self.y as f32 + glyph.y + run.line_y).round() as i32 - top,
+                    self.x as f32 + glyph.x + left as f32,
+                    self.y as f32 + glyph.y + run.line_y - top as f32,
                 );
 
                 let tint = glyph
@@ -300,7 +300,7 @@ impl<M> Widget<M> for Text {
 
                 instances.push(Instance::ui_tex(
                     top_left,
-                    Size::new(width as i32, height as i32),
+                    Size::new(width as f32, height as f32),
                     tint,
                     handle,
                 ));

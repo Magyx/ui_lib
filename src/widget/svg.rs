@@ -73,7 +73,7 @@ struct SvgState {
     handle: Option<TextureHandle>,
     raster_px: Size<u32>,
 
-    draw_rect: Option<(i32, i32, i32, i32)>,
+    draw_rect: Option<(f32, f32, f32, f32)>,
 }
 
 impl SvgState {
@@ -125,13 +125,13 @@ fn fit_rect(
     svg_w: f32,
     svg_h: f32,
     fit: &ContentFit,
-) -> (i32, i32, i32, i32) {
+) -> (f32, f32, f32, f32) {
     if w <= 0 || h <= 0 {
-        return (x, y, 0, 0);
+        return (x as f32, y as f32, 0.0, 0.0);
     }
 
     match fit {
-        ContentFit::Fill => (x, y, w, h),
+        ContentFit::Fill => (x as f32, y as f32, w as f32, h as f32),
         ContentFit::Contain | ContentFit::Cover => {
             // Maintain aspect
             let w_f = w as f32;
@@ -146,11 +146,11 @@ fn fit_rect(
                 sx.max(sy)
             };
 
-            let dw = (svg_w * s).round().max(1.0) as i32;
-            let dh = (svg_h * s).round().max(1.0) as i32;
+            let dw = (svg_w * s).max(1.0);
+            let dh = (svg_h * s).max(1.0);
 
-            let dx = x + (w - dw) / 2;
-            let dy = y + (h - dh) / 2;
+            let dx = x as f32 + (w as f32 - dw) / 2.0;
+            let dy = y as f32 + (h as f32 - dh) / 2.0;
             (dx, dy, dw, dh)
         }
     }
@@ -197,7 +197,6 @@ impl<M> Widget<M> for Svg {
             .downcast_mut::<SvgState>()
             .expect("SvgState type mismatch in view_state");
 
-        // Default: nothing to draw unless we complete prepare successfully.
         state.draw_rect = None;
 
         if self.w <= 0 || self.h <= 0 || self.tint.a() == 0 {
@@ -212,24 +211,22 @@ impl<M> Widget<M> for Svg {
         let svg_size = tree.size();
         let svg_w = svg_size.width();
         let svg_h = svg_size.height();
-
         let (dx, dy, dw, dh) = fit_rect(self.x, self.y, self.w, self.h, svg_w, svg_h, &self.fit);
-        if dw <= 0 || dh <= 0 {
+        if dw <= 0.0 || dh <= 0.0 {
             return;
         }
 
         let raster = Size::new(dw as u32, dh as u32);
-        let need_rerender = state.handle.is_none() || state.raster_px != raster;
-
-        if need_rerender {
+        if state.handle.is_none() || state.raster_px != raster {
             let Some(mut pixmap) = tiny_skia::Pixmap::new(raster.width, raster.height) else {
                 return;
             };
             let sx = raster.width as f32 / svg_w;
             let sy = raster.height as f32 / svg_h;
             let transform = tiny_skia::Transform::from_scale(sx, sy);
-            let mut pixmap_mut = pixmap.as_mut();
-            resvg::render(tree, transform, &mut pixmap_mut);
+
+            // resvg::render outputs sRGB pixels
+            resvg::render(tree, transform, &mut pixmap.as_mut());
             let pixels: &[u8] = pixmap.data();
 
             match state.handle {
@@ -250,10 +247,9 @@ impl<M> Widget<M> for Svg {
                     state.handle = Some(new_h);
                 }
             }
-            state.raster_px = raster;
-        }
 
-        state.draw_rect = Some((dx, dy, dw, dh));
+            state.draw_rect = Some((dx, dy, dw, dh));
+        }
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {

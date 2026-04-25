@@ -12,7 +12,7 @@ pub struct TextInputViewState {
     value: String,
     width: i32,
     cursor: Cursor,
-    cursor_rect: Option<(i32, i32, i32)>,
+    cursor_rect: Option<(f32, f32, f32)>,
 }
 
 impl TextInputViewState {
@@ -277,9 +277,9 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         t: i32,
         font_size: f32,
         line_height: f32,
-    ) -> Option<(i32, i32, i32)> {
+    ) -> Option<(f32, f32, f32)> {
         let line_advance = font_size * line_height;
-        let caret_h = (font_size * 1.1).round() as i32;
+        let caret_h = font_size * 1.1;
 
         // Walk layout runs to find the one matching our cursor line,
         // then find the glyph span containing cursor.index.
@@ -301,8 +301,8 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             if let Some(first) = run.glyphs.first()
                 && cursor.index <= first.start
             {
-                let cx = l + first.x.round() as i32;
-                let cy = t + (run.line_y - font_size * 0.9).round() as i32;
+                let cx = l as f32 + first.x;
+                let cy = t as f32 + run.line_y - font_size * 0.9;
                 return Some((cx, cy, caret_h));
             }
 
@@ -318,8 +318,8 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
                         let frac = prefix_len as f32 / cluster_len.max(1) as f32;
                         glyph.x + glyph.w * frac
                     };
-                    let cx = l + x.round() as i32;
-                    let cy = t + (run.line_y - font_size * 0.9).round() as i32;
+                    let cx = l as f32 + x;
+                    let cy = t as f32 + run.line_y - font_size * 0.9;
                     return Some((cx, cy, caret_h));
                 }
                 last_matching_end_x = glyph.x + glyph.w;
@@ -336,13 +336,13 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             let has_run_on_cursor_line = buffer.layout_runs().any(|r| r.line_i == cursor.line);
 
             if !has_run_on_cursor_line {
-                let cx = l;
-                let cy = t + (line_y + line_advance - font_size * 0.9).round() as i32;
+                let cx = l as f32;
+                let cy = t as f32 + line_y + line_advance - font_size * 0.9;
                 return Some((cx, cy, caret_h));
             }
 
-            let cx = l + last_matching_end_x.round() as i32;
-            let cy = t + (line_y - font_size * 0.9).round() as i32;
+            let cx = l as f32 + last_matching_end_x;
+            let cy = t as f32 + line_y - font_size * 0.9;
             return Some((cx, cy, caret_h));
         }
 
@@ -352,8 +352,8 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             .next()
             .map(|r| r.line_y)
             .unwrap_or(line_advance);
-        let cx = l;
-        let cy = t + (baseline - font_size * 0.9).round() as i32;
+        let cx = l as f32;
+        let cy = t as f32 + baseline - font_size * 0.9;
         Some((cx, cy, caret_h))
     }
 
@@ -433,13 +433,13 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             self.colors.border
         };
         instances.push(Instance::ui(
-            Position::new(self.x, self.y),
-            Size::new(self.w, self.h),
+            Position::new(self.x as f32, self.y as f32),
+            Size::new(self.w as f32, self.h as f32),
             border_color,
         ));
         instances.push(Instance::ui(
-            Position::new(self.x + 1, self.y + 1),
-            Size::new(self.w - 2, self.h - 2),
+            Position::new((self.x + 1) as f32, (self.y + 1) as f32),
+            Size::new((self.w - 2) as f32, (self.h - 2) as f32),
             self.colors.bg,
         ));
 
@@ -461,8 +461,8 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
                 };
 
                 let top_left = Position::new(
-                    l + glyph.x.round() as i32 + left,
-                    t + (glyph.y + run.line_y).round() as i32 - top,
+                    l as f32 + glyph.x + left as f32,
+                    t as f32 + glyph.y + run.line_y - top as f32,
                 );
 
                 let tint = glyph
@@ -476,7 +476,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
                 instances.push(Instance::ui_tex(
                     top_left,
-                    Size::new(size.width as i32, size.height as i32),
+                    Size::new(size.width as f32, size.height as f32),
                     tint,
                     handle,
                 ));
@@ -487,7 +487,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         if let Some((cx, cy, ch)) = st.cursor_rect {
             instances.push(Instance::ui(
                 Position::new(cx, cy),
-                Size::new(1, ch),
+                Size::new(1.0, ch),
                 self.colors.caret,
             ));
         }

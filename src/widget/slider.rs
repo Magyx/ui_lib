@@ -135,17 +135,17 @@ impl<M: 'static> Widget<M> for Slider<M> {
     fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         if self.bg_color.a() != 0 {
             out.push(Instance::ui(
-                Position::new(self.x, self.y),
-                Size::new(self.w, self.h),
+                Position::new(self.x as f32, self.y as f32),
+                Size::new(self.w as f32, self.h as f32),
                 self.bg_color,
             ));
         }
 
-        let th = self.track_h.clamp(2, self.h.max(2));
-        let ty = self.y + (self.h - th) / 2;
+        let th = self.track_h.clamp(2, self.h.max(2)) as f32;
+        let ty = self.y as f32 + (self.h as f32 - th) / 2.0;
         out.push(Instance::ui(
-            Position::new(self.x, ty),
-            Size::new(self.w, th),
+            Position::new(self.x as f32, ty),
+            Size::new(self.w as f32, th),
             self.track_color,
         ));
 
@@ -154,16 +154,16 @@ impl<M: 'static> Widget<M> for Slider<M> {
         } else {
             0.0
         };
-        let fw = (ratio * self.w as f32).round() as i32;
+        let fw = ratio * self.w as f32;
         out.push(Instance::ui(
-            Position::new(self.x, ty),
+            Position::new(self.x as f32, ty),
             Size::new(fw, th),
             self.fill_color,
         ));
 
-        let kw = (th * 2).clamp(10, (self.h * 3) / 4);
-        let kx = self.x + (fw - kw / 2).clamp(0, self.w - kw);
-        let ky = self.y + (self.h - kw) / 2;
+        let kw = (th * 2.0).clamp(10.0, (self.h as f32 * 3.0) / 4.0);
+        let kx = self.x as f32 + (fw - kw / 2.0).clamp(0.0, self.w as f32 - kw);
+        let ky = self.y as f32 + (self.h as f32 - kw) / 2.0;
         out.push(Instance::ui(
             Position::new(kx, ky),
             Size::new(kw, kw),

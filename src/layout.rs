@@ -251,7 +251,7 @@ fn __paint_tree<M>(
         }
         if dx != 0 || dy != 0 {
             for inst in &mut out[new_begin..] {
-                inst.translate(dx, dy);
+                inst.translate(dx as f32, dy as f32);
             }
         }
     }
@@ -263,11 +263,11 @@ fn __paint_tree<M>(
     if eng.debug {
         let (r, g, b, a) = color_for_depth(depth);
         let col = Color::rgba(r, g, b, a);
-        let w = n.current_size.width.max(1);
-        let h = n.current_size.height.max(1);
-        let x = n.pos.x;
-        let y = n.pos.y;
-        let thickness = 1;
+        let w = n.current_size.width.max(1) as f32;
+        let h = n.current_size.height.max(1) as f32;
+        let x = n.pos.x as f32;
+        let y = n.pos.y as f32;
+        let thickness = 1.0;
 
         // top
         out.push(Instance::ui(

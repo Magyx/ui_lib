@@ -148,8 +148,8 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
             self.normal_color
         };
         instances.push(Instance::ui(
-            Position::new(self.x, self.y),
-            Size::new(self.w, self.h),
+            Position::new(self.x as f32, self.y as f32),
+            Size::new(self.w as f32, self.h as f32),
             color,
         ));
     }

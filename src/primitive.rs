@@ -44,10 +44,10 @@ pub struct Primitive {
 }
 
 impl Primitive {
-    pub fn new(position: Position<i32>, size: Size<i32>, data1: [u32; 4], data2: [u32; 4]) -> Self {
+    pub fn new(position: Position<f32>, size: Size<f32>, data1: [u32; 4], data2: [u32; 4]) -> Self {
         Self {
-            position: [position.x as f32, position.y as f32],
-            size: [size.width as f32, size.height as f32],
+            position: [position.x, position.y],
+            size: [size.width, size.height],
             data1,
             data2,
         }
@@ -88,8 +88,8 @@ impl Primitive {
 #[derive(Debug)]
 pub struct Instance {
     pub(crate) kind: PipelineKey,
-    position: Position<i32>,
-    size: Size<i32>,
+    position: Position<f32>,
+    size: Size<f32>,
     data1: [u32; 4],
     data2: [u32; 4],
 
@@ -99,8 +99,8 @@ pub struct Instance {
 impl Instance {
     pub fn new(
         kind: PipelineKey,
-        position: Position<i32>,
-        size: Size<i32>,
+        position: Position<f32>,
+        size: Size<f32>,
         data1: [u32; 4],
         data2: [u32; 4],
     ) -> Self {
@@ -115,7 +115,7 @@ impl Instance {
         }
     }
 
-    pub fn ui(position: Position<i32>, size: Size<i32>, color: Color) -> Self {
+    pub fn ui(position: Position<f32>, size: Size<f32>, color: Color) -> Self {
         Self {
             kind: PipelineKey::Ui,
             position,
@@ -128,8 +128,8 @@ impl Instance {
     }
 
     pub fn ui_tex(
-        position: Position<i32>,
-        size: Size<i32>,
+        position: Position<f32>,
+        size: Size<f32>,
         tint: Color,
         handle: TextureHandle,
     ) -> Self {
@@ -150,8 +150,8 @@ impl Instance {
     }
 
     pub fn ui_tex_fit(
-        position: Position<i32>,
-        size: Size<i32>,
+        position: Position<f32>,
+        size: Size<f32>,
         tint: Color,
         handle: TextureHandle,
         content_scale: [f32; 2],
@@ -187,7 +187,7 @@ impl Instance {
         }
     }
 
-    pub fn translate(&mut self, dx: i32, dy: i32) {
+    pub fn translate(&mut self, dx: f32, dy: f32) {
         self.position.x += dx;
         self.position.y += dy;
     }
@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn ui_instance_packs_color_into_data1_low_word() {
         let color = Color::rgba(0x11, 0x22, 0x33, 0x44);
-        let inst = Instance::ui(Position::new(1, 2), Size::new(10, 20), color);
+        let inst = Instance::ui(Position::new(1.0, 2.0), Size::new(10.0, 20.0), color);
         assert_eq!(inst.data1[0], color.0);
         assert_eq!(inst.data1[1], 0);
         assert_eq!(inst.data2, [0, 0, 0, 0]);
@@ -218,7 +218,7 @@ mod tests {
 
     #[test]
     fn ui_instance_preserves_position_and_size() {
-        let inst = Instance::ui(Position::new(3, 7), Size::new(50, 60), Color::WHITE);
+        let inst = Instance::ui(Position::new(3.0, 7.0), Size::new(50.0, 60.0), Color::WHITE);
         let prim = inst.to_primitive();
         assert_eq!(prim.position, [3.0, 7.0]);
         assert_eq!(prim.size, [50.0, 60.0]);
@@ -226,58 +226,58 @@ mod tests {
 
     #[test]
     fn translate_shifts_position() {
-        let mut inst = Instance::ui(Position::new(10, 20), Size::new(1, 1), Color::BLACK);
-        inst.translate(5, -3);
+        let mut inst = Instance::ui(Position::new(10.0, 20.0), Size::new(1.0, 1.0), Color::BLACK);
+        inst.translate(5.0, -3.0);
         let prim = inst.to_primitive();
         assert_eq!(prim.position, [15.0, 17.0]);
     }
 
     #[test]
     fn translate_is_additive() {
-        let mut inst = Instance::ui(Position::new(0, 0), Size::new(1, 1), Color::BLACK);
-        inst.translate(1, 2);
-        inst.translate(3, 4);
-        inst.translate(-1, -1);
+        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::BLACK);
         let prim = inst.to_primitive();
+        inst.translate(1.0, 2.0);
+        inst.translate(3.0, 4.0);
+        inst.translate(-1.0, -1.0);
         assert_eq!(prim.position, [3.0, 5.0]);
     }
 
     #[test]
     fn translate_does_not_touch_size_or_data() {
-        let mut inst = Instance::ui(Position::new(0, 0), Size::new(40, 50), Color::RED);
+        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(40.0, 50.0), Color::RED);
         let before = inst.to_primitive();
-        inst.translate(100, 100);
         let after = inst.to_primitive();
         assert_eq!(before.size, after.size);
         assert_eq!(before.data1, after.data1);
         assert_eq!(before.data2, after.data2);
+        inst.translate(100.0, 100.0);
     }
 
     #[test]
     fn add_clip_normal_rect_sets_scissor() {
-        let mut inst = Instance::ui(Position::new(0, 0), Size::new(1, 1), Color::WHITE);
+        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
         inst.add_clip(5, 10, 100, 200);
         assert_eq!(inst.scissor(), Some([5, 10, 100, 200]));
     }
 
     #[test]
     fn add_clip_zero_width_becomes_null_clip() {
+        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
         // Implementation uses `w > 0 && h > 0`; non-positive means [0;4].
-        let mut inst = Instance::ui(Position::new(0, 0), Size::new(1, 1), Color::WHITE);
         inst.add_clip(5, 10, 0, 200);
         assert_eq!(inst.scissor(), Some([0, 0, 0, 0]));
     }
 
     #[test]
     fn add_clip_negative_height_becomes_null_clip() {
-        let mut inst = Instance::ui(Position::new(0, 0), Size::new(1, 1), Color::WHITE);
+        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
         inst.add_clip(5, 10, 100, -1);
         assert_eq!(inst.scissor(), Some([0, 0, 0, 0]));
     }
 
     #[test]
     fn add_clip_negative_origin_clamps_to_zero() {
-        let mut inst = Instance::ui(Position::new(0, 0), Size::new(1, 1), Color::WHITE);
+        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
         inst.add_clip(-10, -20, 100, 50);
         // x and y are clamped via `.max(0)` before the u32 cast.
         assert_eq!(inst.scissor(), Some([0, 0, 100, 50]));
@@ -285,17 +285,29 @@ mod tests {
 
     #[test]
     fn add_clip_overwrites_previous_clip() {
-        let mut inst = Instance::ui(Position::new(0, 0), Size::new(1, 1), Color::WHITE);
+        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
         inst.add_clip(1, 1, 10, 10);
         inst.add_clip(5, 5, 20, 20);
         assert_eq!(inst.scissor(), Some([5, 5, 20, 20]));
     }
 
     #[test]
-    fn to_primitive_casts_coords_to_f32() {
-        let inst = Instance::ui(Position::new(-7, -8), Size::new(0, 0), Color::TRANSPARENT);
+    fn primitive_stores_f32_coords() {
+        let inst = Instance::ui(
+            Position::new(-7.0, -8.0),
+            Size::new(0.0, 0.0),
+            Color::TRANSPARENT,
+        );
         let prim = inst.to_primitive();
         assert_eq!(prim.position, [-7.0, -8.0]);
         assert_eq!(prim.size, [0.0, 0.0]);
+    }
+
+    #[test]
+    fn subpixel_positions_preserved() {
+        let inst = Instance::ui(Position::new(10.3, 20.7), Size::new(5.5, 8.0), Color::WHITE);
+        let prim = inst.to_primitive();
+        assert_eq!(prim.position, [10.3, 20.7]);
+        assert_eq!(prim.size, [5.5, 8.0]);
     }
 }

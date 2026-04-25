@@ -111,10 +111,10 @@ impl<M> Widget<M> for Image {
             }
         };
 
-        let px = self.x + ((dst_w - draw_w) * 0.5).round() as i32;
-        let py = self.y + ((dst_h - draw_h) * 0.5).round() as i32;
-        let dw = draw_w.round().max(1.0) as i32;
-        let dh = draw_h.round().max(1.0) as i32;
+        let px = self.x as f32 + (dst_w - draw_w) * 0.5;
+        let py = self.y as f32 + (dst_h - draw_h) * 0.5;
+        let dw = draw_w.max(1.0);
+        let dh = draw_h.max(1.0);
 
         out.push(Instance::ui_tex(
             Position::new(px, py),

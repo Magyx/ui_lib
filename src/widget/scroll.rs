@@ -15,7 +15,7 @@ pub enum ScrollBarBehavior {
 
 struct ScrollViewState {
     y: i32,
-    grab: Option<i32>,
+    grab: Option<f32>,
 }
 
 pub struct Scrollable<M> {
@@ -85,17 +85,17 @@ impl<M: 'static> Scrollable<M> {
     }
 
     #[inline]
-    fn track_rect(&self) -> (i32, i32, i32, i32) {
-        let margin = 2;
-        let track_w = 6;
-        let tx = self.x + self.w - margin - track_w;
-        let ty = self.y + margin;
-        let th = self.h - 2 * margin;
+    fn track_rect(&self) -> (f32, f32, f32, f32) {
+        let margin = 2.0;
+        let track_w = 6.0;
+        let tx = self.x as f32 + self.w as f32 - margin - track_w;
+        let ty = self.y as f32 + margin;
+        let th = self.h as f32 - 2.0 * margin;
         (tx, ty, track_w, th)
     }
 
     #[inline]
-    fn thumb_rect(&self, state: &ScrollViewState) -> Option<(i32, i32, i32, i32)> {
+    fn thumb_rect(&self, state: &ScrollViewState) -> Option<(f32, f32, f32, f32)> {
         if let ScrollBarBehavior::Hide = self.scrollbar_behavior {
             return None;
         }
@@ -108,15 +108,15 @@ impl<M: 'static> Scrollable<M> {
 
         let ch = self.content_h.max(self.h);
         let ratio = (self.h as f32 / ch as f32).clamp(0.0, 1.0);
-        let thumb_h = (ratio * th as f32).round() as i32;
-        let thumb_h = thumb_h.clamp(20, th); // min thumb size
+        let thumb_h = ratio * th;
+        let thumb_h = thumb_h.clamp(20.0, th); // min thumb size
 
         let t = if max > 0 {
             state.y as f32 / max as f32
         } else {
             0.0
         };
-        let thumb_y = ty + ((th - thumb_h) as f32 * t).round() as i32;
+        let thumb_y = ty + (th - thumb_h) * t;
 
         Some((tx, thumb_y, tw, thumb_h))
     }
@@ -167,15 +167,18 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         (0, -self.ensure_state(view_state).y)
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn prepare(&mut self, ctx: &mut PrepareCtx) {
+        self.content_h = ctx.child_content_height();
+    }
+
+    fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         if self.bg.a() > 0 {
             out.push(Instance::ui(
-                Position::new(self.x, self.y),
-                Size::new(self.w, self.h),
+                Position::new(self.x as f32, self.y as f32),
+                Size::new(self.w as f32, self.h as f32),
                 self.bg,
             ));
         }
-        self.content_h = ctx.child_content_height();
     }
 
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
@@ -196,11 +199,14 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        const HIT_SLOP: i32 = 4;
+        const HIT_SLOP: f32 = 4.0;
 
-        let mx = ctx.ui.mouse_pos.x as i32;
-        let my = ctx.ui.mouse_pos.y as i32;
-        let inside = mx >= self.x && mx < self.x + self.w && my >= self.y && my < self.y + self.h;
+        let mx = ctx.ui.mouse_pos.x;
+        let my = ctx.ui.mouse_pos.y;
+        let inside = mx >= self.x as f32
+            && mx < self.x as f32 + self.w as f32
+            && my >= self.y as f32
+            && my < self.y as f32 + self.h as f32;
 
         let max = (self.content_h - self.h).max(0);
 
@@ -253,17 +259,17 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             if (over_thumb || over_track) && pressed {
                 ctx.ui.active_item = Some(self.id);
                 let grab = if over_thumb {
-                    (my - ty).clamp(0, th)
+                    (my - ty).clamp(0.0, th)
                 } else {
-                    th / 2
+                    th / 2.0
                 };
                 let st = self.ensure_state(&mut ctx.ui.view_state);
                 st.grab = Some(grab);
 
                 if over_track && !over_thumb {
                     let desired = (my - grab).clamp(track_y, track_y + track_h - th);
-                    let denom = (track_h - th).max(1);
-                    let t = (desired - track_y) as f32 / denom as f32;
+                    let denom = (track_h - th).max(1.0);
+                    let t = (desired - track_y) / denom;
                     st.y = (t * max as f32).round() as i32;
                     ctx.ui.request_redraw();
                 }
@@ -271,11 +277,11 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
 
             if ctx.ui.active_item == Some(self.id) && down {
                 let st = self.ensure_state(&mut ctx.ui.view_state);
-                let mut pos = my - st.grab.unwrap_or(th / 2);
+                let mut pos = my - st.grab.unwrap_or(th / 2.0);
                 pos = pos.clamp(track_y, track_y + track_h - th);
 
-                let denom = (track_h - th).max(1);
-                let t = (pos - track_y) as f32 / denom as f32;
+                let denom = (track_h - th).max(1.0);
+                let t = (pos - track_y) / denom;
                 st.y = (t * max as f32).round() as i32;
 
                 ctx.ui.request_redraw();
