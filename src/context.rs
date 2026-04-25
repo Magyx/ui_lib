@@ -159,6 +159,7 @@ impl<'a> PaintCtx<'a> {
 
 pub struct EventCtx<'a, M> {
     pub globals: &'a Globals,
+    pub text: &'a mut TextSystem,
     pub ui: &'a mut Context<M>,
     pub event: Option<UiEventRef<'a>>,
 }

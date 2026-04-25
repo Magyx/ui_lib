@@ -81,6 +81,7 @@ impl Harness {
     pub fn handle<W: Widget<TopMsg>>(&mut self, root: &mut W) {
         let mut ectx: EventCtx<TopMsg> = EventCtx {
             globals: &self.globals,
+            text: &mut self.text,
             ui: &mut self.ctx,
             event: None,
         };

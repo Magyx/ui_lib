@@ -415,6 +415,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         if let Some(root) = target.root.as_mut() {
             let mut event_cx = EventCtx {
+                text: &mut self.renderer.text,
                 event: None,
                 globals: &target.globals,
                 ui: &mut target.ctx,
@@ -481,6 +482,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         // TODO: split handle in other steps so we don't need to force a take_redraw
         let mut event_ctx = EventCtx {
+            text: &mut self.renderer.text,
             globals: &target.globals,
             ui: &mut target.ctx,
             event: None,
@@ -616,6 +618,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
             if ev_view.is_some() {
                 let mut ctx = EventCtx {
+                    text: &mut self.renderer.text,
                     globals: &target.globals,
                     ui: &mut target.ctx,
                     event: ev_view,

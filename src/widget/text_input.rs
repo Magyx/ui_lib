@@ -2,7 +2,7 @@ use std::any::{Any, TypeId};
 use std::marker::PhantomData;
 use std::{borrow::Cow, collections::HashMap};
 
-use cosmic_text::{Attrs, Buffer, Metrics, Shaping};
+use cosmic_text::{Attrs, Buffer, Cursor, Metrics, Motion, Shaping};
 
 use super::*;
 use crate::event::{KeyState, LogicalKey, MouseButton, UiEventRef};
@@ -11,8 +11,8 @@ pub struct TextInputViewState {
     buffer: Buffer,
     value: String,
     width: i32,
-    caret: usize,
-    caret_rect: Option<(i32, i32, i32)>,
+    cursor: Cursor,
+    cursor_rect: Option<(i32, i32, i32)>,
 }
 
 impl TextInputViewState {
@@ -21,9 +21,48 @@ impl TextInputViewState {
             buffer: Buffer::new(fs, Metrics::relative(font_size, line_height)),
             value: String::new(),
             width: 0,
-            caret: 0,
-            caret_rect: None,
+            cursor: Cursor::new(0, 0),
+            cursor_rect: None,
         }
+    }
+
+    fn cursor_to_byte_offset(&self) -> usize {
+        let mut offset = 0usize;
+        let mut line = 0usize;
+        // Walk through `value` counting newlines to find where cursor.line starts.
+        for (i, ch) in self.value.char_indices() {
+            if line == self.cursor.line {
+                // We've reached the target line. Add the within-line index.
+                return (i + self.cursor.index).min(self.value.len());
+            }
+            if ch == '\n' {
+                line += 1;
+                offset = i + 1;
+            }
+        }
+        // If the cursor line matches the last line (no trailing \n found mid-loop)
+        if line == self.cursor.line {
+            return (offset + self.cursor.index).min(self.value.len());
+        }
+        // Cursor line is past all lines — clamp to end.
+        self.value.len()
+    }
+
+    /// Convert a flat byte offset into `value` to a `Cursor` (line, index-within-line).
+    fn byte_offset_to_cursor(value: &str, offset: usize) -> Cursor {
+        let offset = offset.min(value.len());
+        let mut line = 0usize;
+        let mut line_start = 0usize;
+        for (i, ch) in value.char_indices() {
+            if i >= offset {
+                break;
+            }
+            if ch == '\n' {
+                line += 1;
+                line_start = i + 1;
+            }
+        }
+        Cursor::new(line, offset - line_start)
     }
 }
 
@@ -54,12 +93,6 @@ pub type Handler<M> = dyn Fn(&str) -> M + Send + Sync + 'static;
 
 pub trait TextMode {
     fn wrap() -> Wrap;
-    fn handle_enter<M>(
-        state: &mut TextInputViewState,
-        on_change: &Option<Box<Handler<M>>>,
-        on_submit: &Option<Box<Handler<M>>>,
-        ctx: &mut EventCtx<M>,
-    );
 }
 
 #[derive(Debug, Default)]
@@ -72,38 +105,12 @@ impl TextMode for SingleLine {
     fn wrap() -> Wrap {
         Wrap::None
     }
-    #[inline]
-    fn handle_enter<M>(
-        state: &mut TextInputViewState,
-        _on_change: &Option<Box<dyn Fn(&str) -> M + Send + Sync + 'static>>,
-        on_submit: &Option<Box<dyn Fn(&str) -> M + Send + Sync + 'static>>,
-        ctx: &mut EventCtx<M>,
-    ) {
-        if let Some(f) = on_submit {
-            ctx.ui.emit(f(&state.value));
-        }
-    }
 }
 
 impl TextMode for MultiLine {
     #[inline]
     fn wrap() -> Wrap {
         Wrap::Word
-    }
-    #[inline]
-    fn handle_enter<M>(
-        state: &mut TextInputViewState,
-        on_change: &Option<Box<dyn Fn(&str) -> M + Send + Sync + 'static>>,
-        _on_submit: &Option<Box<dyn Fn(&str) -> M + Send + Sync + 'static>>,
-        ctx: &mut EventCtx<M>,
-    ) {
-        let caret = state.caret;
-        state.value.insert(caret, '\n');
-        state.caret += 1;
-        if let Some(f) = on_change {
-            ctx.ui.emit(f(&state.value));
-            ctx.ui.request_redraw();
-        }
     }
 }
 
@@ -242,6 +249,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             .downcast_mut::<TextInputViewState>()
             .expect("View state was wrong type")
     }
+
     fn state<'b>(
         &self,
         view_state: &'b HashMap<Id, Box<dyn Any>>,
@@ -250,6 +258,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             .get(&self.id)?
             .downcast_ref::<TextInputViewState>()
     }
+
     fn state_mut<'b>(
         &self,
         view_state: &'b mut HashMap<Id, Box<dyn Any>>,
@@ -259,11 +268,99 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             .downcast_mut::<TextInputViewState>()
     }
 
+    /// Compute the pixel (x, y, height) of the cursor by finding the glyph at cursor.index
+    /// in the layout runs, using cosmic_text's own layout data.
+    fn compute_cursor_rect(
+        buffer: &Buffer,
+        cursor: Cursor,
+        l: i32,
+        t: i32,
+        font_size: f32,
+        line_height: f32,
+    ) -> Option<(i32, i32, i32)> {
+        let line_advance = font_size * line_height;
+        let caret_h = (font_size * 1.1).round() as i32;
+
+        // Walk layout runs to find the one matching our cursor line,
+        // then find the glyph span containing cursor.index.
+        let mut last_matching_line_y: Option<f32> = None;
+        let mut last_matching_end_x: f32 = 0.0;
+
+        for run in buffer.layout_runs() {
+            if run.line_i != cursor.line {
+                // Track the last run before our cursor line for positioning
+                // a cursor on an empty trailing line.
+                if run.line_i < cursor.line {
+                    last_matching_line_y = Some(run.line_y);
+                }
+                continue;
+            }
+            last_matching_line_y = Some(run.line_y);
+
+            // Check if cursor is at or before the first glyph
+            if let Some(first) = run.glyphs.first()
+                && cursor.index <= first.start
+            {
+                let cx = l + first.x.round() as i32;
+                let cy = t + (run.line_y - font_size * 0.9).round() as i32;
+                return Some((cx, cy, caret_h));
+            }
+
+            for glyph in run.glyphs.iter() {
+                if cursor.index >= glyph.start && cursor.index <= glyph.end {
+                    let x = if cursor.index == glyph.start {
+                        glyph.x
+                    } else if cursor.index == glyph.end {
+                        glyph.x + glyph.w
+                    } else {
+                        let cluster_len = glyph.end - glyph.start;
+                        let prefix_len = cursor.index - glyph.start;
+                        let frac = prefix_len as f32 / cluster_len.max(1) as f32;
+                        glyph.x + glyph.w * frac
+                    };
+                    let cx = l + x.round() as i32;
+                    let cy = t + (run.line_y - font_size * 0.9).round() as i32;
+                    return Some((cx, cy, caret_h));
+                }
+                last_matching_end_x = glyph.x + glyph.w;
+            }
+        }
+
+        // The cursor's line had runs but the index was past all glyphs (end of line).
+        if let Some(line_y) = last_matching_line_y {
+            // Check if cursor is on a line with no layout runs of its own
+            // (e.g. an empty line after a newline). In that case,
+            // the cursor line_i won't have matched any run.line_i.
+            // We detect this: if we never found a run with run.line_i == cursor.line,
+            // place the cursor one line_advance below the last preceding run.
+            let has_run_on_cursor_line = buffer.layout_runs().any(|r| r.line_i == cursor.line);
+
+            if !has_run_on_cursor_line {
+                let cx = l;
+                let cy = t + (line_y + line_advance - font_size * 0.9).round() as i32;
+                return Some((cx, cy, caret_h));
+            }
+
+            let cx = l + last_matching_end_x.round() as i32;
+            let cy = t + (line_y - font_size * 0.9).round() as i32;
+            return Some((cx, cy, caret_h));
+        }
+
+        // Completely empty buffer — place cursor at origin.
+        let baseline = buffer
+            .layout_runs()
+            .next()
+            .map(|r| r.line_y)
+            .unwrap_or(line_advance);
+        let cx = l;
+        let cy = t + (baseline - font_size * 0.9).round() as i32;
+        Some((cx, cy, caret_h))
+    }
+
     fn prepare_text_and_caret(&mut self, ctx: &mut PrepareCtx) {
         let (l, t, r, _b) = self.inner_bounds();
         let available_w = (r - l).max(1) as f32;
 
-        // Shape the main buffer and collect glyph cache keys.
         let fs = ctx.text.font_system_mut();
         let st = self.ensure_state(ctx.view_state, fs);
 
@@ -302,44 +399,6 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             b.set_size(fs, Some(available_w), None);
             b.shape_until_scroll(fs, false);
         }
-
-        // Compute caret rect if focused and not placeholder.
-        let caret_rect = if self.focused && !show_placeholder {
-            let prefix = &st.value[..st.caret];
-            let mut pb = Buffer::new(fs, Metrics::relative(self.font_size, self.line_height));
-            pb.set_wrap(fs, Mode::wrap());
-            pb.set_text(fs, prefix, &self.attrs, Shaping::Basic);
-            pb.set_size(fs, Some(available_w), None);
-            pb.shape_until_scroll(fs, false);
-
-            let mut x_advance = 0.0f32;
-            let mut last_line_y: Option<f32> = None;
-            for run in pb.layout_runs() {
-                last_line_y = Some(run.line_y);
-                for g in run.glyphs {
-                    x_advance = g.x + g.w;
-                }
-            }
-
-            let line_advance = self.font_size * self.line_height;
-            let mut baseline = last_line_y
-                .or_else(|| st.buffer.layout_runs().next().map(|r| r.line_y))
-                .unwrap_or(line_advance);
-
-            if prefix.ends_with('\n') {
-                baseline += line_advance;
-                x_advance = 0.0;
-            }
-
-            let caret_x = (l as f32 + x_advance).round() as i32;
-            let caret_h = (self.font_size * 1.1) as i32;
-            let caret_y = (t as f32 + baseline - self.font_size * 0.9).round() as i32;
-            Some((caret_x, caret_y, caret_h))
-        } else {
-            None
-        };
-
-        // Upload glyphs.
         for glyph in st.buffer.layout_runs().flat_map(|r| r.glyphs) {
             if let Some((_, size, key)) = ctx.text.prepare_glyph_data(glyph) {
                 let _ = ctx
@@ -348,10 +407,22 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             }
         }
 
-        // Store caret rect in state for paint to read.
-        if let Some(st) = self.state_mut(ctx.view_state) {
-            st.caret_rect = caret_rect;
-        }
+        // Compute cursor rect if focused and not placeholder.
+        let Some(st) = self.state_mut(ctx.view_state) else {
+            return;
+        };
+        st.cursor_rect = if self.focused && !show_placeholder {
+            Self::compute_cursor_rect(
+                &st.buffer,
+                st.cursor,
+                l,
+                t,
+                self.font_size,
+                self.line_height,
+            )
+        } else {
+            None
+        };
     }
 
     fn paint_text_and_caret(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
@@ -390,8 +461,8 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
                 };
 
                 let top_left = Position::new(
-                    (l as f32 + glyph.x).round() as i32 + left,
-                    (t as f32 + glyph.y + run.line_y).round() as i32 - top,
+                    l + glyph.x.round() as i32 + left,
+                    t + (glyph.y + run.line_y).round() as i32 - top,
                 );
 
                 let tint = glyph
@@ -413,13 +484,74 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         }
 
         // Caret.
-        if let Some((cx, cy, ch)) = st.caret_rect {
+        if let Some((cx, cy, ch)) = st.cursor_rect {
             instances.push(Instance::ui(
                 Position::new(cx, cy),
                 Size::new(1, ch),
                 self.colors.caret,
             ));
         }
+    }
+
+    /// Apply a `cosmic_text::Motion` to the cursor stored in view state.
+    /// Returns true if the cursor actually moved.
+    fn apply_motion(
+        &self,
+        view_state: &mut HashMap<Id, Box<dyn Any>>,
+        fs: &mut cosmic_text::FontSystem,
+        motion: Motion,
+    ) -> bool {
+        let st = match self.state_mut(view_state) {
+            Some(s) => s,
+            None => return false,
+        };
+        let old = st.cursor;
+        if let Some((new_cursor, _)) = st.buffer.cursor_motion(fs, st.cursor, None, motion) {
+            st.cursor = new_cursor;
+        }
+        st.cursor != old
+    }
+
+    /// Insert text at the current cursor position, advancing the cursor.
+    fn insert_at_cursor(st: &mut TextInputViewState, text: &str) {
+        let offset = st.cursor_to_byte_offset();
+        st.value.insert_str(offset, text);
+        let new_offset = offset + text.len();
+        st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, new_offset);
+    }
+
+    /// Delete the grapheme before the cursor (backspace behaviour).
+    /// Returns true if anything was deleted.
+    fn delete_before_cursor(st: &mut TextInputViewState) -> bool {
+        let offset = st.cursor_to_byte_offset();
+        if offset == 0 || st.value.is_empty() {
+            return false;
+        }
+        let mut new_offset = offset - 1;
+        while new_offset > 0 && !st.value.is_char_boundary(new_offset) {
+            new_offset -= 1;
+        }
+        st.value.replace_range(new_offset..offset, "");
+        st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, new_offset);
+        true
+    }
+
+    /// Delete the grapheme after the cursor (delete key behaviour).
+    /// Returns true if anything was deleted.
+    fn delete_after_cursor(st: &mut TextInputViewState) -> bool {
+        let offset = st.cursor_to_byte_offset();
+        if offset >= st.value.len() {
+            return false;
+        }
+        let mut end = offset + 1;
+        while end < st.value.len() && !st.value.is_char_boundary(end) {
+            end += 1;
+        }
+        st.value.drain(offset..end);
+        // Cursor byte offset stays the same, but line/index may have changed
+        // (e.g. deleting a \n merges two lines).
+        st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, offset);
+        true
     }
 }
 
@@ -466,6 +598,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         self.prepare_text_and_caret(ctx);
     }
+
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         self.paint_text_and_caret(ctx, instances);
     }
@@ -485,8 +618,19 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         if inside && ctx.ui.is_button_released(MouseButton::Left) {
             ctx.ui.kbd_focus_item = Some(self.id);
             self.focused = true;
+
+            // Use Buffer::hit() to place cursor at click position.
+            let (l, t, _r, _b) = self.inner_bounds();
+            let click_x = ctx.ui.mouse_pos.x - l as f32;
+            let click_y = ctx.ui.mouse_pos.y - t as f32;
+
             if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                st.caret = st.value.len();
+                if let Some(hit_cursor) = st.buffer.hit(click_x, click_y) {
+                    st.cursor = hit_cursor;
+                } else {
+                    // Click didn't hit any glyph — place at end.
+                    st.cursor = Cursor::new(0, st.value.len());
+                }
             }
             needs_redraw = true;
         }
@@ -505,9 +649,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             match ev {
                 UiEventRef::Text(t) => {
                     if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                        let caret = st.caret;
-                        st.value.insert_str(caret, &t.text);
-                        st.caret += t.text.len();
+                        Self::insert_at_cursor(st, &t.text);
                         if let Some(f) = &self.on_change {
                             queued_emit = Some(f(&st.value));
                         }
@@ -518,159 +660,84 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                     use LogicalKey::*;
                     match k.logical_key {
                         Backspace => {
-                            let mut changed = false;
+                            if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
+                                && Self::delete_before_cursor(st)
                             {
-                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
-                                    && st.caret > 0
-                                    && !st.value.is_empty()
-                                {
-                                    let caret = st.caret;
-                                    let mut new_caret = caret - 1;
-                                    while new_caret > 0 && !st.value.is_char_boundary(new_caret) {
-                                        new_caret -= 1;
-                                    }
-                                    st.value.replace_range(new_caret..caret, "");
-                                    st.caret = new_caret;
-                                    if let Some(f) = &self.on_change {
-                                        queued_emit = Some(f(&st.value));
-                                    }
-                                    changed = true;
+                                if let Some(f) = &self.on_change {
+                                    queued_emit = Some(f(&st.value));
                                 }
-                            }
-                            if changed {
                                 needs_redraw = true;
                             }
                         }
                         Delete => {
-                            let mut changed = false;
+                            if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
+                                && Self::delete_after_cursor(st)
                             {
-                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                                    let caret = st.caret;
-                                    if caret < st.value.len() {
-                                        let mut end = caret + 1;
-                                        while end < st.value.len()
-                                            && !st.value.is_char_boundary(end)
-                                        {
-                                            end += 1;
-                                        }
-                                        st.value.drain(caret..end);
-                                        if let Some(f) = &self.on_change {
-                                            queued_emit = Some(f(&st.value));
-                                        }
-                                        changed = true;
-                                    }
+                                if let Some(f) = &self.on_change {
+                                    queued_emit = Some(f(&st.value));
                                 }
-                            }
-                            if changed {
                                 needs_redraw = true;
                             }
                         }
                         ArrowLeft => {
-                            let mut moved = false;
-                            {
-                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
-                                    && st.caret > 0
-                                {
-                                    let mut idx = st.caret - 1;
-                                    while idx > 0 && !st.value.is_char_boundary(idx) {
-                                        idx -= 1;
-                                    }
-                                    st.caret = idx;
-                                    moved = true;
-                                }
-                            }
-                            if moved {
+                            let fs = ctx.text.font_system_mut();
+                            if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Left) {
                                 needs_redraw = true;
                             }
                         }
-
                         ArrowRight => {
-                            let mut moved = false;
-                            {
-                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
-                                    && st.caret < st.value.len()
-                                {
-                                    let mut idx = st.caret + 1;
-                                    while idx < st.value.len() && !st.value.is_char_boundary(idx) {
-                                        idx += 1;
-                                    }
-                                    st.caret = idx;
-                                    moved = true;
-                                }
-                            }
-                            if moved {
+                            let fs = ctx.text.font_system_mut();
+                            if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Right) {
                                 needs_redraw = true;
                             }
                         }
-
-                        Home => {
-                            let mut moved = false;
-                            {
-                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
-                                    && st.caret != 0
-                                {
-                                    st.caret = 0;
-                                    moved = true;
-                                }
-                            }
-                            if moved {
-                                needs_redraw = true;
-                            }
-                        }
-
-                        End => {
-                            let mut moved = false;
-                            {
-                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                                    let end = st.value.len();
-                                    if st.caret != end {
-                                        st.caret = end;
-                                        moved = true;
-                                    }
-                                }
-                            }
-                            if moved {
-                                needs_redraw = true;
-                            }
-                        }
-
-                        Enter => {
-                            if TypeId::of::<Mode>() == TypeId::of::<SingleLine>() {
-                                // Submit current value
-                                let to_emit = {
-                                    if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                                        if let Some(f) = &self.on_submit {
-                                            Some(f(&st.value))
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                };
-                                if to_emit.is_some() {
-                                    queued_emit = to_emit;
-                                }
-                            } else {
-                                // MultiLine: insert '\n' and treat as change
-                                let mut changed = false;
-                                {
-                                    if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                                        let caret = st.caret;
-                                        st.value.insert(caret, '\n');
-                                        st.caret += 1;
-                                        if let Some(f) = &self.on_change {
-                                            queued_emit = Some(f(&st.value));
-                                        }
-                                        changed = true;
-                                    }
-                                }
-                                if changed {
+                        ArrowUp => {
+                            if TypeId::of::<Mode>() == TypeId::of::<MultiLine>() {
+                                let fs = ctx.text.font_system_mut();
+                                if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Up) {
                                     needs_redraw = true;
                                 }
                             }
                         }
-
+                        ArrowDown => {
+                            if TypeId::of::<Mode>() == TypeId::of::<MultiLine>() {
+                                let fs = ctx.text.font_system_mut();
+                                if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Down) {
+                                    needs_redraw = true;
+                                }
+                            }
+                        }
+                        Home => {
+                            let fs = ctx.text.font_system_mut();
+                            if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Home) {
+                                needs_redraw = true;
+                            }
+                        }
+                        End => {
+                            let fs = ctx.text.font_system_mut();
+                            if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::End) {
+                                needs_redraw = true;
+                            }
+                        }
+                        Enter => {
+                            if TypeId::of::<Mode>() == TypeId::of::<SingleLine>() {
+                                // Submit
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
+                                    && let Some(f) = &self.on_submit
+                                {
+                                    queued_emit = Some(f(&st.value));
+                                }
+                            } else {
+                                // MultiLine: insert newline
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                    Self::insert_at_cursor(st, "\n");
+                                    if let Some(f) = &self.on_change {
+                                        queued_emit = Some(f(&st.value));
+                                    }
+                                    needs_redraw = true;
+                                }
+                            }
+                        }
                         Tab => {
                             self.focused = false;
                             if ctx.ui.kbd_focus_item == Some(self.id) {
@@ -678,7 +745,6 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                             }
                             needs_redraw = true;
                         }
-
                         Character(_) | Space => {
                             let s = match k.logical_key {
                                 Space => " ",
@@ -688,19 +754,11 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                             if s.is_empty() {
                                 return;
                             }
-                            let mut changed = false;
-                            {
-                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                                    let caret = st.caret;
-                                    st.value.insert_str(caret, s);
-                                    st.caret += s.len();
-                                    if let Some(f) = &self.on_change {
-                                        queued_emit = Some(f(&st.value));
-                                    }
-                                    changed = true;
+                            if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                Self::insert_at_cursor(st, s);
+                                if let Some(f) = &self.on_change {
+                                    queued_emit = Some(f(&st.value));
                                 }
-                            }
-                            if changed {
                                 needs_redraw = true;
                             }
                         }

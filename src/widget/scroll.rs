@@ -302,6 +302,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
 
         self.child.as_mut().handle(&mut EventCtx {
             globals: &updated_globals,
+            text: ctx.text,
             ui: ctx.ui,
             event: ctx.event,
         });
