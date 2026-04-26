@@ -110,10 +110,4 @@ impl<M: 'static> Widget<M> for Column<M> {
             ));
         }
     }
-
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        for c in &mut self.children {
-            c.as_mut().handle(ctx);
-        }
-    }
 }

@@ -154,11 +154,7 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         ));
     }
 
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        if let Some(child) = self.content.as_mut() {
-            child.as_mut().handle(ctx);
-        }
-
+    fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
         let was_hovered = self.hovered;
         let was_pressed = self.pressed;
 

@@ -2,7 +2,7 @@
 use std::cmp::{max, min};
 
 use crate::{
-    context::{Id, LayoutCtx, PaintCtx, PrepareCtx},
+    context::{Id, LayoutCtx, PaintCtx, PrepareCtx, ViewState},
     model::{Color, Position, Size},
     primitive::Instance,
     widget::{Axis, Length, Padding, Widget},
@@ -86,7 +86,15 @@ pub fn run_layout<'a, M>(
     let mut cursor = 0usize;
     {
         crate::scope!("layout::write_back");
-        write_back(root, layout_engine, &mut cursor, 0xCBF2_9CE4_8422_2325u64);
+        write_back(
+            root,
+            layout_engine,
+            &mut cursor,
+            &mut ctx.ui.view_state,
+            0,
+            0,
+            0xCBF2_9CE4_8422_2325u64,
+        );
     }
     root_id
 }
@@ -173,6 +181,36 @@ fn __prepare_tree<M>(
     w.prepare_overlay(ctx);
 }
 
+pub fn handle_tree<M>(
+    w: &mut dyn crate::widget::Widget<M>,
+    ctx: &mut crate::context::EventCtx<M>,
+    cursor: &mut usize,
+) {
+    crate::scope!("layout::handle_tree");
+    __handle_tree(w, ctx, cursor);
+}
+
+fn __handle_tree<M>(
+    w: &mut dyn crate::widget::Widget<M>,
+    ctx: &mut crate::context::EventCtx<M>,
+    cursor: &mut usize,
+) {
+    let id = *cursor;
+    ctx.__set_current_node(id);
+
+    w.handle(ctx);
+    *cursor += 1;
+
+    let child_count = w.child_count();
+    for i in 0..child_count {
+        let child = w.child_mut(i);
+        __handle_tree(child, ctx, cursor);
+    }
+
+    ctx.__set_current_node(id);
+    w.handle_after(ctx);
+}
+
 pub fn paint_tree<M>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut PaintCtx,
@@ -234,26 +272,18 @@ fn __paint_tree<M>(
     let (dx, dy) = w.children_offset(ctx.view_state);
     let child_count = w.child_count();
     for i in 0..child_count {
-        let new_begin = out.len();
-        {
-            let child = w.child_mut(i);
-            __paint_tree(
-                child,
-                ctx,
-                eng,
-                cursor,
-                out,
-                clip,
-                acc_tx + dx,
-                acc_ty + dy,
-                depth + 1,
-            );
-        }
-        if dx != 0 || dy != 0 {
-            for inst in &mut out[new_begin..] {
-                inst.translate(dx as f32, dy as f32);
-            }
-        }
+        let child = w.child_mut(i);
+        __paint_tree(
+            child,
+            ctx,
+            eng,
+            cursor,
+            out,
+            clip,
+            acc_tx + dx,
+            acc_ty + dy,
+            depth + 1,
+        );
     }
 
     let overlay_begin = out.len();
@@ -306,13 +336,16 @@ fn write_back<M>(
     w: &mut dyn Widget<M>,
     layout_engine: &LayoutEngine,
     cursor: &mut usize,
+    view_state: &mut ViewState,
+    off_x: i32,
+    off_y: i32,
     root_seed: u64,
 ) {
     let id = *cursor;
     let n = layout_engine.nodes[id];
     w.set_layout(
-        n.pos.x,
-        n.pos.y,
+        n.pos.x + off_x,
+        n.pos.y + off_y,
         n.current_size.width,
         n.current_size.height,
     );
@@ -320,11 +353,23 @@ fn write_back<M>(
 
     *cursor += 1;
 
+    let (dx, dy) = w.children_offset(view_state);
+    let child_off_x = off_x + dx;
+    let child_off_y = off_y + dy;
+
     let count = w.child_count();
     for i in 0..count {
         let child = w.child_mut(i);
         let child_seed = mix64(root_seed, i + 1);
-        write_back(child, layout_engine, cursor, child_seed);
+        write_back(
+            child,
+            layout_engine,
+            cursor,
+            view_state,
+            child_off_x,
+            child_off_y,
+            child_seed,
+        );
     }
 }
 
@@ -717,9 +762,9 @@ impl LayoutEngine {
                 }
                 _ => 0,
             };
-            let resolved_h = max(total_min_h, base_h).min(self.nodes[id].max.height);
-            self.nodes[id].current_size.height = resolved_h;
-            self.nodes[id].content_size.height = resolved_h;
+            let natural_h = max(total_min_h, base_h);
+            self.nodes[id].content_size.height = natural_h;
+            self.nodes[id].current_size.height = natural_h.min(self.nodes[id].max.height);
             self.nodes[id].min.height = total_min_h;
         } else {
             let base_h = match self.nodes[id].size.height {
@@ -730,9 +775,9 @@ impl LayoutEngine {
                 }
                 _ => 0,
             };
-            let resolved_h = max(self.nodes[id].min.height, base_h).min(self.nodes[id].max.height);
-            self.nodes[id].current_size.height = resolved_h;
-            self.nodes[id].content_size.height = resolved_h;
+            let natural_h = max(self.nodes[id].min.height, base_h);
+            self.nodes[id].content_size.height = natural_h;
+            self.nodes[id].current_size.height = natural_h.min(self.nodes[id].max.height);
         }
     }
 

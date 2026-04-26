@@ -125,10 +125,4 @@ impl<M: 'static> Widget<M> for Grid<M> {
             ));
         }
     }
-
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        for r in self.rows.iter_mut() {
-            r.handle(ctx);
-        }
-    }
 }

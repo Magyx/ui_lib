@@ -212,6 +212,49 @@ pub struct EventCtx<'a, M> {
     pub text: &'a mut TextSystem,
     pub ui: &'a mut Context<M>,
     pub event: Option<UiEventRef<'a>>,
+    #[doc(hidden)]
+    pub layout: &'a LayoutEngine,
+    pub(crate) current_node: usize,
+}
+
+impl<'a, M> EventCtx<'a, M> {
+    pub fn new(
+        globals: &'a Globals,
+        text: &'a mut TextSystem,
+        ui: &'a mut Context<M>,
+        event: Option<UiEventRef<'a>>,
+        layout: &'a LayoutEngine,
+        current_node: usize,
+    ) -> Self {
+        Self {
+            globals,
+            text,
+            ui,
+            event,
+            layout,
+            current_node,
+        }
+    }
+
+    pub(crate) fn __set_current_node(&mut self, id: usize) {
+        self.current_node = id;
+    }
+
+    pub fn current_node_id(&self) -> usize {
+        self.current_node
+    }
+
+    pub fn first_child_node(&self) -> Option<usize> {
+        self.layout.nodes[self.current_node].first_child
+    }
+
+    pub fn child_content_height(&self) -> i32 {
+        if let Some(cid) = self.first_child_node() {
+            self.layout.nodes[cid].content_size.height.max(0)
+        } else {
+            0
+        }
+    }
 }
 
 #[cfg(test)]

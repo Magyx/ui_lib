@@ -423,8 +423,11 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 event: None,
                 globals: &target.globals,
                 ui: &mut target.ctx,
+                layout: &self.layout_engine,
+                current_node: 0usize,
             };
-            root.as_mut().handle(&mut event_cx);
+            let mut cursor = 0usize;
+            layout::handle_tree(root.as_mut(), &mut event_cx, &mut cursor);
         } else {
             require_redraw = true;
         }
@@ -482,15 +485,21 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             )
         };
 
-        // TODO: split handle in other steps so we don't need to force a take_redraw
-        let mut event_ctx = EventCtx {
-            text: &mut self.renderer.text,
-            globals: &target.globals,
-            ui: &mut target.ctx,
-            event: None,
-        };
-        root.as_mut().handle(&mut event_ctx);
-        target.ctx.take_redraw();
+        {
+            // TODO: split handle in other steps so we don't need to force a take_redraw
+            crate::scope!("handle");
+            let mut event_ctx = EventCtx {
+                text: &mut self.renderer.text,
+                globals: &target.globals,
+                ui: &mut target.ctx,
+                event: None,
+                layout: &self.layout_engine,
+                current_node: root_id,
+            };
+            let mut cursor = root_id;
+            layout::handle_tree(root.as_mut(), &mut event_ctx, &mut cursor);
+            target.ctx.take_redraw();
+        }
 
         {
             crate::scope!("prepare");
@@ -629,8 +638,11 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                     globals: &target.globals,
                     ui: &mut target.ctx,
                     event: ev_view,
+                    layout: &self.layout_engine,
+                    current_node: 0usize,
                 };
-                root.as_mut().handle(&mut ctx);
+                let mut cursor = 0usize;
+                layout::handle_tree(root.as_mut(), &mut ctx, &mut cursor);
             }
         }
 

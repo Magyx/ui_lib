@@ -163,10 +163,4 @@ impl<M: 'static> Widget<M> for Overlay<M> {
             ));
         }
     }
-
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        for c in &mut self.children {
-            c.handle(ctx);
-        }
-    }
 }
