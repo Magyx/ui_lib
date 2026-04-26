@@ -35,11 +35,23 @@ impl<M> Widget<M> for Absolute<M> {
     fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
         self.inner.as_mut().child_mut(i)
     }
+    fn prepare(&mut self, ctx: &mut PrepareCtx) {
+        self.inner.as_mut().prepare(ctx);
+    }
+    fn prepare_overlay(&mut self, ctx: &mut PrepareCtx) {
+        self.inner.as_mut().prepare_overlay(ctx);
+    }
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         self.inner.as_mut().paint(ctx, out);
     }
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instancess: &mut Vec<Instance>) {
+        self.inner.as_mut().paint_overlay(ctx, instancess);
+    }
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
         self.inner.as_mut().handle(ctx);
+    }
+    fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
+        self.inner.as_mut().handle_after(ctx);
     }
 }
 
