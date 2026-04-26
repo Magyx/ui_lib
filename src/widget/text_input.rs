@@ -585,6 +585,8 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
+        let _ = self.ensure_state(&mut ctx.ui.view_state, ctx.text.font_system_mut());
+
         let inside = ctx.ui.mouse_pos.x >= self.x as f32
             && ctx.ui.mouse_pos.x < (self.x + self.w) as f32
             && ctx.ui.mouse_pos.y >= self.y as f32

@@ -193,8 +193,12 @@ impl Instance {
         self.primitive.position[1] += dy;
     }
 
-    pub(crate) fn scissor(&self) -> Option<[u32; 4]> {
+    pub fn scissor(&self) -> Option<[u32; 4]> {
         self.clip
+    }
+
+    pub fn primitive(&self) -> &Primitive {
+        &self.primitive
     }
 }
 

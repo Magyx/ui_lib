@@ -171,6 +171,21 @@ pub struct PaintCtx<'a> {
 }
 
 impl<'a> PaintCtx<'a> {
+    pub fn new(
+        globals: &'a Globals,
+        text: &'a TextSystem,
+        layout: &'a LayoutEngine,
+        view_state: &'a mut ViewState,
+    ) -> Self {
+        Self {
+            globals,
+            text,
+            layout,
+            current_node: 0,
+            view_state,
+        }
+    }
+
     pub(crate) fn __set_current_node(&mut self, id: usize) {
         self.current_node = id;
     }
