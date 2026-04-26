@@ -55,6 +55,7 @@ pub trait Widget<M>: IntoElement {
 
     /* ----- interaction ----- */
     fn handle(&mut self, _ctx: &mut EventCtx<M>) {}
+    fn handle_after(&mut self, _ctx: &mut EventCtx<M>) {}
 }
 
 pub struct Element<M>(Box<dyn Widget<M> + 'static>);

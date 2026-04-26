@@ -417,7 +417,7 @@ pub mod text {
                     .color(Color::TRANSPARENT)
                     .size(Size::new(Grow, Fit)),
             )
-            .size(Size::splat(Grow))
+            .size(Size::new(Grow, Fit)),
         ])
         .spacing(12)
         .padding(Vec4::splat(12))

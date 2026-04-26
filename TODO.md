@@ -27,7 +27,7 @@ Priorities:
 
 ### P0 — correctness blockers
 
-- [ ] **Scrollable is fundamentally broken.** Three interlocking issues; fix as a single PR.
+- [x] **Scrollable is fundamentally broken.** Three interlocking issues; fix as a single PR.
   - `__Node.content_size.height` is set to `current_size.height` in `measure_height` (`layout.rs:4044, 4057`), so `Scrollable::content_h` always equals viewport height and the wheel handler's `max > 0` guard is never true. `content_size` must track the unconstrained natural size separately.
   - `write_back` (`layout.rs:3627`) writes the layout engine's unscrolled `pos` into widgets via `set_layout`. Visual paint applies `children_offset` (`layout.rs:3556, 3574–3578`) but widget `self.x/self.y` stay unscrolled, so hit-testing inside scrolled regions is wrong. Thread the cumulative offset into `write_back` or store the post-offset position on the node.
   - `Scrollable::handle` reads `self.content_h` but `prepare()` (which sets it) runs *after* `handle()` in `Engine::poll`. On frame N, scroll uses frame N−1's content height; on frame 0 it's zero.

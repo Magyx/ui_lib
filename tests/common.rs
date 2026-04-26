@@ -11,7 +11,7 @@ mod harness {
         context::{Context, EventCtx, LayoutCtx, PaintCtx},
         event::UiEventRef,
         graphics::Globals,
-        layout::{LayoutEngine, paint_tree, run_layout},
+        layout::{LayoutEngine, handle_tree, paint_tree, run_layout},
         model::{Color, Size},
         primitive::Instance,
         render::text::TextSystem,
@@ -84,22 +84,28 @@ mod harness {
             run_layout(&mut self.engine, &mut lctx, root, max_w, max_h)
         }
         pub fn handle<W: Widget<TopMsg>>(&mut self, root: &mut W) {
-            let mut ectx: EventCtx<TopMsg> = EventCtx {
-                globals: &self.globals,
-                text: &mut self.text,
-                ui: &mut self.ctx,
-                event: None,
-            };
-            root.handle(&mut ectx);
+            let mut ectx: EventCtx<TopMsg> = EventCtx::new(
+                &self.globals,
+                &mut self.text,
+                &mut self.ctx,
+                None,
+                &self.engine,
+                0usize,
+            );
+            let mut cursor = 0usize;
+            handle_tree(root, &mut ectx, &mut cursor);
         }
         pub fn handle_event<W: Widget<TopMsg>>(&mut self, root: &mut W, event: UiEventRef) {
-            let mut ectx: EventCtx<TopMsg> = EventCtx {
-                globals: &self.globals,
-                text: &mut self.text,
-                ui: &mut self.ctx,
-                event: Some(event),
-            };
-            root.handle(&mut ectx);
+            let mut ectx: EventCtx<TopMsg> = EventCtx::new(
+                &self.globals,
+                &mut self.text,
+                &mut self.ctx,
+                Some(event),
+                &self.engine,
+                0usize,
+            );
+            let mut cursor = 0usize;
+            handle_tree(root, &mut ectx, &mut cursor);
         }
 
         pub fn paint<W: Widget<TopMsg>>(&mut self, root: &mut W) -> Vec<Instance> {
@@ -207,6 +213,9 @@ mod harness {
         }
         fn handle(&mut self, ctx: &mut ui::context::EventCtx<M>) {
             self.inner.handle(ctx);
+        }
+        fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
+            self.inner.handle_after(ctx);
         }
     }
 

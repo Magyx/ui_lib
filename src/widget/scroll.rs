@@ -27,7 +27,6 @@ pub struct Scrollable<M> {
     child: Element<M>,
 
     id: Id,
-    content_h: i32,
 
     scrollbar_behavior: ScrollBarBehavior,
 
@@ -48,7 +47,6 @@ impl<M: 'static> Scrollable<M> {
             max: Size::splat(i32::MAX),
             id: 0,
             child: child.into(),
-            content_h: 0,
             scrollbar_behavior: ScrollBarBehavior::Auto,
             bar_color: Color::rgba(70, 70, 80, 128),
             thumb_color: Color::rgb(200, 200, 210),
@@ -93,18 +91,18 @@ impl<M: 'static> Scrollable<M> {
     }
 
     #[inline]
-    fn thumb_rect(&self, state: &ScrollViewState) -> Option<(f32, f32, f32, f32)> {
+    fn thumb_rect(&self, state: &ScrollViewState, content_h: i32) -> Option<(f32, f32, f32, f32)> {
         if let ScrollBarBehavior::Hide = self.scrollbar_behavior {
             return None;
         }
-        let max = (self.content_h - self.h).max(0);
+        let max = (content_h - self.h).max(0);
         if max <= 0 && matches!(self.scrollbar_behavior, ScrollBarBehavior::Auto) {
             return None;
         }
 
         let (tx, ty, tw, th) = self.track_rect();
 
-        let ch = self.content_h.max(self.h);
+        let ch = content_h.max(self.h);
         let ratio = (self.h as f32 / ch as f32).clamp(0.0, 1.0);
         let thumb_h = ratio * th;
         let thumb_h = thumb_h.clamp(20.0, th); // min thumb size
@@ -158,10 +156,6 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         (0, -self.ensure_state(view_state).y)
     }
 
-    fn prepare(&mut self, ctx: &mut PrepareCtx) {
-        self.content_h = ctx.child_content_height();
-    }
-
     fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         if self.bg.a() > 0 {
             out.push(Instance::ui(
@@ -173,8 +167,9 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
     }
 
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+        let content_h = ctx.child_content_height();
         let state = self.ensure_state(ctx.view_state);
-        if let Some((tx, ty, tw, th)) = self.thumb_rect(state) {
+        if let Some((tx, ty, tw, th)) = self.thumb_rect(state, content_h) {
             let (track_x, track_y, track_w, track_h) = self.track_rect();
             out.push(Instance::ui(
                 Position::new(track_x, track_y),
@@ -199,7 +194,8 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             && my >= self.y as f32
             && my < self.y as f32 + self.h as f32;
 
-        let max = (self.content_h - self.h).max(0);
+        let content_h = ctx.child_content_height();
+        let max = (content_h - self.h).max(0);
 
         let pressed = ctx.ui.is_button_pressed(MouseButton::Left);
         let down = ctx.ui.is_button_down(MouseButton::Left);
@@ -215,14 +211,14 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             };
             if delta.dy != 0.0 {
                 let st = self.ensure_state(&mut ctx.ui.view_state);
-                let ny = (st.y as f32 - delta.dy * step).round() as i32; // +dy up → smaller y
+                let ny = (st.y as f32 + delta.dy * step).round() as i32;
                 st.y = ny.clamp(0, max);
                 ctx.ui.request_redraw();
             }
         }
 
         let st = self.ensure_state(&mut ctx.ui.view_state);
-        let thumb = self.thumb_rect(st);
+        let thumb = self.thumb_rect(st, content_h);
         let track = self.track_rect();
 
         if let Some((tx, ty, tw, th)) = thumb {
@@ -289,21 +285,5 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             let st = self.ensure_state(&mut ctx.ui.view_state);
             st.grab = None;
         }
-
-        let st = self.ensure_state(&mut ctx.ui.view_state);
-        let saved_mouse = ctx.ui.mouse_pos;
-        ctx.ui.mouse_pos.y += st.y as f32;
-
-        let mut updated_globals = *ctx.globals;
-        updated_globals.mouse_pos[1] += st.y as f32;
-
-        self.child.as_mut().handle(&mut EventCtx {
-            globals: &updated_globals,
-            text: ctx.text,
-            ui: ctx.ui,
-            event: ctx.event,
-        });
-
-        ctx.ui.mouse_pos = saved_mouse;
     }
 }
