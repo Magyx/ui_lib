@@ -197,9 +197,9 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         let content_h = ctx.child_content_height();
         let max = (content_h - self.h).max(0);
 
-        let pressed = ctx.ui.is_button_pressed(MouseButton::Left);
+        let pressed = ctx.is_mouse_pressed(MouseButton::Left);
         let down = ctx.ui.is_button_down(MouseButton::Left);
-        let released = ctx.ui.is_button_released(MouseButton::Left);
+        let released = ctx.is_mouse_released(MouseButton::Left);
 
         if inside
             && max > 0

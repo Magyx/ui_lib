@@ -598,7 +598,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         let mut queued_emit: Option<M> = None;
         let mut needs_redraw = false;
 
-        if inside && ctx.ui.is_button_released(MouseButton::Left) {
+        if inside && ctx.is_mouse_released(MouseButton::Left) {
             ctx.ui.kbd_focus_item = Some(self.id);
             self.focused = true;
 
@@ -617,7 +617,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             }
             needs_redraw = true;
         }
-        if ctx.ui.is_button_pressed(MouseButton::Left) && !inside && self.focused {
+        if ctx.is_mouse_pressed(MouseButton::Left) && !inside && self.focused {
             ctx.ui.kbd_focus_item = None;
             self.focused = false;
         }

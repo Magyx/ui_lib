@@ -1,7 +1,7 @@
 use std::{any::Any, collections::HashMap};
 
 use crate::{
-    event::{MouseButton, UiEventRef},
+    event::{KeyState, MouseButton, UiEventRef},
     graphics::{Globals, Gpu},
     layout::LayoutEngine,
     model::Position,
@@ -100,11 +100,11 @@ impl<M> Context<M> {
         (self.mouse_buttons_down & (1 << b.bit())) != 0
     }
     #[inline]
-    pub fn is_button_pressed(&self, b: MouseButton) -> bool {
+    fn is_button_pressed(&self, b: MouseButton) -> bool {
         (self.mouse_buttons_pressed & (1 << b.bit())) != 0
     }
     #[inline]
-    pub fn is_button_released(&self, b: MouseButton) -> bool {
+    fn is_button_released(&self, b: MouseButton) -> bool {
         (self.mouse_buttons_released & (1 << b.bit())) != 0
     }
 
@@ -254,6 +254,28 @@ impl<'a, M> EventCtx<'a, M> {
         } else {
             0
         }
+    }
+
+    #[inline]
+    pub fn is_mouse_pressed(&self, b: MouseButton) -> bool {
+        matches!(
+            self.event,
+            Some(UiEventRef::MouseButton {
+                button,
+                state: KeyState::Pressed,
+            }) if button == b
+        ) && self.ui.is_button_pressed(b)
+    }
+
+    #[inline]
+    pub fn is_mouse_released(&self, b: MouseButton) -> bool {
+        matches!(
+            self.event,
+            Some(UiEventRef::MouseButton {
+                button,
+                state: KeyState::Released,
+            }) if button == b
+        ) && self.ui.is_button_released(b)
     }
 }
 
