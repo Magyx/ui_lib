@@ -488,24 +488,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         };
 
         {
-            // TODO: split handle in other steps so we don't need to force a take_redraw
-            crate::scope!("handle");
-            let mut event_ctx = EventCtx {
-                text: &mut self.renderer.text,
-                globals: &target.globals,
-                ui: &mut target.ctx,
-                event: None,
-                layout: &self.layout_engine,
-                current_node: root_id,
-            };
-            let mut cursor = root_id;
-            layout::handle_tree(root.as_mut(), &mut event_ctx, &mut cursor);
-            target.ctx.take_redraw();
-            target.ctx.mouse_buttons_pressed = 0;
-            target.ctx.mouse_buttons_released = 0;
-        }
-
-        {
             crate::scope!("prepare");
             let mut prepare_ctx = PrepareCtx {
                 globals: &target.globals,
