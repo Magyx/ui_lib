@@ -8,6 +8,9 @@ use super::*;
 use crate::event::{KeyState, LogicalKey, MouseButton, UiEventRef};
 
 pub struct TextInputViewState {
+    hovered: bool,
+    focused: bool,
+
     buffer: Buffer,
     value: String,
     width: i32,
@@ -18,6 +21,9 @@ pub struct TextInputViewState {
 impl TextInputViewState {
     fn new(fs: &mut cosmic_text::FontSystem, font_size: f32, line_height: f32) -> Self {
         Self {
+            hovered: false,
+            focused: false,
+
             buffer: Buffer::new(fs, Metrics::relative(font_size, line_height)),
             value: String::new(),
             width: 0,
@@ -133,9 +139,6 @@ pub struct TextInput<M, Mode: TextMode = SingleLine> {
     attrs: Attrs<'static>,
     colors: TextColors,
 
-    hovered: bool,
-    focused: bool,
-
     on_change: Option<Box<Handler<M>>>,
     on_submit: Option<Box<Handler<M>>>,
 
@@ -162,8 +165,6 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
                 1.2
             },
             attrs: Attrs::new(),
-            hovered: false,
-            focused: false,
             colors: TextColors::default(),
             on_change: None,
             on_submit: None,
@@ -392,7 +393,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         let Some(st) = self.state_mut(ctx.view_state) else {
             return;
         };
-        st.cursor_rect = if self.focused && !show_placeholder {
+        st.cursor_rect = if st.focused && !show_placeholder {
             Self::compute_cursor_rect(
                 &st.buffer,
                 st.cursor,
@@ -408,7 +409,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
     fn paint_text_and_caret(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         // Border and background.
-        let border_color = if self.focused {
+        let border_color = if self.state(ctx.view_state).is_some_and(|s| s.focused) {
             self.colors.focus_border
         } else {
             self.colors.border
@@ -585,29 +586,29 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        let _ = self.ensure_state(&mut ctx.ui.view_state, ctx.text.font_system_mut());
+        let (was_hovered, hovered, focused) = {
+            let st = self.ensure_state(&mut ctx.ui.view_state, ctx.text.font_system_mut());
+            let inside = ctx.ui.mouse_pos.x >= self.x as f32
+                && ctx.ui.mouse_pos.x < (self.x + self.w) as f32
+                && ctx.ui.mouse_pos.y >= self.y as f32
+                && ctx.ui.mouse_pos.y < (self.y + self.h) as f32;
+            let was_hovered = st.hovered;
+            st.hovered = inside;
+            st.focused = ctx.ui.kbd_focus_item == Some(self.id);
+            (was_hovered, st.hovered, st.focused)
+        };
 
-        let inside = ctx.ui.mouse_pos.x >= self.x as f32
-            && ctx.ui.mouse_pos.x < (self.x + self.w) as f32
-            && ctx.ui.mouse_pos.y >= self.y as f32
-            && ctx.ui.mouse_pos.y < (self.y + self.h) as f32;
-        let was_hovered = self.hovered;
-        self.hovered = inside;
-        self.focused = ctx.ui.kbd_focus_item == Some(self.id);
-
-        let mut queued_emit: Option<M> = None;
         let mut needs_redraw = false;
+        let mut queued_emit: Option<M> = None;
 
-        if inside && ctx.is_mouse_released(MouseButton::Left) {
-            ctx.ui.kbd_focus_item = Some(self.id);
-            self.focused = true;
-
-            // Use Buffer::hit() to place cursor at click position.
+        if hovered && ctx.is_mouse_released(MouseButton::Left) {
             let (l, t, _r, _b) = self.inner_bounds();
             let click_x = ctx.ui.mouse_pos.x - l as f32;
             let click_y = ctx.ui.mouse_pos.y - t as f32;
 
             if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                ctx.ui.kbd_focus_item = Some(self.id);
+                st.focused = true;
                 if let Some(hit_cursor) = st.buffer.hit(click_x, click_y) {
                     st.cursor = hit_cursor;
                 } else {
@@ -617,12 +618,16 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             }
             needs_redraw = true;
         }
-        if ctx.is_mouse_pressed(MouseButton::Left) && !inside && self.focused {
+
+        if ctx.is_mouse_pressed(MouseButton::Left) && !hovered && focused {
+            if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                st.focused = false;
+            }
             ctx.ui.kbd_focus_item = None;
-            self.focused = false;
         }
-        if !self.focused {
-            if was_hovered != self.hovered {
+
+        if !focused {
+            if was_hovered != hovered {
                 ctx.ui.request_redraw();
             }
             return;
@@ -722,7 +727,9 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                             }
                         }
                         Tab => {
-                            self.focused = false;
+                            if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                st.focused = false;
+                            }
                             if ctx.ui.kbd_focus_item == Some(self.id) {
                                 ctx.ui.kbd_focus_item = None;
                             }
@@ -755,7 +762,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         if let Some(msg) = queued_emit {
             ctx.ui.emit(msg);
         }
-        if needs_redraw || was_hovered != self.hovered {
+        if needs_redraw || was_hovered != hovered {
             ctx.ui.request_redraw();
         }
     }
