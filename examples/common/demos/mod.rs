@@ -19,6 +19,7 @@ fn small_block(r: u8, g: u8, b: u8) -> Element<Message> {
 }
 
 pub mod layout;
+pub mod scrollable;
 pub mod interaction {
 
     use super::*;
