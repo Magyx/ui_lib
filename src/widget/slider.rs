@@ -177,7 +177,7 @@ impl<M: 'static> Widget<M> for Slider<M> {
             ctx.ui.hot_item = Some(self.id);
         }
 
-        if inside && ctx.ui.is_button_pressed(MouseButton::Left) {
+        if inside && ctx.is_mouse_pressed(MouseButton::Left) {
             ctx.ui.active_item = Some(self.id);
         }
 
@@ -185,7 +185,7 @@ impl<M: 'static> Widget<M> for Slider<M> {
             && ctx.ui.is_button_down(MouseButton::Left)
             && self.set_from_cursor(ctx.ui.mouse_pos.x);
 
-        if ctx.ui.is_button_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
+        if ctx.is_mouse_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
             changed |= self.set_from_cursor(ctx.ui.mouse_pos.x);
             ctx.ui.active_item = None;
         }

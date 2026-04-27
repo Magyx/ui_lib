@@ -158,20 +158,21 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         let was_hovered = self.hovered;
         let was_pressed = self.pressed;
 
-        let inside = self.contains(ctx.ui.mouse_pos);
-        self.hovered = inside;
-        if inside {
+        self.hovered = self.contains(ctx.ui.mouse_pos);
+        if self.hovered {
             ctx.ui.hot_item = Some(self.id);
         }
 
-        if inside && ctx.ui.is_button_pressed(MouseButton::Left) {
+        if self.hovered && ctx.is_mouse_pressed(MouseButton::Left) {
             ctx.ui.active_item = Some(self.id);
         }
         self.pressed =
             ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_down(MouseButton::Left);
 
-        if ctx.ui.is_button_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
-            if inside && let Some(m) = self.on_press.clone() {
+        if ctx.is_mouse_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
+            if self.hovered
+                && let Some(m) = self.on_press.clone()
+            {
                 ctx.ui.emit(m);
             }
             ctx.ui.active_item = None;

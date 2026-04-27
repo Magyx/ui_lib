@@ -428,6 +428,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             };
             let mut cursor = 0usize;
             layout::handle_tree(root.as_mut(), &mut event_cx, &mut cursor);
+            target.ctx.mouse_buttons_pressed = 0;
+            target.ctx.mouse_buttons_released = 0;
         } else {
             require_redraw = true;
         }
@@ -499,6 +501,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             let mut cursor = root_id;
             layout::handle_tree(root.as_mut(), &mut event_ctx, &mut cursor);
             target.ctx.take_redraw();
+            target.ctx.mouse_buttons_pressed = 0;
+            target.ctx.mouse_buttons_released = 0;
         }
 
         {
