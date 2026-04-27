@@ -15,11 +15,12 @@ pub enum View {
     Pipeline = 2,
     Texture = 3,
     Text = 4,
+    Scrollable = 5,
 }
 
 #[allow(dead_code)]
 impl View {
-    const COUNT: u8 = 5;
+    const COUNT: u8 = 6;
 
     fn from_u8(v: u8) -> Self {
         match v {
@@ -28,6 +29,7 @@ impl View {
             2 => Self::Pipeline,
             3 => Self::Texture,
             4 => Self::Text,
+            5 => Self::Scrollable,
             _ => unreachable!("value out of range"),
         }
     }
@@ -39,6 +41,7 @@ impl View {
             View::Pipeline => "Pipeline",
             View::Texture => "Texture",
             View::Text => "Text",
+            View::Scrollable => "Scrollable",
         }
     }
 
@@ -286,5 +289,6 @@ pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
         View::Pipeline => demos::pipeline::view(tid, state),
         View::Texture => demos::texture::view(state),
         View::Text => demos::text::view(state),
+        View::Scrollable => demos::scrollable::view(tid, state),
     }
 }
