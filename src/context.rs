@@ -47,11 +47,19 @@ impl ViewState {
     }
 
     pub fn ensure<T: 'static>(&mut self, id: Id, default: impl FnOnce() -> T) -> &mut T {
-        self.inner
-            .entry(id)
-            .or_insert_with(|| Box::new(default()))
-            .downcast_mut::<T>()
-            .expect("ViewState type mismatch")
+        use std::collections::hash_map::Entry;
+        let entry = match self.inner.entry(id) {
+            Entry::Vacant(v) => v.insert(Box::new(default())),
+            Entry::Occupied(mut o) => {
+                if !o.get().is::<T>() {
+                    tracing::warn!("id {} overlapped!", id);
+                    *o.get_mut() = Box::new(default());
+                }
+                o.into_mut()
+            }
+        };
+
+        entry.downcast_mut::<T>().unwrap()
     }
 }
 
