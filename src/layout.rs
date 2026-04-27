@@ -765,7 +765,9 @@ impl LayoutEngine {
             let natural_h = max(total_min_h, base_h);
             self.nodes[id].content_size.height = natural_h;
             self.nodes[id].current_size.height = natural_h.min(self.nodes[id].max.height);
-            self.nodes[id].min.height = total_min_h;
+            if !self.nodes[id].clip_children {
+                self.nodes[id].min.height = total_min_h;
+            }
         } else {
             let base_h = match self.nodes[id].size.height {
                 Length::Fixed(h) => {
