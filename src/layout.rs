@@ -360,7 +360,10 @@ fn write_back<M>(
     let count = w.child_count();
     for i in 0..count {
         let child = w.child_mut(i);
-        let child_seed = mix64(root_seed, i + 1);
+        let child_seed = match child.identity_key() {
+            Some(k) => mix64(root_seed, k as usize),
+            None => mix64(root_seed, i + 1),
+        };
         write_back(
             child,
             layout_engine,
