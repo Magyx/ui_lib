@@ -145,8 +145,8 @@ pub struct PrepareCtx<'a> {
 }
 
 impl<'a> PrepareCtx<'a> {
-    pub(crate) fn __set_current_node(&mut self, id: usize) {
-        self.current_node = id;
+    pub(crate) fn __set_current_node(&mut self, i: usize) {
+        self.current_node = i;
     }
     pub fn current_node_id(&self) -> usize {
         self.current_node
@@ -187,8 +187,8 @@ impl<'a> PaintCtx<'a> {
         }
     }
 
-    pub(crate) fn __set_current_node(&mut self, id: usize) {
-        self.current_node = id;
+    pub(crate) fn __set_current_node(&mut self, i: usize) {
+        self.current_node = i;
     }
 
     pub fn current_node_id(&self) -> usize {
@@ -237,8 +237,8 @@ impl<'a, M> EventCtx<'a, M> {
         }
     }
 
-    pub(crate) fn __set_current_node(&mut self, id: usize) {
-        self.current_node = id;
+    pub(crate) fn __set_current_node(&mut self, i: usize) {
+        self.current_node = i;
     }
 
     pub fn current_node_id(&self) -> usize {
