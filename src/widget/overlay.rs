@@ -18,7 +18,7 @@ impl<M> Absolute<M> {
 
 impl<M> IntoElement for Absolute<M> {}
 
-impl<M> Widget<M> for Absolute<M> {
+impl<M: 'static> Widget<M> for Absolute<M> {
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node {
         let mut n = self.inner.as_mut().layout(ctx);
         n.is_absolute = true;

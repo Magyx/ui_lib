@@ -9,6 +9,40 @@ use crate::{
 };
 
 const MAX_NODES: usize = 1024;
+const LANE_SIZE: usize = 1_000_000;
+
+struct TypeLanes {
+    buf: [(std::any::TypeId, usize, usize); 16],
+    len: usize,
+}
+
+impl TypeLanes {
+    fn new() -> Self {
+        Self {
+            // TypeId doesn't impl Default, so we init lazily
+            buf: unsafe { std::mem::zeroed() },
+            len: 0,
+        }
+    }
+
+    fn next(&mut self, type_id: std::any::TypeId) -> (usize, usize) {
+        for i in 0..self.len {
+            if self.buf[i].0 == type_id {
+                let nth = self.buf[i].2;
+                self.buf[i].2 += 1;
+                return (self.buf[i].1, nth);
+            }
+        }
+        let slot = self.len;
+        debug_assert!(
+            slot < 16,
+            "more than 16 distinct widget types under one parent"
+        );
+        self.buf[slot] = (type_id, slot, 1);
+        self.len += 1;
+        (slot, 0)
+    }
+}
 
 #[inline]
 fn mix64(parent: Id, idx: usize) -> Id {
@@ -34,7 +68,7 @@ fn color_for_depth(depth: usize) -> (u8, u8, u8, u8) {
     P[depth % P.len()]
 }
 
-pub fn run_layout<'a, M>(
+pub fn run_layout<'a, M: 'static>(
     layout_engine: &mut LayoutEngine,
     ctx: &mut LayoutCtx<'a, M>,
     root: &mut dyn Widget<M>,
@@ -99,7 +133,7 @@ pub fn run_layout<'a, M>(
     root_id
 }
 
-fn build_tree<'a, M>(
+fn build_tree<'a, M: 'static>(
     layout_engine: &mut LayoutEngine,
     ctx: &mut LayoutCtx<'a, M>,
     w: &mut dyn Widget<M>,
@@ -126,7 +160,7 @@ fn build_tree<'a, M>(
     id
 }
 
-fn post_width_query<'a, M>(
+fn post_width_query<'a, M: 'static>(
     w: &mut dyn Widget<M>,
     eng: &mut LayoutEngine,
     ctx: &mut LayoutCtx<'a, M>,
@@ -151,7 +185,7 @@ fn post_width_query<'a, M>(
     }
 }
 
-pub fn prepare_tree<M>(
+pub fn prepare_tree<M: 'static>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut PrepareCtx,
     cursor: &mut usize,
@@ -160,7 +194,7 @@ pub fn prepare_tree<M>(
     __prepare_tree(w, ctx, cursor);
 }
 
-fn __prepare_tree<M>(
+fn __prepare_tree<M: 'static>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut PrepareCtx,
     cursor: &mut usize,
@@ -181,7 +215,7 @@ fn __prepare_tree<M>(
     w.prepare_overlay(ctx);
 }
 
-pub fn handle_tree<M>(
+pub fn handle_tree<M: 'static>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut crate::context::EventCtx<M>,
     cursor: &mut usize,
@@ -190,7 +224,7 @@ pub fn handle_tree<M>(
     __handle_tree(w, ctx, cursor);
 }
 
-fn __handle_tree<M>(
+fn __handle_tree<M: 'static>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut crate::context::EventCtx<M>,
     cursor: &mut usize,
@@ -211,7 +245,7 @@ fn __handle_tree<M>(
     w.handle_after(ctx);
 }
 
-pub fn paint_tree<M>(
+pub fn paint_tree<M: 'static>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut PaintCtx,
     eng: &crate::layout::LayoutEngine,
@@ -223,7 +257,7 @@ pub fn paint_tree<M>(
     __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, 0, 0);
 }
 #[allow(clippy::too_many_arguments)]
-fn __paint_tree<M>(
+fn __paint_tree<M: 'static>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut PaintCtx,
     eng: &crate::layout::LayoutEngine,
@@ -332,7 +366,7 @@ fn __paint_tree<M>(
     }
 }
 
-fn write_back<M>(
+fn write_back<M: 'static>(
     w: &mut dyn Widget<M>,
     layout_engine: &LayoutEngine,
     cursor: &mut usize,
@@ -357,12 +391,17 @@ fn write_back<M>(
     let child_off_x = off_x + dx;
     let child_off_y = off_y + dy;
 
+    let mut type_lanes = TypeLanes::new();
     let count = w.child_count();
     for i in 0..count {
         let child = w.child_mut(i);
         let child_seed = match child.identity_key() {
             Some(k) => mix64(root_seed, k as usize),
-            None => mix64(root_seed, i + 1),
+            None => {
+                let type_id = child.widget_type_id();
+                let (slot, nth) = type_lanes.next(type_id);
+                mix64(root_seed, slot * LANE_SIZE + nth)
+            }
         };
         write_back(
             child,

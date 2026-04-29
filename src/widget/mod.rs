@@ -25,14 +25,18 @@ pub struct Padding {
 
 pub trait IntoElement {}
 
-pub trait Widget<M>: IntoElement {
-    /* ----- layout ----- */
-    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node;
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32);
+pub trait Widget<M>: IntoElement + 'static {
+    fn widget_type_id(&self) -> std::any::TypeId {
+        std::any::TypeId::of::<Self>()
+    }
     fn identity_key(&self) -> Option<u64> {
         None
     }
     fn set_id(&mut self, _id: Id) {}
+
+    /* ----- layout ----- */
+    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node;
+    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32);
     fn child_count(&self) -> usize;
     fn child_mut(&mut self, idx: usize) -> &mut dyn Widget<M>;
 
