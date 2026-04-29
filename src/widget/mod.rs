@@ -29,7 +29,7 @@ pub trait Widget<M>: IntoElement {
     /* ----- layout ----- */
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node;
     fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32);
-    fn supplied_id(&self) -> Option<Id> {
+    fn identity_key(&self) -> Option<u64> {
         None
     }
     fn set_id(&mut self, _id: Id) {}
@@ -58,14 +58,18 @@ pub trait Widget<M>: IntoElement {
     fn handle_after(&mut self, _ctx: &mut EventCtx<M>) {}
 }
 
-pub struct Element<M>(Box<dyn Widget<M> + 'static>);
+pub struct Element<M> {
+    inner: Box<dyn Widget<M> + 'static>,
+}
 
 impl<M> Element<M> {
     pub fn new<W>(widget: W) -> Self
     where
         W: Widget<M> + 'static,
     {
-        Element(Box::new(widget))
+        Self {
+            inner: Box::new(widget),
+        }
     }
 }
 
@@ -74,19 +78,19 @@ where
     W: Widget<M> + IntoElement + 'static,
 {
     fn from(w: W) -> Self {
-        Element::new(w)
+        Self::new(w)
     }
 }
 
 impl<M> AsRef<dyn Widget<M> + 'static> for Element<M> {
     fn as_ref(&self) -> &(dyn Widget<M> + 'static) {
-        self.0.as_ref()
+        self.inner.as_ref()
     }
 }
 
 impl<M> AsMut<dyn Widget<M> + 'static> for Element<M> {
     fn as_mut(&mut self) -> &mut (dyn Widget<M> + 'static) {
-        self.0.as_mut()
+        self.inner.as_mut()
     }
 }
 
@@ -140,3 +144,6 @@ pub use scroll::Scrollable;
 mod svg;
 #[cfg(feature = "svg")]
 pub use svg::Svg;
+
+mod keyed;
+pub use keyed::Keyed;

@@ -10,16 +10,6 @@ use crate::{
 
 pub type Id = u64;
 
-// use std::sync::atomic::{AtomicU64, Ordering};
-// static NEXT_ID: AtomicU64 = AtomicU64::new(1);
-// pub fn next_id() -> Id {
-//     NEXT_ID.fetch_add(1, Ordering::Relaxed)
-// }
-//
-// pub fn reset_ids_for_frame() {
-//     NEXT_ID.store(1, Ordering::Relaxed);
-// }
-
 type ViewStateInner = HashMap<Id, Box<dyn Any>>;
 
 #[derive(Default)]
@@ -53,7 +43,10 @@ impl ViewState {
             Entry::Occupied(mut o) => {
                 if !o.get().is::<T>() {
                     #[cfg(feature = "tracing")]
-                    tracing::warn!("id {} overlapped!", id);
+                    tracing::warn!(
+                        "Id {} overlapped! Possible duplicate Keyed key under the same parent.",
+                        id
+                    );
                     *o.get_mut() = Box::new(default());
                 }
                 o.into_mut()
