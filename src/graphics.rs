@@ -113,6 +113,10 @@ impl<'a, M> Default for Engine<'a, M> {
             trace: wgpu::Trace::Off,
         }))
         .expect("wgpu: failed to request logical device/queue (feature set unsupported?)");
+        #[cfg(feature = "tracing")]
+        device.on_uncaptured_error(Box::new(|err| {
+            tracing::warn!("wgpu uncaptured error: {err}");
+        }));
 
         let gpu = Gpu {
             instance,
