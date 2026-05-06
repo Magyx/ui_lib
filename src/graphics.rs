@@ -29,6 +29,17 @@ impl TargetIdAlloc {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderOutcome {
+    /// A frame was encoded and submitted.
+    Rendered,
+    /// Rendering was skipped (need was false, target missing, or Timeout).
+    Skipped,
+    /// The surface was Lost or Outdated; `surface.configure()` has been called
+    /// and the caller should try rendering again.
+    NeedsRerender,
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Globals {
@@ -454,14 +465,14 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         need: bool,
         view: &impl Fn(&TargetId, &S) -> Element<M>,
         state: &mut S,
-    ) {
+    ) -> crate::Result<RenderOutcome> {
         if !need {
-            return;
+            return Ok(RenderOutcome::Skipped);
         }
 
         // TODO: need to invalidate and cleanup target.view_state
         let Some(target) = self.targets.get_mut(tid) else {
-            return; // TODO: maybe return a result instead
+            return Ok(RenderOutcome::Skipped);
         };
 
         crate::scope!("Engine::render");
@@ -543,14 +554,25 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         target.globals.frame = target.globals.frame.wrapping_add(1);
 
-        let _ = self.renderer.render(
+        match self.renderer.render(
             &self.gpu,
             target,
             &mut self.pipeline_registry,
             &target.globals,
             &self.instance_buf,
             &self.primitive_buf,
-        );
+        ) {
+            Ok(()) => Ok(RenderOutcome::Rendered),
+            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                target.surface.configure(&self.gpu.device, &target.config);
+                Ok(RenderOutcome::NeedsRerender)
+            }
+            Err(wgpu::SurfaceError::Timeout) => Ok(RenderOutcome::Skipped),
+            Err(wgpu::SurfaceError::OutOfMemory) => {
+                Err(crate::error::EngineError::OutOfMemory.into())
+            }
+            Err(_) => Err(crate::error::EngineError::OutOfMemory.into()),
+        }
     }
     pub fn handle_platform_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
         &mut self,

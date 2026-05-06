@@ -319,7 +319,7 @@ where
                     &mut self.state,
                     event_loop,
                 );
-                engine.render_if_needed(
+                _ = engine.render_if_needed(
                     &self.target.unwrap(),
                     should_redraw,
                     &self.view,

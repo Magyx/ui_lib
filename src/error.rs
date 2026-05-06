@@ -38,6 +38,7 @@ pub enum InitError {
 pub enum EngineError {
     InvalidTarget,
     MissingPrimaryTarget,
+    OutOfMemory,
 }
 
 #[non_exhaustive]

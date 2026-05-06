@@ -74,10 +74,7 @@ impl Renderer {
             match target.surface.get_current_texture() {
                 Ok(o) => o,
                 Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    target.surface.configure(&gpu.device, &target.config);
-                    // TODO/FIX: this should return somethinig that indicates a round trip is needed
-                    // from the compositor.
-                    return Ok(());
+                    return Err(wgpu::SurfaceError::Outdated);
                 }
                 Err(wgpu::SurfaceError::Timeout) => return Ok(()),
                 Err(e) => return Err(e),

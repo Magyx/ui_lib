@@ -607,7 +607,10 @@ where
                     &mut state,
                     &loop_ctl,
                 );
-            engine.render_if_needed(&tid, need, &view, &mut state);
+            if let Err(e) = engine.render_if_needed(&tid, need, &view, &mut state) {
+                #[cfg(feature = "tracing")]
+                tracing::error!("error dialog render failed: {e:?}");
+            }
             any_rendered |= need;
         }
 
