@@ -80,6 +80,11 @@ impl<M: 'static> Scrollable<M> {
         self
     }
 
+    #[doc(hidden)]
+    pub fn __scroll_y_for_test(&self, vs: &ViewState) -> i32 {
+        vs.get::<ScrollViewState>(&self.id).map_or(0, |s| s.y)
+    }
+
     #[inline]
     fn track_rect(&self) -> (f32, f32, f32, f32) {
         let margin = 2.0;

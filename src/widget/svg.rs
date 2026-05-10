@@ -76,6 +76,14 @@ struct SvgState {
     draw_rect: Option<(f32, f32, f32, f32)>,
 }
 
+impl OnSweep for SvgState {
+    fn on_sweep(&mut self, cx: &mut SweepCtx) {
+        if let Some(handle) = self.handle.take() {
+            cx.texture.unload(cx.gpu, handle);
+        }
+    }
+}
+
 impl SvgState {
     fn ensure_tree(
         &mut self,
@@ -189,7 +197,7 @@ impl<M> Widget<M> for Svg {
     }
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
-        let state = ctx.view_state.ensure(self.id, SvgState::default);
+        let state = ctx.view_state.ensure_swept(self.id, SvgState::default);
         state.draw_rect = None;
 
         if self.w <= 0 || self.h <= 0 || self.tint.a() == 0 {

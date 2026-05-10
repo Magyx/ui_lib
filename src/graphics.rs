@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use crate::{
     consts::*,
-    context::{Context, EventCtx, LayoutCtx, PaintCtx, PrepareCtx},
+    context::{Context, EventCtx, LayoutCtx, PaintCtx, PrepareCtx, SweepCtx},
     event::{Event, KeyState, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
@@ -470,7 +470,6 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             return Ok(RenderOutcome::Skipped);
         }
 
-        // TODO: need to invalidate and cleanup target.view_state
         let Some(target) = self.targets.get_mut(tid) else {
             return Ok(RenderOutcome::Skipped);
         };
@@ -547,6 +546,16 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             self.primitive_buf.clear();
             self.primitive_buf
                 .extend(self.instance_buf.iter().map(|i| i.primitive));
+        }
+
+        {
+            crate::scope!("view_state::sweep");
+            target.ctx.sweep_focus();
+            let mut sweep_ctx = SweepCtx {
+                gpu: &self.gpu,
+                texture: &mut self.renderer.textures,
+            };
+            target.ctx.view_state.sweep(&mut sweep_ctx);
         }
 
         crate::plot!("ui.instances", self.instance_buf.len() as f64);
