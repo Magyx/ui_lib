@@ -34,7 +34,7 @@ Priorities:
 - [x] **Double-click / double-emit bug.** `Engine::poll` (`graphics.rs:3101`) and `render_if_needed` (`graphics.rs:3166`) both run `root.handle(event: None)`, but `mouse_buttons_pressed`/`released` are only cleared at the *start* of `handle_platform_event` (`graphics.rs:3246–3247`). Released bits leak into redraw frames; buttons re-fire `on_press`. Clear pressed/released after the render pass too, or make widgets only consult them when `ctx.event` is `Some(MouseButton)`.
 - [x] **Two `handle` passes per frame.** `Engine::poll` and `Engine::render_if_needed` both call `root.handle()` with `event: None`. Wasted traversal and the proximate cause of #2 above. The TODO at `graphics.rs:3159` acknowledges this. Split into `update` (per-frame mouse-state-derived hover/active) vs `handle_event` (only when there's a discrete event).
 - [x] **`ViewState` is never invalidated.** `graphics.rs:3127` notes this. Removed widgets leak entries forever, and a list that shrinks then grows will hand stale state to new widgets at the same indices. Mark touched IDs during the frame and sweep unreferenced ones at end-of-frame.
-- [ ] **Hard 1024-node panic.** `layout.rs:3333`'s `MAX_NODES = 1024` plus `assert!` in `create_node` is a runtime crash for users with moderately-sized trees. Switch to `Vec` or return `Result`.
+- [x] **Hard 1024-node panic.** `layout.rs:3333`'s `MAX_NODES = 1024` plus `assert!` in `create_node` is a runtime crash for users with moderately-sized trees. Switch to `Vec` or return `Result`.
 
 ### P1 — real user-visible bugs
 

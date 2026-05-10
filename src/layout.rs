@@ -8,8 +8,6 @@ use crate::{
     widget::{Axis, Length, Padding, Widget},
 };
 
-const MAX_NODES: usize = 1024;
-
 #[inline]
 fn mix64(parent: Id, idx: usize) -> Id {
     let mut z =
@@ -451,7 +449,7 @@ impl Default for Node {
 }
 
 pub struct LayoutEngine {
-    pub(crate) nodes: [__Node; MAX_NODES],
+    pub(crate) nodes: Vec<__Node>,
     pub(crate) node_count: usize,
 
     debug: bool,
@@ -466,21 +464,25 @@ impl Default for LayoutEngine {
 impl LayoutEngine {
     pub fn new() -> Self {
         LayoutEngine {
-            nodes: [__Node::default(); MAX_NODES],
+            nodes: Vec::with_capacity(1024),
             node_count: 0,
 
             debug: false,
         }
     }
     fn create_node(&mut self, size: Size<Length>, layout_dir: Axis, is_absolute: bool) -> usize {
-        assert!(self.node_count < MAX_NODES);
         let id = self.node_count;
-        self.nodes[id] = __Node {
+        let node = __Node {
             size,
             layout_dir,
             is_absolute,
             ..Default::default()
         };
+        if id < self.nodes.len() {
+            self.nodes[id] = node;
+        } else {
+            self.nodes.push(node);
+        }
         self.node_count += 1;
         id
     }
@@ -977,5 +979,41 @@ impl LayoutEngine {
             self.nodes[id].current_size.width,
             self.nodes[id].current_size.height,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn node_vec_grows_beyond_initial_capacity() {
+        let mut engine = LayoutEngine::new();
+        let initial_cap = engine.nodes.capacity();
+
+        // Force growth past the initial allocation
+        for _ in 0..initial_cap + 1 {
+            engine.create_node(Size::default(), Axis::default(), false);
+        }
+
+        assert!(
+            engine.nodes.capacity() > initial_cap,
+            "vec should have reallocated"
+        );
+        assert_eq!(
+            engine.node_count,
+            initial_cap + 1,
+            "all nodes should be accounted for"
+        );
+
+        // Verify reset preserves capacity
+        let grown_cap = engine.nodes.capacity();
+        engine.reset();
+        assert_eq!(engine.node_count, 0);
+        assert_eq!(
+            engine.nodes.capacity(),
+            grown_cap,
+            "reset should not shrink capacity"
+        );
     }
 }
