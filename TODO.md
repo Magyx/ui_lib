@@ -38,7 +38,7 @@ Priorities:
 
 ### P1 — real user-visible bugs
 
-- [ ] **Atlas has no eviction.** `render/texture.rs:5946` TODO. Once full, glyph upload silently returns `None` and `Text::paint` skips those glyphs — text just disappears. Add LRU eviction or grow-on-full.
+- [x] **Atlas has no eviction.** `render/texture.rs:5946` TODO. Once full, glyph upload silently returns `None` and `Text::paint` skips those glyphs — text just disappears. Add LRU eviction or grow-on-full.
 - [ ] **No HiDPI / scale-factor handling.** `Target::scale` is set to `1` (`graphics.rs:2921`) and never read. Layout, fonts, and mouse coords all run in physical pixels — UI looks tiny on 2× displays. Pick a model (logical-px throughout, scale at render) and apply consistently.
 - [ ] **`Modifiers` snapshot has no home.** `event.rs:2530` plumbs `ModifiersChanged` through `UiEventRef`, but `Context` (`context.rs:2066`) has no `modifiers` field. Any widget that wants Shift+Arrow, Ctrl+C, etc. has nowhere to read modifier state from. Add `pub modifiers: Modifiers` to `Context`.
 - [x] **No keyed children / stable identity across reorder.** Identity comes from `mix64(parent, idx)` (`layout.rs:3411, 3648`), which is purely positional. Sort, filter, or reorder a list and state attaches to the wrong items. Add an explicit `key` mechanism (à la React) or accept `supplied_id` more broadly.

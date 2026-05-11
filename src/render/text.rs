@@ -1,42 +1,13 @@
-use std::collections::{HashMap, VecDeque};
-
 use cosmic_text::{CacheKey, FontSystem, LayoutGlyph, SwashCache, SwashContent, SwashImage};
 
 use crate::{
     graphics::Gpu,
     model::{Position, Size},
-    render::texture::{Atlas, TextureHandle, TextureRegistry},
+    render::{
+        glyph_atlas::GlyphAtlas,
+        texture::{TextureHandle, TextureRegistry},
+    },
 };
-
-const GLYPH_PAGE_SIZE: u32 = 1024;
-
-struct Page {
-    id: usize,
-    atlas: Atlas,
-}
-
-pub struct TextSystem {
-    pages: VecDeque<Page>,
-    page_cap: usize,
-    current_page: usize,
-    glyph_map: HashMap<CacheKey, (TextureHandle, usize)>,
-
-    swash_cache: SwashCache,
-    font_system: FontSystem,
-}
-
-impl Default for TextSystem {
-    fn default() -> Self {
-        Self {
-            pages: VecDeque::new(),
-            page_cap: 4,
-            current_page: 0,
-            glyph_map: HashMap::new(),
-            swash_cache: SwashCache::new(),
-            font_system: FontSystem::new(),
-        }
-    }
-}
 
 fn premul_rgba(img: &SwashImage) -> Vec<u8> {
     match img.content {
@@ -73,6 +44,24 @@ fn premul_rgba(img: &SwashImage) -> Vec<u8> {
     }
 }
 
+const GLYPH_PAGE_SIZE: u32 = 1024;
+
+pub struct TextSystem {
+    glyph_atlas: GlyphAtlas,
+    swash_cache: SwashCache,
+    font_system: FontSystem,
+}
+
+impl Default for TextSystem {
+    fn default() -> Self {
+        Self {
+            glyph_atlas: GlyphAtlas::default(),
+            swash_cache: SwashCache::new(),
+            font_system: FontSystem::new(),
+        }
+    }
+}
+
 impl TextSystem {
     pub fn font_system(&self) -> &FontSystem {
         &self.font_system
@@ -88,6 +77,10 @@ impl TextSystem {
 
     pub fn swash_cache_mut(&mut self) -> &mut SwashCache {
         &mut self.swash_cache
+    }
+
+    pub(crate) fn tick(&mut self) {
+        self.glyph_atlas.tick();
     }
 
     pub fn prepare_glyph_data(
@@ -136,25 +129,6 @@ impl TextSystem {
         ))
     }
 
-    fn create_atlas(&mut self, gpu: &Gpu, texture_reg: &mut TextureRegistry) -> bool {
-        if self.pages.len() >= self.page_cap {
-            return false;
-        }
-        let id = self.pages.back().map(|p| p.id + 1).unwrap_or(0);
-        let atlas = texture_reg.create_atlas(gpu, GLYPH_PAGE_SIZE, GLYPH_PAGE_SIZE);
-        self.pages.push_back(Page { id, atlas });
-        self.current_page = self.pages.len() - 1;
-        true
-    }
-
-    fn recycle_oldest(&mut self, gpu: &Gpu, texture_reg: &mut TextureRegistry) {
-        if let Some(Page { id, mut atlas }) = self.pages.pop_front() {
-            texture_reg.destroy_atlas(gpu, &mut atlas);
-            self.glyph_map.retain(|_, (_, page_id)| *page_id != id);
-            let _ = self.create_atlas(gpu, texture_reg);
-        }
-    }
-
     pub fn upload_glyph(
         &mut self,
         gpu: &Gpu,
@@ -170,12 +144,9 @@ impl TextSystem {
             return Some(TextureHandle::default());
         }
 
-        if let Some(&(handle, _)) = self.glyph_map.get(&key) {
+        if let Some(handle) = self.glyph_atlas.lookup(&key) {
+            self.glyph_atlas.touch(key);
             return Some(handle);
-        }
-
-        if self.pages.is_empty() && !self.create_atlas(gpu, texture_reg) {
-            return Some(TextureHandle::default());
         }
 
         let img = self
@@ -184,45 +155,10 @@ impl TextSystem {
             .as_ref()?;
         let rgba = premul_rgba(img);
 
-        // Try current page
-        if let Some(handle) =
-            texture_reg.load_into_atlas(gpu, &mut self.pages[self.current_page].atlas, w, h, &rgba)
-        {
-            let id = self.pages[self.current_page].id;
-            self.glyph_map.insert(key, (handle, id));
-            return Some(handle);
-        }
-
-        // Try other pages
-        for idx in 0..self.pages.len() {
-            if idx == self.current_page {
-                continue;
-            }
-            if let Some(handle) =
-                texture_reg.load_into_atlas(gpu, &mut self.pages[idx].atlas, w, h, &rgba)
-            {
-                let id = self.pages[idx].id;
-                self.glyph_map.insert(key, (handle, id));
-                return Some(handle);
-            }
-        }
-
-        // Allocate or recycle, then place
-        if !self.create_atlas(gpu, texture_reg) {
-            self.recycle_oldest(gpu, texture_reg);
-        }
-        if let Some(handle) =
-            texture_reg.load_into_atlas(gpu, &mut self.pages[self.current_page].atlas, w, h, &rgba)
-        {
-            let id = self.pages[self.current_page].id;
-            self.glyph_map.insert(key, (handle, id));
-            return Some(handle);
-        }
-
-        Some(TextureHandle::default())
+        self.glyph_atlas.upload(gpu, texture_reg, key, w, h, &rgba)
     }
 
     pub fn lookup_glyph_handle(&self, key: CacheKey) -> Option<TextureHandle> {
-        self.glyph_map.get(&key).map(|&(handle, _)| handle)
+        self.glyph_atlas.lookup(&key)
     }
 }

@@ -97,7 +97,10 @@ pub struct State {
 }
 
 mod update {
-    use ui::graphics::{Engine, TargetId};
+    use ui::{
+        graphics::{Engine, TargetId},
+        render::AllocatorKind,
+    };
 
     pub fn ensure_icons_loaded<'a>(
         engine: &mut Engine<'a, super::Message>,
@@ -109,7 +112,7 @@ mod update {
 
         const MAX_DEMO_ICONS: usize = 16;
 
-        let mut atlas = engine.create_atlas(512, 512);
+        let mut atlas = engine.create_atlas(512, 512, AllocatorKind::Shelf);
         let mut handles = Vec::new();
         let mut svg_paths = Vec::with_capacity(MAX_DEMO_ICONS);
 

@@ -9,6 +9,7 @@ use crate::{
     model::*,
     primitive::{Instance, Primitive, Vertex},
     render::{
+        AllocatorKind,
         pipeline::PipelineRegistry,
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
@@ -386,10 +387,10 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
     pub fn unload_texture(&mut self, handle: TextureHandle) -> bool {
         self.renderer.textures.unload(&self.gpu, handle)
     }
-    pub fn create_atlas(&mut self, width: u32, height: u32) -> Atlas {
+    pub fn create_atlas(&mut self, width: u32, height: u32, kind: AllocatorKind) -> Atlas {
         self.renderer
             .textures
-            .create_atlas(&self.gpu, width, height)
+            .create_atlas(&self.gpu, width, height, kind)
     }
     pub fn load_texture_into_atlas(
         &mut self,
@@ -401,6 +402,9 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         self.renderer
             .textures
             .load_into_atlas(&self.gpu, atlas, width, height, pixels)
+    }
+    pub fn free_from_atlas(&mut self, atlas: &mut Atlas, handle: TextureHandle) {
+        atlas.free(handle);
     }
     pub fn destroy_atlas(&mut self, atlas: &mut Atlas) {
         self.renderer.textures.destroy_atlas(&self.gpu, atlas)
@@ -500,6 +504,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 max.height,
             )
         };
+
+        self.renderer.text.tick();
 
         {
             crate::scope!("prepare");

@@ -1,9 +1,23 @@
-use crate::{consts::DEFAULT_MAX_TEXTURES, graphics::Gpu, model::Size};
+use crate::{
+    consts::DEFAULT_MAX_TEXTURES,
+    graphics::Gpu,
+    model::Size,
+    render::{
+        AllocatorKind,
+        alloc::{Allocator, AtlasRect},
+    },
+};
 
 #[inline]
 pub fn pack_unorm2x16(xy: [f32; 2]) -> u32 {
     let q = |v: f32| -> u32 { (v.clamp(0.0, 1.0) * 65535.0 + 0.5).floor() as u32 };
     q(xy[0]) | (q(xy[1]) << 16)
+}
+#[inline]
+pub fn unpack_unorm2x16(packed: u32) -> (f32, f32) {
+    let x = (packed & 0xFFFF) as f32 / 65535.0;
+    let y = (packed >> 16) as f32 / 65535.0;
+    (x, y)
 }
 
 #[inline]
@@ -15,6 +29,7 @@ pub fn pack_unorm4x8(xyzw: [f32; 4]) -> u32 {
 // up to 4096 textures (12 bits), 20-bit generations
 pub const SLOT_BITS: u32 = 12;
 pub const SLOT_MASK: u32 = (1 << SLOT_BITS) - 1;
+
 #[inline]
 pub fn pack_slot_gen(slot: usize, generation: u32) -> u32 {
     (generation << SLOT_BITS) | ((slot + 1) as u32 & SLOT_MASK)
@@ -38,59 +53,48 @@ fn dummy_bind_group(device: &wgpu::Device) -> wgpu::BindGroup {
     })
 }
 
-pub struct AtlasRect {
-    pub x: u32,
-    pub y: u32,
-    pub w: u32,
-    pub h: u32,
-}
-
 pub struct Atlas {
-    slot_index: usize,
-    generation: u32,
-    size_px: Size<u32>,
-    cursor_x: u32,
-    cursor_y: u32,
-    row_h: u32,
+    pub(crate) slot_index: usize,
+    pub(crate) generation: u32,
+    pub(crate) size_px: Size<u32>,
+    pub(crate) allocator: Allocator,
 }
 
 impl Atlas {
-    fn new(slot_index: usize, generation: u32, size_px: Size<u32>) -> Self {
+    pub(crate) fn new(
+        slot_index: usize,
+        generation: u32,
+        size_px: Size<u32>,
+        kind: AllocatorKind,
+    ) -> Self {
         Self {
             slot_index,
             generation,
             size_px,
-            cursor_x: 0,
-            cursor_y: 0,
-            row_h: 0,
+            allocator: Allocator::new(kind, size_px.width, size_px.height),
         }
     }
 
-    // TODO: alloc using LRU
-    fn alloc(&mut self, w: u32, h: u32) -> Option<AtlasRect> {
-        if w > self.size_px.width || h > self.size_px.height {
-            return None;
-        }
-        if self.cursor_x + w > self.size_px.width {
-            self.cursor_x = 0;
-            self.cursor_y += self.row_h;
-            self.row_h = 0;
-        }
-        if self.cursor_y + h > self.size_px.height {
-            return None;
-        }
+    /// Allocate a `w × h` rect inside this atlas. Returns `None` when full.
+    pub(crate) fn alloc(&mut self, w: u32, h: u32) -> Option<AtlasRect> {
+        self.allocator.alloc(w, h)
+    }
 
-        let rect = AtlasRect {
-            x: self.cursor_x,
-            y: self.cursor_y,
-            w,
-            h,
-        };
-        self.cursor_x += w;
-        if h > self.row_h {
-            self.row_h = h;
-        }
-        Some(rect)
+    /// Mark the region occupied by `handle` as reclaimable.
+    ///
+    /// Only meaningful for atlases created with [`AllocatorKind::Skyline`];
+    /// calling this on a `Shelf` atlas is a safe no-op (shelf packing cannot
+    /// reclaim individual rects without resetting the whole atlas).
+    pub fn free(&mut self, handle: TextureHandle) {
+        let (ox, oy) = unpack_unorm2x16(handle.offset_packed);
+        let x = (ox * self.size_px.width as f32).round() as u32;
+        let y = (oy * self.size_px.height as f32).round() as u32;
+        self.allocator.free(AtlasRect {
+            x,
+            y,
+            w: handle.size_px.width,
+            h: handle.size_px.height,
+        });
     }
 }
 
@@ -357,7 +361,13 @@ impl TextureRegistry {
         true
     }
 
-    pub fn create_atlas(&mut self, gpu: &Gpu, width: u32, height: u32) -> Atlas {
+    pub fn create_atlas(
+        &mut self,
+        gpu: &Gpu,
+        width: u32,
+        height: u32,
+        kind: AllocatorKind,
+    ) -> Atlas {
         let idx = self
             .free
             .pop()
@@ -386,7 +396,7 @@ impl TextureRegistry {
         );
         self.update_bind_group(&gpu.device);
 
-        Atlas::new(idx, self.gens[idx], Size::new(width, height))
+        Atlas::new(idx, self.gens[idx], Size::new(width, height), kind)
     }
 
     pub fn load_into_atlas(
@@ -458,9 +468,7 @@ impl TextureRegistry {
         self.free.push(idx);
 
         atlas.size_px = Size::new(0, 0);
-        atlas.cursor_x = 0;
-        atlas.cursor_y = 0;
-        atlas.row_h = 0;
+        atlas.allocator.reset();
         atlas.generation = self.gens[idx];
     }
 }
@@ -469,9 +477,7 @@ impl TextureRegistry {
 mod tests {
     use super::*;
 
-    // ========================================================
     // pack_unorm2x16 / pack_unorm4x8
-    // ========================================================
     //
     // These are the GPU-format contracts used to pack atlas UV
     // offsets/scales and content-fit ratios into u32. A rounding bug
@@ -529,9 +535,7 @@ mod tests {
         assert_eq!(pack_unorm4x8([2.0, 3.0, 100.0, f32::INFINITY]), 0xFFFF_FFFF);
     }
 
-    // ========================================================
     // pack_slot_gen / unpack_slot_gen
-    // ========================================================
     //
     // The encoding stores (slot + 1) in the low SLOT_BITS and the
     // generation in the upper bits. Note the +1/-1 offset: slot 0 is
@@ -582,135 +586,7 @@ mod tests {
         assert_eq!(s, max_slot);
     }
 
-    // ========================================================
-    // Atlas::alloc - shelf packing state machine
-    // ========================================================
-
-    fn fresh_atlas(w: u32, h: u32) -> Atlas {
-        // Atlas::new is private; we're in the same module, so this works
-        // from inside `mod tests` only.
-        Atlas::new(0, 0, Size::new(w, h))
-    }
-
-    #[test]
-    fn alloc_single_fits_at_origin() {
-        let mut a = fresh_atlas(256, 256);
-        let r = a.alloc(32, 16).expect("should fit");
-        assert_eq!((r.x, r.y, r.w, r.h), (0, 0, 32, 16));
-    }
-
-    #[test]
-    fn alloc_second_fits_next_to_first_on_same_row() {
-        let mut a = fresh_atlas(256, 256);
-        let r1 = a.alloc(32, 16).unwrap();
-        let r2 = a.alloc(24, 16).unwrap();
-        assert_eq!((r1.x, r1.y), (0, 0));
-        assert_eq!(
-            (r2.x, r2.y),
-            (32, 0),
-            "second rect starts where first ended on x"
-        );
-    }
-
-    #[test]
-    fn alloc_row_h_tracks_tallest_on_current_row() {
-        // Pack: [10x5][10x20][10x5] — row height should be 20 by the end.
-        let mut a = fresh_atlas(100, 100);
-        let _ = a.alloc(10, 5).unwrap();
-        let _ = a.alloc(10, 20).unwrap(); // bumps row_h to 20
-        let _ = a.alloc(10, 5).unwrap();
-
-        // Now force a wrap. The next rect should land at y = 20 (the
-        // tallest row so far), not y = 5.
-        // Fill the rest of row 1 (width 100, we used 30, so 70 left).
-        let _ = a.alloc(70, 1).unwrap();
-        // Next alloc of any size triggers the wrap.
-        let wrap = a.alloc(5, 5).unwrap();
-        assert_eq!(
-            wrap.y, 20,
-            "new row should start below the tallest on prev row"
-        );
-        assert_eq!(wrap.x, 0, "new row starts at x=0");
-    }
-
-    #[test]
-    fn alloc_wraps_to_new_row_when_current_row_full() {
-        // 10-wide atlas, first row holds one 6x4 rect. Next 6x4 needs to wrap.
-        let mut a = fresh_atlas(10, 20);
-        let _ = a.alloc(6, 4).unwrap();
-        let r = a.alloc(6, 4).unwrap();
-        assert_eq!(r.x, 0);
-        assert_eq!(r.y, 4, "second row starts at row_h of first");
-    }
-
-    #[test]
-    fn alloc_rejects_rect_larger_than_atlas() {
-        let mut a = fresh_atlas(32, 32);
-        assert!(a.alloc(33, 10).is_none(), "too wide");
-        assert!(a.alloc(10, 33).is_none(), "too tall");
-        assert!(a.alloc(100, 100).is_none(), "both");
-    }
-
-    #[test]
-    fn alloc_rejects_when_vertical_space_exhausted() {
-        // A tiny atlas that fits exactly one row of 5x5.
-        let mut a = fresh_atlas(5, 5);
-        let _ = a.alloc(5, 5).unwrap();
-        // Next request needs to wrap to y=5 but the atlas ends at y=5.
-        assert!(a.alloc(1, 1).is_none());
-    }
-
-    #[test]
-    fn alloc_exactly_fits_atlas_width_on_single_row() {
-        let mut a = fresh_atlas(100, 50);
-        let r = a.alloc(100, 50).expect("exact-fit should succeed");
-        assert_eq!((r.x, r.y, r.w, r.h), (0, 0, 100, 50));
-        // Next alloc has nowhere to go.
-        assert!(a.alloc(1, 1).is_none());
-    }
-
-    #[test]
-    fn alloc_zero_sized_rect_succeeds_and_does_not_advance_cursor() {
-        // `w > self.size_px.width` is the only rejection, so zero is allowed.
-        // Zero-width also means the x cursor doesn't move.
-        let mut a = fresh_atlas(100, 100);
-        let r = a.alloc(0, 0).expect("zero-sized alloc should succeed");
-        assert_eq!((r.w, r.h), (0, 0));
-
-        // A subsequent real alloc should still start at x=0 because
-        // cursor_x only advances by w, and w was 0.
-        let r2 = a.alloc(10, 10).unwrap();
-        assert_eq!((r2.x, r2.y), (0, 0));
-    }
-
-    #[test]
-    fn alloc_many_small_rects_fills_multiple_rows() {
-        // 40x40 atlas filled with 10x10 rects should pack 4x4 = 16 rects.
-        let mut a = fresh_atlas(40, 40);
-        let mut allocated = 0;
-        while a.alloc(10, 10).is_some() {
-            allocated += 1;
-        }
-        assert_eq!(allocated, 16, "a 40x40 atlas should fit 16 10x10 tiles");
-        // One more attempt must still fail.
-        assert!(a.alloc(10, 10).is_none());
-    }
-
-    #[test]
-    fn alloc_mixed_heights_waste_vertical_space() {
-        // Shelf packers waste space below short rects in a tall row.
-        // Verify this is the behaviour (regression guard in case we
-        // later switch to a smarter packer).
-        let mut a = fresh_atlas(100, 100);
-        let _ = a.alloc(100, 80).unwrap(); // row_h becomes 80
-        // Force wrap.
-        let r = a.alloc(1, 1).unwrap();
-        assert_eq!(r.y, 80, "gap below short rects is still 80 tall");
-    }
-
-    // ========================================================
     // TextureHandle
-    // ========================================================
 
     #[test]
     fn texture_handle_default_is_all_zero() {

@@ -3,6 +3,11 @@ pub(crate) mod renderer;
 pub mod text;
 pub mod texture;
 
+pub(crate) mod alloc;
+pub use alloc::AllocatorKind;
+
+pub(crate) mod glyph_atlas;
+
 pub type PipelineFactoryFn = fn(
     &crate::graphics::Gpu,
     &wgpu::TextureFormat,
