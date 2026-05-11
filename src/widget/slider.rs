@@ -10,8 +10,8 @@ pub struct Slider<M> {
 
     id: Id,
     size: Size<Length>,
-    min_px: Size<i32>,
-    max_px: Size<i32>,
+    min: Size<i32>,
+    max: Size<i32>,
 
     lo: f32,
     hi: f32,
@@ -37,8 +37,8 @@ impl<M> Slider<M> {
             h: 0,
             id: 0,
             size,
-            min_px: Size::splat(0),
-            max_px: Size::splat(i32::MAX),
+            min: Size::splat(0),
+            max: Size::splat(i32::MAX),
 
             lo,
             hi,
@@ -71,11 +71,11 @@ impl<M> Slider<M> {
         self
     }
     pub fn min(mut self, s: Size<i32>) -> Self {
-        self.min_px = s;
+        self.min = s;
         self
     }
     pub fn max(mut self, s: Size<i32>) -> Self {
-        self.max_px = s;
+        self.max = s;
         self
     }
 
@@ -108,8 +108,8 @@ impl<M: 'static> Widget<M> for Slider<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
             size: self.size,
-            min: self.min_px,
-            max: self.max_px,
+            min: self.min,
+            max: self.max,
             ..Default::default()
         }
     }
