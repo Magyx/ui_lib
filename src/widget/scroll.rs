@@ -14,6 +14,7 @@ pub enum ScrollBarBehavior {
 struct ScrollViewState {
     y: i32,
     grab: Option<f32>,
+    content_h: i32,
 }
 
 pub struct Scrollable<M> {
@@ -123,7 +124,11 @@ impl<M: 'static> Scrollable<M> {
     }
 
     fn ensure_state<'b>(&self, view_state: &'b mut ViewState) -> &'b mut ScrollViewState {
-        view_state.ensure(self.id, || ScrollViewState { y: 0, grab: None })
+        view_state.ensure(self.id, || ScrollViewState {
+            y: 0,
+            grab: None,
+            content_h: 0,
+        })
     }
 }
 
@@ -158,7 +163,10 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         self.child.as_mut()
     }
     fn children_offset<'a>(&self, view_state: &mut ViewState) -> (i32, i32) {
-        (0, -self.ensure_state(view_state).y)
+        let st = self.ensure_state(view_state);
+        let max = (st.content_h - self.h).max(0);
+        st.y = st.y.clamp(0, max);
+        (0, -st.y)
     }
 
     fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
@@ -174,6 +182,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         let content_h = ctx.child_content_height();
         let state = self.ensure_state(ctx.view_state);
+        state.content_h = content_h;
         if let Some((tx, ty, tw, th)) = self.thumb_rect(state, content_h) {
             let (track_x, track_y, track_w, track_h) = self.track_rect();
             out.push(Instance::ui(
@@ -201,6 +210,11 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
 
         let content_h = ctx.child_content_height();
         let max = (content_h - self.h).max(0);
+        {
+            let st = self.ensure_state(&mut ctx.ui.view_state);
+            st.content_h = content_h;
+            st.y = st.y.clamp(0, max);
+        }
 
         let pressed = ctx.is_mouse_pressed(MouseButton::Left);
         let down = ctx.ui.is_button_down(MouseButton::Left);
