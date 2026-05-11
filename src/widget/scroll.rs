@@ -42,7 +42,7 @@ impl<M: 'static> Scrollable<M> {
             y: 0,
             w: 0,
             h: 0,
-            size: Size::new(Length::Grow, Length::Fit),
+            size: Size::new(Length::Grow, Length::Grow),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
             id: 0,
