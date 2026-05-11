@@ -629,7 +629,10 @@ impl LayoutEngine {
                         let shrinkables: Vec<usize> = children
                             .iter()
                             .enumerate()
-                            .filter(|(j, child)| allocated[*j] > self.nodes[**child].min.width)
+                            .filter(|(j, child)| {
+                                allocated[*j] > self.nodes[**child].min.width
+                                    && !matches!(self.nodes[**child].size.width, Length::Fixed(_))
+                            })
                             .map(|(j, _)| j)
                             .collect();
                         if shrinkables.is_empty() {
@@ -771,7 +774,7 @@ impl LayoutEngine {
             self.nodes[id].content_size.height = natural_h;
             self.nodes[id].current_size.height = natural_h.min(self.nodes[id].max.height);
             if !self.nodes[id].clip_children {
-                self.nodes[id].min.height = total_min_h;
+                self.nodes[id].min.height = natural_h;
             }
         } else {
             let base_h = match self.nodes[id].size.height {
@@ -843,7 +846,10 @@ impl LayoutEngine {
                         let shrinkables: Vec<usize> = children
                             .iter()
                             .enumerate()
-                            .filter(|(j, child)| allocated[*j] > self.nodes[**child].min.height)
+                            .filter(|(j, child)| {
+                                allocated[*j] > self.nodes[**child].min.height
+                                    && !matches!(self.nodes[**child].size.height, Length::Fixed(_))
+                            })
                             .map(|(j, _)| j)
                             .collect();
                         if shrinkables.is_empty() {
