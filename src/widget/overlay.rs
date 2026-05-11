@@ -29,11 +29,23 @@ impl<M> Widget<M> for Absolute<M> {
     fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
         self.inner.as_mut().set_layout(x, y, w, h);
     }
+    fn identity_key(&self) -> Option<u64> {
+        self.inner.as_ref().identity_key()
+    }
+    fn set_id(&mut self, id: Id) {
+        self.inner.as_mut().set_id(id);
+    }
     fn child_count(&self) -> usize {
         self.inner.as_ref().child_count()
     }
     fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
         self.inner.as_mut().child_mut(i)
+    }
+    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
+        self.inner.as_mut().min_height_for_width(ctx, width)
+    }
+    fn children_offset(&self, view_state: &mut ViewState) -> (i32, i32) {
+        self.inner.as_ref().children_offset(view_state)
     }
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         self.inner.as_mut().prepare(ctx);
