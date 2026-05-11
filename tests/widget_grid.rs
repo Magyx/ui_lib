@@ -38,9 +38,7 @@ mod widget_grid {
         g.child_mut(i).child_count()
     }
 
-    // ============================================================
     // Chunking correctness
-    // ============================================================
 
     #[test]
     fn grid_with_zero_items_has_zero_rows() {

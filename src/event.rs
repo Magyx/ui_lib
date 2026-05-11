@@ -157,7 +157,7 @@ pub enum UiEventRef<'a> {
 mod tests {
     use super::*;
 
-    // -------- MouseButton bit packing --------
+    // MouseButton bit packing
     //
     // Context uses `1 << MouseButton::bit()` to index into the mouse_buttons_*
     // bitfields, which are u32. That's the invariant we're protecting here.
@@ -214,7 +214,7 @@ mod tests {
         assert_eq!(s.len(), 2);
     }
 
-    // -------- Modifiers --------
+    // Modifiers
 
     #[test]
     fn modifiers_default_is_all_off() {
@@ -227,7 +227,7 @@ mod tests {
         assert_eq!(m.num_lock, None);
     }
 
-    // -------- ScrollDelta --------
+    // ScrollDelta
 
     #[test]
     fn scroll_delta_is_copy() {
@@ -241,7 +241,7 @@ mod tests {
         assert_eq!(d2.dx, 1.0);
     }
 
-    // -------- LogicalKey --------
+    // LogicalKey
 
     #[test]
     fn logical_key_f_variant_carries_number() {
@@ -263,7 +263,7 @@ mod tests {
         assert_ne!(a, b);
     }
 
-    // -------- KeyState --------
+    // KeyState
 
     #[test]
     fn key_state_pressed_and_released_differ() {

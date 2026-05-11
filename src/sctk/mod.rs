@@ -39,7 +39,7 @@ pub mod handler;
 mod helpers;
 pub mod state;
 
-// === Public API ================================================================================
+// Public API
 
 #[derive(Clone, Debug)]
 pub enum OutputSet {

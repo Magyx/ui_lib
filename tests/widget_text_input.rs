@@ -25,8 +25,6 @@ mod text_input {
         Submitted(String),
     }
 
-    // ----- helpers -----
-
     fn key_event(key: LogicalKey, state: KeyState) -> KeyEvent {
         KeyEvent {
             state,

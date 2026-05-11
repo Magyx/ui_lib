@@ -34,9 +34,7 @@ mod widget_interaction {
         (btn, harness)
     }
 
-    // ============================================================
     // Hover tracking
-    // ============================================================
 
     #[test]
     fn button_marks_itself_as_hot_when_cursor_is_inside() {
@@ -97,9 +95,7 @@ mod widget_interaction {
         );
     }
 
-    // ============================================================
     // Click sequence: press inside, release inside -> message
-    // ============================================================
 
     #[test]
     fn click_inside_emits_on_press_message() {
@@ -134,9 +130,7 @@ mod widget_interaction {
         );
     }
 
-    // ============================================================
     // Press inside, release outside -> no message
-    // ============================================================
 
     #[test]
     fn press_inside_release_outside_does_not_emit() {
@@ -171,9 +165,7 @@ mod widget_interaction {
         );
     }
 
-    // ============================================================
     // Press outside -> no capture, no message
-    // ============================================================
 
     #[test]
     fn press_outside_does_not_capture_or_emit() {
@@ -194,9 +186,7 @@ mod widget_interaction {
         assert!(harness.ctx.take().is_empty());
     }
 
-    // ============================================================
     // Button without on_press: click is safe no-op
-    // ============================================================
 
     #[test]
     fn button_with_no_on_press_is_silent_on_click() {
@@ -216,9 +206,7 @@ mod widget_interaction {
         assert!(harness.ctx.take().is_empty());
     }
 
-    // ============================================================
     // contains() boundary behaviour (inclusive-left/top, exclusive-right/bottom)
-    // ============================================================
     //
     // Button::contains uses `p.x >= l && p.x < r`. Since button is laid out at
     // (0, 0) with size 100x50, the inclusive bounds are [0, 100) x [0, 50).

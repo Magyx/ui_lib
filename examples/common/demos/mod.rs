@@ -285,7 +285,7 @@ pub mod text {
         let fg_text = Color::rgb(210, 215, 230);
         let accent = Color::rgb(88, 146, 255);
 
-        // --- Sidebar (fixed width) ---
+        // Sidebar (fixed width)
         let sidebar = Column::new(el![
             // Sidebar header
             Row::new(el![Text::new("Project Nimbus", 20.0).color(fg_title)])
@@ -308,7 +308,7 @@ pub mod text {
         .color(bg_panel)
         .size(Size::new(Fixed(220), Grow));
 
-        // --- Top bar (fixed height) ---
+        // Top bar (fixed height)
         let topbar = Row::new(el![
             Text::new("Dashboard", 22.0).color(fg_title),
             Spacer::new(Size::new(Grow, Grow)),
@@ -322,7 +322,7 @@ pub mod text {
         .color(bg_panel_alt)
         .size(Size::new(Grow, Fixed(52)));
 
-        // --- Main content ---
+        // Main content
         let hero_text = "This area demonstrates styled, multiline text using cosmic-text. \n\
             The grey rectangle below acts as an image/preview placeholder. \n\
             Resize the window to see wrapping and layout negotiation.";
@@ -409,7 +409,7 @@ pub mod text {
         .color(Color::TRANSPARENT)
         .size(Size::new(Grow, Fit));
 
-        // --- Page layout: sidebar | (topbar + content) ---
+        // Page layout: sidebar | (topbar + content)
         Row::new(el![
             sidebar,
             Scrollable::new(

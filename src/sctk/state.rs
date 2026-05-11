@@ -506,7 +506,7 @@ impl SctkState {
     }
 }
 
-// === Handlers on SctkState =====================================================================
+// Handlers on SctkState
 
 impl ProvidesRegistryState for SctkState {
     fn registry(&mut self) -> &mut RegistryState {
