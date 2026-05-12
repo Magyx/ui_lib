@@ -382,7 +382,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             b.shape_until_scroll(fs, false);
         }
         for glyph in st.buffer.layout_runs().flat_map(|r| r.glyphs) {
-            if let Some((_, size, key)) = ctx.text.prepare_glyph_data(glyph) {
+            if let Some((size, key)) = ctx.text.prepare_glyph_data(glyph) {
                 let _ = ctx
                     .text
                     .upload_glyph(ctx.gpu, ctx.texture, key, size.width, size.height);
@@ -436,16 +436,12 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
         for run in st.buffer.layout_runs() {
             for glyph in run.glyphs {
-                let Some((Position { x: left, y: top }, size, cache_key)) =
-                    ctx.text.get_glyph_data(glyph)
+                let Some((Position { x: left, y: top }, size, cache_key)) = ctx
+                    .text
+                    .get_glyph_data(glyph, (l as f32, t as f32), run.line_y)
                 else {
                     continue;
                 };
-
-                let top_left = Position::new(
-                    l as f32 + glyph.x + left as f32,
-                    t as f32 + glyph.y + run.line_y - top as f32,
-                );
 
                 let tint = glyph
                     .color_opt
@@ -457,7 +453,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
                 };
 
                 instances.push(Instance::ui_tex(
-                    top_left,
+                    Position::new(left as f32, top as f32),
                     Size::new(size.width as f32, size.height as f32),
                     tint,
                     handle,

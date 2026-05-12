@@ -83,10 +83,7 @@ impl TextSystem {
         self.glyph_atlas.tick();
     }
 
-    pub fn prepare_glyph_data(
-        &mut self,
-        glyph: &LayoutGlyph,
-    ) -> Option<(Position<i32>, Size<u32>, CacheKey)> {
+    pub fn prepare_glyph_data(&mut self, glyph: &LayoutGlyph) -> Option<(Size<u32>, CacheKey)> {
         let phys = glyph.physical((0.0, 0.0), 1.0);
         let img = self
             .swash_cache
@@ -100,18 +97,16 @@ impl TextSystem {
         let gw = img.placement.width;
         let gh = img.placement.height;
 
-        Some((
-            Position::new(img.placement.left, img.placement.top),
-            Size::new(gw, gh),
-            phys.cache_key,
-        ))
+        Some((Size::new(gw, gh), phys.cache_key))
     }
 
     pub fn get_glyph_data(
         &self,
         glyph: &LayoutGlyph,
+        origin: (f32, f32),
+        line_y: f32,
     ) -> Option<(Position<i32>, Size<u32>, CacheKey)> {
-        let phys = glyph.physical((0.0, 0.0), 1.0);
+        let phys = glyph.physical((origin.0, origin.1 + line_y), 1.0);
         let img = self
             .swash_cache
             .image_cache
@@ -123,7 +118,7 @@ impl TextSystem {
         }
 
         Some((
-            Position::new(img.placement.left, img.placement.top),
+            Position::new(phys.x + img.placement.left, phys.y - img.placement.top),
             Size::new(img.placement.width, img.placement.height),
             phys.cache_key,
         ))

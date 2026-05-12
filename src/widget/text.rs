@@ -250,7 +250,7 @@ impl<M> Widget<M> for Text {
         buf.shape_until_scroll(fs, false);
 
         for key in buf.layout_runs().flat_map(|r| r.glyphs) {
-            if let Some((_, size, key)) = ctx.text.prepare_glyph_data(key) {
+            if let Some((size, key)) = ctx.text.prepare_glyph_data(key) {
                 let _ = ctx
                     .text
                     .upload_glyph(ctx.gpu, ctx.texture, key, size.width, size.height);
@@ -267,16 +267,12 @@ impl<M> Widget<M> for Text {
 
         for run in buf.layout_runs() {
             for glyph in run.glyphs {
-                let Some((Position { x: left, y: top }, Size { width, height }, cache_key)) =
-                    ctx.text.get_glyph_data(glyph)
+                let Some((Position { x: left, y: top }, Size { width, height }, cache_key)) = ctx
+                    .text
+                    .get_glyph_data(glyph, (self.x as f32, self.y as f32), run.line_y)
                 else {
                     continue;
                 };
-
-                let top_left = Position::new(
-                    self.x as f32 + glyph.x + left as f32,
-                    self.y as f32 + glyph.y + run.line_y - top as f32,
-                );
 
                 let tint = glyph
                     .color_opt
@@ -288,7 +284,7 @@ impl<M> Widget<M> for Text {
                 };
 
                 instances.push(Instance::ui_tex(
-                    top_left,
+                    Position::new(left as f32, top as f32),
                     Size::new(width as f32, height as f32),
                     tint,
                     handle,
