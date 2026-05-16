@@ -105,6 +105,7 @@ mod update {
     pub fn ensure_icons_loaded<'a>(
         engine: &mut Engine<'a, super::Message>,
         state: &mut super::State,
+        scale: f32,
     ) {
         if state.icon_atlas.is_some() {
             return;
@@ -112,7 +113,9 @@ mod update {
 
         const MAX_DEMO_ICONS: usize = 16;
 
-        let mut atlas = engine.create_atlas(512, 512, AllocatorKind::Shelf);
+        let icon_phys = (48.0 * scale).round() as u32;
+        let atlas_phys = (512.0 * scale).round() as u32;
+        let mut atlas = engine.create_atlas(atlas_phys, atlas_phys, AllocatorKind::Shelf);
         let mut handles = Vec::new();
         let mut svg_paths = Vec::with_capacity(MAX_DEMO_ICONS);
 
@@ -131,7 +134,11 @@ mod update {
                 if let Ok(reader) = image::ImageReader::open(&path)
                     && let Ok(img) = reader.decode()
                 {
-                    let img = img.resize_exact(48, 48, image::imageops::FilterType::Triangle);
+                    let img = img.resize_exact(
+                        icon_phys,
+                        icon_phys,
+                        image::imageops::FilterType::Triangle,
+                    );
                     let rgba = img.to_rgba8();
                     let (w, h) = rgba.dimensions();
                     #[cfg(feature = "tracing")]
@@ -220,8 +227,9 @@ mod update {
         }
 
         if let super::View::Texture = target.view {
+            let scale = engine.globals(&tid).map(|g| g.scale).unwrap_or(1.0);
             ensure_background_loaded(engine, state);
-            ensure_icons_loaded(engine, state);
+            ensure_icons_loaded(engine, state, scale);
         }
 
         true
