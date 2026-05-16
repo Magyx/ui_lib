@@ -2,6 +2,10 @@ use crate::event::MouseButton;
 
 use super::*;
 
+struct SliderViewState {
+    grab: Option<f32>,
+}
+
 pub struct Slider<M> {
     x: i32,
     y: i32,
@@ -88,17 +92,70 @@ impl<M> Slider<M> {
         p.x >= l && p.x < r && p.y >= t && p.y < b
     }
 
+    #[inline]
+    fn knob_size(&self) -> f32 {
+        if self.h <= 0 {
+            return 0.0;
+        }
+        let th = self.track_h.clamp(2, self.h.max(2)) as f32;
+        let h = self.h as f32;
+        let lower = (10.0_f32).min(h);
+        let upper = h;
+        (th * 2.0).clamp(lower, upper)
+    }
+
+    #[inline]
+    fn value_track(&self) -> (f32, f32) {
+        let kw = self.knob_size();
+        let left = self.x as f32 + kw / 2.0;
+        let right = self.x as f32 + self.w as f32 - kw / 2.0;
+        (left, right.max(left))
+    }
+
+    #[inline]
+    fn ratio(&self) -> f32 {
+        if self.hi > self.lo {
+            (self.value - self.lo) / (self.hi - self.lo)
+        } else {
+            0.0
+        }
+    }
+
+    #[inline]
+    fn knob_center_x(&self) -> f32 {
+        let (l, r) = self.value_track();
+        l + self.ratio() * (r - l)
+    }
+
+    #[inline]
+    fn value_per_pixel(&self) -> f32 {
+        let (l, r) = self.value_track();
+        let w = (r - l).max(1.0);
+        (self.hi - self.lo).abs() / w
+    }
+
     fn set_from_cursor(&mut self, mx: f32) -> bool {
-        if self.w <= 0 {
+        if self.w <= 0 || self.hi <= self.lo {
             return false;
         }
-        let t = ((mx - self.x as f32) / self.w as f32).clamp(0.0, 1.0);
+        let (l, r) = self.value_track();
+        let denom = (r - l).max(1.0);
+        let t = ((mx - l) / denom).clamp(0.0, 1.0);
         let new_v = self.lo + t * (self.hi - self.lo);
-        let changed = (new_v - self.value).abs() > f32::EPSILON;
+
+        let threshold = self.value_per_pixel() * 0.5;
+        let changed = (new_v - self.value).abs() >= threshold
+            || (new_v == self.lo && self.value != self.lo)
+            || (new_v == self.hi && self.value != self.hi);
+
         if changed {
             self.value = new_v;
         }
         changed
+    }
+
+    fn ensure_state<'b>(&self, view_state: &'b mut ViewState) -> &'b mut SliderViewState {
+        view_state.ensure(self.id, || SliderViewState { grab: None })
     }
 }
 
@@ -143,26 +200,22 @@ impl<M: 'static> Widget<M> for Slider<M> {
 
         let th = self.track_h.clamp(2, self.h.max(2)) as f32;
         let ty = self.y as f32 + (self.h as f32 - th) / 2.0;
+
         out.push(Instance::ui(
             Position::new(self.x as f32, ty),
             Size::new(self.w as f32, th),
             self.track_color,
         ));
 
-        let ratio = if self.hi > self.lo {
-            (self.value - self.lo) / (self.hi - self.lo)
-        } else {
-            0.0
-        };
-        let fw = ratio * self.w as f32;
+        let kcx = self.knob_center_x();
+        let kw = self.knob_size();
+        let kx = kcx - kw / 2.0;
+        let fw = (kx - self.x as f32).max(0.0);
         out.push(Instance::ui(
             Position::new(self.x as f32, ty),
             Size::new(fw, th),
             self.fill_color,
         ));
-
-        let kw = (th * 2.0).clamp(10.0, (self.h as f32 * 3.0) / 4.0);
-        let kx = self.x as f32 + (fw - kw / 2.0).clamp(0.0, self.w as f32 - kw);
         let ky = self.y as f32 + (self.h as f32 - kw) / 2.0;
         out.push(Instance::ui(
             Position::new(kx, ky),
@@ -177,16 +230,40 @@ impl<M: 'static> Widget<M> for Slider<M> {
             ctx.ui.hot_item = Some(self.id);
         }
 
+        let kcx = self.knob_center_x();
+        let kw = self.knob_size();
+        let over_knob =
+            inside && ctx.ui.mouse_pos.x >= kcx - kw / 2.0 && ctx.ui.mouse_pos.x < kcx + kw / 2.0;
+
+        let mut changed = false;
+
         if inside && ctx.is_mouse_pressed(MouseButton::Left) {
             ctx.ui.active_item = Some(self.id);
+
+            if over_knob {
+                let offset = ctx.ui.mouse_pos.x - kcx;
+                self.ensure_state(&mut ctx.ui.view_state).grab = Some(offset);
+            } else {
+                self.ensure_state(&mut ctx.ui.view_state).grab = Some(0.0);
+                changed |= self.set_from_cursor(ctx.ui.mouse_pos.x);
+            }
         }
 
-        let mut changed = ctx.ui.active_item == Some(self.id)
-            && ctx.ui.is_button_down(MouseButton::Left)
-            && self.set_from_cursor(ctx.ui.mouse_pos.x);
+        if ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_down(MouseButton::Left) {
+            let offset = self
+                .ensure_state(&mut ctx.ui.view_state)
+                .grab
+                .unwrap_or(0.0);
+            changed |= self.set_from_cursor(ctx.ui.mouse_pos.x - offset);
+        }
 
         if ctx.is_mouse_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
-            changed |= self.set_from_cursor(ctx.ui.mouse_pos.x);
+            let offset = self
+                .ensure_state(&mut ctx.ui.view_state)
+                .grab
+                .unwrap_or(0.0);
+            changed |= self.set_from_cursor(ctx.ui.mouse_pos.x - offset);
+            self.ensure_state(&mut ctx.ui.view_state).grab = None;
             ctx.ui.active_item = None;
         }
 
