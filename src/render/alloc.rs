@@ -434,15 +434,19 @@ mod tests {
     }
 
     #[test]
-    fn skyline_uses_notch_efficiently() {
-        // Place a 30x20 rect, then a 20x10 rect beside it, leaving a notch.
-        // A 20x5 rect should fit in the lower notch at x=30, not at the top.
+    fn skyline_prefers_lowest_baseline_over_notch() {
+        // A 20x5 has three candidate landings: y=20, y=10, y=0. BL packing
+        // takes the lowest baseline that fits, which is y=0 at x=50
         let mut a = sky(100, 100);
         let _ = a.alloc(30, 20).unwrap(); // [0..30) raised to 20
         let _ = a.alloc(20, 10).unwrap(); // [30..50) raised to 10
         // Notch at x=30, y=10. A small rect should land there.
         let r = a.alloc(20, 5).unwrap();
-        assert_eq!((r.x, r.y), (30, 10), "should fill the lower notch");
+        assert_eq!(
+            (r.x, r.y),
+            (50, 0),
+            "should prefer fresh y=0 ground over the y=10 notch"
+        );
     }
 
     #[test]
