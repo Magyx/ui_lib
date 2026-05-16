@@ -54,6 +54,7 @@ pub struct SurfaceRec {
     pub configured: bool,
     pub wl_surface: WlSurface,
     pub size: Size<u32>,
+    pub scale_factor: i32,
     role: SurfaceRole,
     pub output: Option<WlOutput>,
 }
@@ -173,6 +174,7 @@ impl SctkState {
                     configured: false,
                     wl_surface: wl,
                     size: opts.size,
+                    scale_factor: 1,
                     role: SurfaceRole::Layer(layer),
                     output: out.into_option(),
                 },
@@ -227,6 +229,7 @@ impl SctkState {
                     configured: false,
                     wl_surface: wl,
                     size: opts.size,
+                    scale_factor: 1,
                     role: SurfaceRole::Layer(layer),
                     output: out.into_option(),
                 },
@@ -268,6 +271,7 @@ impl SctkState {
                     configured: false,
                     wl_surface: wl,
                     size: opts.size,
+                    scale_factor: 1,
                     role: SurfaceRole::Layer(layer),
                     output: out.into_option(),
                 },
@@ -317,6 +321,7 @@ impl SctkState {
                 configured: false,
                 wl_surface: window.wl_surface().clone(),
                 size: opts.size,
+                scale_factor: 1,
                 role: SurfaceRole::Xdg(window),
                 output,
             },
@@ -369,6 +374,7 @@ impl SctkState {
                 configured: false,
                 wl_surface: window.wl_surface().clone(),
                 size: opts.size,
+                scale_factor: 1,
                 role: SurfaceRole::Xdg(window),
                 output,
             },
@@ -426,6 +432,7 @@ impl SctkState {
                     configured: false,
                     wl_surface,
                     size: opts.size,
+                    scale_factor: 1,
                     role: SurfaceRole::Lock(lock_surface),
                     output: Some(out),
                 },
@@ -483,6 +490,7 @@ impl SctkState {
                     configured: false,
                     wl_surface,
                     size: opts.size,
+                    scale_factor: 1,
                     role: SurfaceRole::Lock(lock_surface),
                     output: Some(out),
                 },
@@ -596,6 +604,24 @@ impl CompositorHandler for SctkState {
         surface: &WlSurface,
         new_factor: i32,
     ) {
+        let proto_id = surface.id().protocol_id();
+        if let Some(&sid) = self.by_surface_id.get(&proto_id)
+            && let Some(rec) = self.surfaces.get_mut(&sid)
+        {
+            rec.scale_factor = new_factor;
+
+            let phys_w = rec.size.width * new_factor as u32;
+            let phys_h = rec.size.height * new_factor as u32;
+            self.emit_event(SctkEvent::ScaleChanged {
+                surface: sid,
+                factor: new_factor,
+            });
+            self.emit_event(SctkEvent::Resized {
+                surface: sid,
+                size: Size::new(phys_w, phys_h),
+            });
+        }
+
         self.handler
             .scale_factor_changed(conn, qh, surface, new_factor);
     }
@@ -636,9 +662,10 @@ impl LayerShellHandler for SctkState {
                 let new_size = Size::new(w, h);
                 if new_size != rec.size {
                     rec.size = new_size;
+                    let sf = rec.scale_factor.max(1) as u32;
                     self.emit_event(SctkEvent::Resized {
                         surface: sid,
-                        size: new_size,
+                        size: Size::new(w * sf, h * sf),
                     });
                 }
             }
@@ -674,9 +701,10 @@ impl WindowHandler for SctkState {
             let new_size = Size::new(w.get(), h.get());
             if new_size != rec.size {
                 rec.size = new_size;
+                let sf = rec.scale_factor.max(1) as u32;
                 self.emit_event(SctkEvent::Resized {
                     surface: sid,
-                    size: new_size,
+                    size: Size::new(w.get() * sf, h.get() * sf),
                 });
             }
 
@@ -747,9 +775,10 @@ impl SessionLockHandler for SctkState {
                 let new_size = Size::new(w, h);
                 if new_size != rec.size {
                     rec.size = new_size;
+                    let sf = rec.scale_factor.max(1) as u32;
                     self.emit_event(SctkEvent::Resized {
                         surface: sid,
-                        size: new_size,
+                        size: Size::new(w * sf, h * sf),
                     });
                 }
             }
@@ -820,9 +849,14 @@ impl PointerHandler for SctkState {
                 PointerEventKind::Leave { .. } => {}
                 PointerEventKind::Motion { .. } => {
                     let (x, y) = ev.position;
+                    let sf = self
+                        .surfaces
+                        .get(&sid)
+                        .map(|r| r.scale_factor.max(1) as f32)
+                        .unwrap_or(1.0);
                     self.emit_event(SctkEvent::PointerMoved {
                         surface: sid,
-                        pos: Position::new(x as f32, y as f32),
+                        pos: Position::new(x as f32 * sf, y as f32 * sf),
                     });
                 }
                 PointerEventKind::Press { button, .. } => {

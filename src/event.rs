@@ -117,6 +117,9 @@ pub enum Event<M, E: ToEvent<M, E>> {
     Resized {
         size: Size<u32>,
     },
+    ScaleFactorChanged {
+        factor: f64,
+    },
     CursorMoved {
         position: Position<f32>,
     },

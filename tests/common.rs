@@ -145,6 +145,7 @@ mod harness {
                     time: 0.0,
                     delta_time: 0.0,
                     frame: 0,
+                    scale: 1.0,
                 },
                 ctx: Context::new(),
                 text: TextSystem::default(),

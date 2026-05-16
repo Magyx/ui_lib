@@ -436,7 +436,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
         for run in st.buffer.layout_runs() {
             for glyph in run.glyphs {
-                let Some((Position { x: left, y: top }, size, cache_key)) = ctx
+                let Some((Position { x: left, y: top }, Size { width, height }, cache_key)) = ctx
                     .text
                     .get_glyph_data(glyph, (l as f32, t as f32), run.line_y)
                 else {
@@ -453,8 +453,8 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
                 };
 
                 instances.push(Instance::ui_tex(
-                    Position::new(left as f32, top as f32),
-                    Size::new(size.width as f32, size.height as f32),
+                    Position::new(left, top),
+                    Size::new(width, height),
                     tint,
                     handle,
                 ));

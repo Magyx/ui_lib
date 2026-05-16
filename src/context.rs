@@ -7,7 +7,7 @@ use crate::{
     event::{KeyState, MouseButton, UiEventRef},
     graphics::{Globals, Gpu},
     layout::LayoutEngine,
-    model::Position,
+    model::{Position, Size},
     render::{text::TextSystem, texture::TextureRegistry},
 };
 
@@ -227,6 +227,16 @@ pub struct LayoutCtx<'a, M> {
     pub text: &'a mut TextSystem,
 }
 
+impl<'a, M> LayoutCtx<'a, M> {
+    pub fn physical_size(&self, logical: Size<u32>) -> Size<u32> {
+        let sf = self.globals.scale;
+        Size::new(
+            (logical.width as f32 * sf).round() as u32,
+            (logical.height as f32 * sf).round() as u32,
+        )
+    }
+}
+
 pub struct PrepareCtx<'a> {
     pub globals: &'a Globals,
     pub text: &'a mut TextSystem,
@@ -253,6 +263,13 @@ impl<'a> PrepareCtx<'a> {
         } else {
             0
         }
+    }
+    pub fn physical_size(&self, logical: Size<u32>) -> Size<u32> {
+        let sf = self.globals.scale;
+        Size::new(
+            (logical.width as f32 * sf).round() as u32,
+            (logical.height as f32 * sf).round() as u32,
+        )
     }
 }
 
@@ -298,6 +315,13 @@ impl<'a> PaintCtx<'a> {
         } else {
             0
         }
+    }
+    pub fn physical_size(&self, logical: Size<u32>) -> Size<u32> {
+        let sf = self.globals.scale;
+        Size::new(
+            (logical.width as f32 * sf).round() as u32,
+            (logical.height as f32 * sf).round() as u32,
+        )
     }
 }
 

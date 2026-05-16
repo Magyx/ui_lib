@@ -193,71 +193,77 @@ impl<M> Widget<M> for Svg {
     }
 
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
-        panic!("Svg has no children")
+        unreachable!()
     }
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
-        let state = ctx.view_state.ensure_swept(self.id, SvgState::default);
-        state.draw_rect = None;
+        {
+            let state = ctx.view_state.ensure_swept(self.id, SvgState::default);
+            state.ensure_tree(&self.path, ctx.texture, ctx.gpu);
+        }
 
         if self.w <= 0 || self.h <= 0 || self.tint.a() == 0 {
             return;
         }
 
-        state.ensure_tree(&self.path, ctx.texture, ctx.gpu);
+        let Some(state) = ctx.view_state.get::<SvgState>(&self.id) else {
+            return;
+        };
         let Some(tree) = state.tree.as_ref() else {
             return;
         };
 
         let svg_size = tree.size();
-        let svg_w = svg_size.width();
-        let svg_h = svg_size.height();
+        let (svg_w, svg_h) = (svg_size.width(), svg_size.height());
         let (dx, dy, dw, dh) = fit_rect(self.x, self.y, self.w, self.h, svg_w, svg_h, &self.fit);
         if dw <= 0.0 || dh <= 0.0 {
             return;
         }
 
-        let raster = Size::new(dw as u32, dh as u32);
-        if state.handle.is_none() || state.raster_px != raster {
-            let Some(mut pixmap) = tiny_skia::Pixmap::new(raster.width, raster.height) else {
-                return;
-            };
-            let sx = raster.width as f32 / svg_w;
-            let sy = raster.height as f32 / svg_h;
-            let transform = tiny_skia::Transform::from_scale(sx, sy);
+        let raster = ctx.physical_size(Size::new(dw as u32, dh as u32));
 
-            // resvg::render outputs sRGB pixels
-            resvg::render(tree, transform, &mut pixmap.as_mut());
-            let pixels: &[u8] = pixmap.data();
-
-            match state.handle {
-                Some(handle) if handle.size_px == raster => {
-                    ctx.texture.update_rgba8(ctx.gpu, handle, pixels);
-                }
-                Some(handle) => {
-                    ctx.texture.unload(ctx.gpu, handle);
-                    let new_h =
-                        ctx.texture
-                            .load_rgba8(ctx.gpu, raster.width, raster.height, pixels);
-                    state.handle = Some(new_h);
-                }
-                None => {
-                    let new_h =
-                        ctx.texture
-                            .load_rgba8(ctx.gpu, raster.width, raster.height, pixels);
-                    state.handle = Some(new_h);
-                }
-            }
-
-            state.draw_rect = Some((dx, dy, dw, dh));
+        let state = ctx.view_state.get_mut::<SvgState>(&self.id).unwrap();
+        if state.handle.is_some() && state.raster_px == raster {
+            return;
         }
+
+        let Some(mut pixmap) = tiny_skia::Pixmap::new(raster.width, raster.height) else {
+            return;
+        };
+        let transform = tiny_skia::Transform::from_scale(
+            raster.width as f32 / svg_w,
+            raster.height as f32 / svg_h,
+        );
+        resvg::render(
+            state.tree.as_ref().unwrap(),
+            transform,
+            &mut pixmap.as_mut(),
+        );
+
+        let pixels = pixmap.data();
+        match state.handle {
+            Some(handle) if handle.size_px == raster => {
+                ctx.texture.update_rgba8(ctx.gpu, handle, pixels);
+            }
+            other => {
+                if let Some(handle) = other {
+                    ctx.texture.unload(ctx.gpu, handle);
+                }
+                state.handle =
+                    Some(
+                        ctx.texture
+                            .load_rgba8(ctx.gpu, raster.width, raster.height, pixels),
+                    );
+            }
+        }
+        state.raster_px = raster;
+        state.draw_rect = Some((dx, dy, dw, dh));
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         let Some(state) = ctx.view_state.get::<SvgState>(&self.id) else {
             return;
         };
-
         let Some(handle) = state.handle else {
             return;
         };

@@ -284,8 +284,8 @@ impl<M> Widget<M> for Text {
                 };
 
                 instances.push(Instance::ui_tex(
-                    Position::new(left as f32, top as f32),
-                    Size::new(width as f32, height as f32),
+                    Position::new(left, top),
+                    Size::new(width, height),
                     tint,
                     handle,
                 ));

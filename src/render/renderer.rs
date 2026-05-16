@@ -92,9 +92,9 @@ impl Renderer {
                 label: Some("Render Encoder"),
             });
 
-        let sw = target.config.width;
-        let sh = target.config.height;
-        let default_clip = [0, 0, sw, sh];
+        let lw = globals.window_size[0].ceil() as u32;
+        let lh = globals.window_size[1].ceil() as u32;
+        let default_clip = [0, 0, lw, lh];
 
         let mut draw_commands = Vec::new();
 
@@ -103,12 +103,10 @@ impl Renderer {
         let mut current_clip = default_clip;
         for (i, instance) in instances.iter().enumerate() {
             let mut clip = instance.scissor().unwrap_or(default_clip);
-            clip[0] = clip[0].min(sw.saturating_sub(1));
-            clip[1] = clip[1].min(sh.saturating_sub(1));
-            let max_w = sw.saturating_sub(clip[0]);
-            let max_h = sh.saturating_sub(clip[1]);
-            clip[2] = clip[2].min(max_w);
-            clip[3] = clip[3].min(max_h);
+            clip[0] = clip[0].min(lw.saturating_sub(1));
+            clip[1] = clip[1].min(lh.saturating_sub(1));
+            clip[2] = clip[2].min(lw.saturating_sub(clip[0]));
+            clip[3] = clip[3].min(lh.saturating_sub(clip[1]));
 
             let need_new_segment =
                 current_key.map(|k| k != &instance.kind).unwrap_or(true) || clip != current_clip;
@@ -169,8 +167,13 @@ impl Renderer {
                     self.textures.bind_group(),
                     &mut pass,
                 );
+                let sf = globals.scale;
                 let [x, y, w, h] = command.clip;
-                pass.set_scissor_rect(x, y, w.max(1), h.max(1));
+                let px = (x as f32 * sf) as u32;
+                let py = (y as f32 * sf) as u32;
+                let pw = (w as f32 * sf).ceil() as u32;
+                let ph = (h as f32 * sf).ceil() as u32;
+                pass.set_scissor_rect(px, py, pw.max(1), ph.max(1));
                 pass.draw_indexed(
                     0..self.number_of_indices,
                     0,

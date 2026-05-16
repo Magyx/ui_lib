@@ -107,6 +107,9 @@ impl<M> ToEvent<M, winit::event::WindowEvent> for winit::event::WindowEvent {
             WE::Resized(size) => Event::Resized {
                 size: (*size).into(),
             },
+            WE::ScaleFactorChanged { scale_factor, .. } => Event::ScaleFactorChanged {
+                factor: *scale_factor,
+            },
             WE::CursorMoved { position, .. } => Event::CursorMoved {
                 position: Position::new(position.x as f32, position.y as f32),
             },
@@ -273,7 +276,7 @@ where
                 }
             };
             let size = window.inner_size().into();
-            let (target, mut engine) = Engine::new_for(window.clone(), size);
+            let (target, mut engine) = Engine::new_for(window.clone(), size, window.scale_factor());
             if let Some(pipelines) = self.extra_pipelines.take() {
                 for (key, factory) in pipelines {
                     engine.register_pipeline(

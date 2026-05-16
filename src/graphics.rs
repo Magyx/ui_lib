@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use crate::{
     consts::*,
     context::{Context, EventCtx, LayoutCtx, PaintCtx, PrepareCtx, SweepCtx},
-    event::{Event, KeyState, ToEvent},
+    event::{Event, KeyState, ScrollDelta, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
     primitive::{Instance, Primitive, Vertex},
@@ -44,12 +44,13 @@ pub enum RenderOutcome {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Globals {
-    pub window_size: [f32; 2], // pixels
-    pub mouse_pos: [f32; 2],   // pixels
+    pub window_size: [f32; 2], // logical pixels
+    pub mouse_pos: [f32; 2],   // logical pixels
     pub mouse_buttons: u32,    // bit 0: left, bit 1: right (etc.)
     pub time: f32,             // seconds since start
     pub delta_time: f32,       // seconds since last frame
     pub frame: u32,            // frame counter
+    pub scale: f32,            // device-pixel ratio
 }
 
 pub struct Gpu {
@@ -62,8 +63,10 @@ pub struct Gpu {
 pub struct Target<'a, M> {
     pub surface: wgpu::Surface<'a>,
     pub config: wgpu::SurfaceConfiguration,
+    /// Logical size of the surface (in logical pixels)
     pub size: Size<u32>,
-    pub scale: i32,
+    /// Device-pixel ratio. Physical size = logical size x scale_factor
+    pub scale_factor: f64,
     pub globals: Globals,
     ctx: Context<M>,
 
@@ -169,7 +172,11 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         Self::default()
     }
 
-    pub fn new_for<T>(target: Arc<T>, size: Size<u32>) -> (TargetId, Self)
+    pub fn new_for<T>(
+        target: Arc<T>,
+        physical_size: Size<u32>,
+        scale_factor: f64,
+    ) -> (TargetId, Self)
     where
         T: wgpu::rwh::HasWindowHandle
             + wgpu::rwh::HasDisplayHandle
@@ -180,12 +187,17 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
     {
         let mut engine = Self::new();
 
-        let target = engine.create_target(target, size);
+        let target = engine.create_target(target, physical_size, scale_factor);
 
         (target, engine)
     }
 
-    fn create_target<T>(&mut self, target: Arc<T>, size: Size<u32>) -> TargetId
+    fn create_target<T>(
+        &mut self,
+        target: Arc<T>,
+        physical_size: Size<u32>,
+        scale_factor: f64,
+    ) -> TargetId
     where
         T: wgpu::rwh::HasWindowHandle
             + wgpu::rwh::HasDisplayHandle
@@ -194,7 +206,13 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             + std::marker::Send
             + 'a,
     {
-        let size = size.max(Size::new(1, 1));
+        let physical_size = physical_size.max(Size::new(1, 1));
+        let sf = scale_factor.max(1.0);
+        let logical_size = Size::new(
+            (physical_size.width as f64 / sf).round() as u32,
+            (physical_size.height as f64 / sf).round() as u32,
+        )
+        .max(Size::new(1, 1));
 
         let surface = self
             .gpu
@@ -245,8 +263,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
-            width: size.width,
-            height: size.height,
+            width: physical_size.width,
+            height: physical_size.height,
             present_mode,
             alpha_mode,
             view_formats: vec![],
@@ -259,15 +277,16 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         let target = Target {
             surface,
             config,
-            size,
-            scale: 1,
+            size: logical_size,
+            scale_factor: sf,
             globals: Globals {
-                window_size: [size.width as f32, size.height as f32],
+                window_size: [logical_size.width as f32, logical_size.height as f32],
                 time: 0.0,
                 delta_time: 0.0,
                 mouse_pos: [0.0, 0.0],
                 mouse_buttons: 0,
                 frame: 0,
+                scale: sf as f32,
             },
             ctx: Context::new(),
 
@@ -332,7 +351,12 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         self.targets.get(tid).map(|t| &t.globals)
     }
 
-    pub fn attach_target<T>(&mut self, target: Arc<T>, size: Size<u32>) -> TargetId
+    pub fn attach_target<T>(
+        &mut self,
+        target: Arc<T>,
+        physical_size: Size<u32>,
+        scale_factor: f64,
+    ) -> TargetId
     where
         T: wgpu::rwh::HasWindowHandle
             + wgpu::rwh::HasDisplayHandle
@@ -341,7 +365,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             + std::marker::Send
             + 'a,
     {
-        self.create_target(target, size)
+        self.create_target(target, physical_size, scale_factor)
     }
     pub fn detach_target(&mut self, tid: &TargetId) {
         if self.targets.remove(tid).is_some() && self.primary_target == Some(*tid) {
@@ -434,6 +458,10 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         crate::plot!("ui.dt_ms", (target.globals.delta_time as f64) * 1000.0);
 
+        self.renderer
+            .text
+            .set_scale_factor(target.scale_factor as f32);
+
         let mut require_redraw = false;
 
         if let Some(root) = target.root.as_mut() {
@@ -479,6 +507,10 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         };
 
         crate::scope!("Engine::render");
+
+        self.renderer
+            .text
+            .set_scale_factor(target.scale_factor as f32);
 
         target.root = Some(view(tid, state));
         let root = target.root.as_mut().unwrap();
@@ -608,19 +640,42 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         target.ctx.mouse_buttons_pressed = 0;
         target.ctx.mouse_buttons_released = 0;
 
+        self.renderer
+            .text
+            .set_scale_factor(target.scale_factor as f32);
+
         match event {
             Event::Resized { size } => {
                 if size.width > 0 && size.height > 0 {
+                    let sf = target.scale_factor;
+                    let lw = (size.width as f64 / sf).round() as u32;
+                    let lh = (size.height as f64 / sf).round() as u32;
+                    target.size = Size::new(lw.max(1), lh.max(1));
+                    target.globals.window_size = [lw as f32, lh as f32];
                     target.config.width = size.width;
                     target.config.height = size.height;
-                    target.globals.window_size = [size.width as f32, size.height as f32];
+                    target.surface.configure(&self.gpu.device, &target.config);
+                }
+                target.ctx.request_redraw();
+            }
+            Event::ScaleFactorChanged { factor } => {
+                target.scale_factor = factor;
+                target.globals.scale = factor as f32;
+
+                let pw = (target.size.width as f64 * factor).round() as u32;
+                let ph = (target.size.height as f64 * factor).round() as u32;
+                if pw > 0 && ph > 0 {
+                    target.config.width = pw;
+                    target.config.height = ph;
                     target.surface.configure(&self.gpu.device, &target.config);
                 }
                 target.ctx.request_redraw();
             }
             Event::CursorMoved { position } => {
-                target.ctx.mouse_pos = position;
-                target.globals.mouse_pos = [position.x, position.y];
+                let sf = target.scale_factor as f32;
+                let lp = Position::new(position.x / sf, position.y / sf);
+                target.ctx.mouse_pos = lp;
+                target.globals.mouse_pos = [lp.x, lp.y];
             }
             Event::MouseInput { button, state } => {
                 let bit = 1u32 << button.bit();
@@ -642,17 +697,31 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         if let Some(root) = target.root.as_mut() {
             use crate::event::UiEventRef as Ui;
+            let logical_size = target.size;
+            let logical_mouse = target.ctx.mouse_pos;
             let ev_view = match &event {
                 Event::RedrawRequested => Some(Ui::RedrawRequested),
-                Event::Resized { size } => Some(Ui::Resized { size: *size }),
-                Event::CursorMoved { position } => Some(Ui::CursorMoved {
-                    position: *position,
+                Event::Resized { .. } => Some(Ui::Resized { size: logical_size }),
+                Event::CursorMoved { .. } => Some(Ui::CursorMoved {
+                    position: logical_mouse,
                 }),
                 Event::MouseInput { button, state } => Some(Ui::MouseButton {
                     button: *button,
                     state: *state,
                 }),
-                Event::MouseWheel(d) => Some(Ui::MouseWheel(*d)),
+                Event::MouseWheel(d) => {
+                    let logical_delta = if d.units == crate::event::ScrollUnits::Pixels {
+                        let sf = target.scale_factor as f32;
+                        ScrollDelta {
+                            dx: d.dx / sf,
+                            dy: d.dy / sf,
+                            units: d.units,
+                        }
+                    } else {
+                        *d
+                    };
+                    Some(Ui::MouseWheel(logical_delta))
+                }
                 Event::Key(k) => Some(Ui::Key(k)),
                 Event::Text(t) => Some(Ui::Text(t)),
                 Event::ModifiersChanged(m) => Some(Ui::ModifiersChanged(m)),

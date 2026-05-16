@@ -30,6 +30,7 @@ struct Globals {
     time: f32,
     delta_time: f32,
     frame: u32,
+    scale: f32,
 };
 
 var<push_constant> globals: Globals;

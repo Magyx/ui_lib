@@ -50,6 +50,7 @@ pub struct TextSystem {
     glyph_atlas: GlyphAtlas,
     swash_cache: SwashCache,
     font_system: FontSystem,
+    scale_factor: f32,
 }
 
 impl Default for TextSystem {
@@ -58,6 +59,7 @@ impl Default for TextSystem {
             glyph_atlas: GlyphAtlas::default(),
             swash_cache: SwashCache::new(),
             font_system: FontSystem::new(),
+            scale_factor: 1.0,
         }
     }
 }
@@ -79,12 +81,16 @@ impl TextSystem {
         &mut self.swash_cache
     }
 
+    pub(crate) fn set_scale_factor(&mut self, factor: f32) {
+        self.scale_factor = factor;
+    }
+
     pub(crate) fn tick(&mut self) {
         self.glyph_atlas.tick();
     }
 
     pub fn prepare_glyph_data(&mut self, glyph: &LayoutGlyph) -> Option<(Size<u32>, CacheKey)> {
-        let phys = glyph.physical((0.0, 0.0), 1.0);
+        let phys = glyph.physical((0.0, 0.0), self.scale_factor);
         let img = self
             .swash_cache
             .get_image(&mut self.font_system, phys.cache_key)
@@ -105,8 +111,9 @@ impl TextSystem {
         glyph: &LayoutGlyph,
         origin: (f32, f32),
         line_y: f32,
-    ) -> Option<(Position<i32>, Size<u32>, CacheKey)> {
-        let phys = glyph.physical((origin.0, origin.1 + line_y), 1.0);
+    ) -> Option<(Position<f32>, Size<f32>, CacheKey)> {
+        let sf = self.scale_factor;
+        let phys = glyph.physical((origin.0 * sf, (origin.1 + line_y) * sf), sf);
         let img = self
             .swash_cache
             .image_cache
@@ -118,8 +125,14 @@ impl TextSystem {
         }
 
         Some((
-            Position::new(phys.x + img.placement.left, phys.y - img.placement.top),
-            Size::new(img.placement.width, img.placement.height),
+            Position::new(
+                (phys.x + img.placement.left) as f32 / sf,
+                (phys.y - img.placement.top) as f32 / sf,
+            ),
+            Size::new(
+                img.placement.width as f32 / sf,
+                img.placement.height as f32 / sf,
+            ),
             phys.cache_key,
         ))
     }

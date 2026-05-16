@@ -146,6 +146,10 @@ pub enum SctkEvent {
         surface: SurfaceId,
         size: Size<u32>,
     },
+    ScaleChanged {
+        surface: SurfaceId,
+        factor: i32,
+    },
     PointerMoved {
         surface: SurfaceId,
         pos: Position<f32>,
@@ -183,6 +187,7 @@ impl SctkEvent {
     pub fn surface_id(&self) -> Option<SurfaceId> {
         match self {
             SctkEvent::Resized { surface, .. }
+            | SctkEvent::ScaleChanged { surface, .. }
             | SctkEvent::PointerMoved { surface, .. }
             | SctkEvent::PointerButton { surface, .. }
             | SctkEvent::PointerAxis { surface, .. }
@@ -198,6 +203,9 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
         match self {
             SctkEvent::Redraw => Event::RedrawRequested,
             SctkEvent::Resized { size, .. } => Event::Resized { size: *size },
+            SctkEvent::ScaleChanged { factor, .. } => Event::ScaleFactorChanged {
+                factor: *factor as f64,
+            },
             SctkEvent::PointerMoved { pos, .. } => Event::CursorMoved { position: *pos },
             SctkEvent::PointerButton {
                 button, pressed, ..
@@ -504,14 +512,25 @@ where
         let Some(sid) = st.surfaces.keys().next() else {
             return Err(crate::error::SctkError::SurfaceSetup.into());
         };
-        let target = Arc::new(RawWaylandHandles::new(&conn, &st.surfaces[sid].wl_surface));
-        let (tid, mut engine) = Engine::new_for(target, st.surfaces[sid].size);
+        let rec = &st.surfaces[sid];
+        let sf = rec.scale_factor.max(1) as f64;
+        let phys = Size::new(
+            rec.size.width * rec.scale_factor.max(1) as u32,
+            rec.size.height * rec.scale_factor.max(1) as u32,
+        );
+        let target = Arc::new(RawWaylandHandles::new(&conn, &rec.wl_surface));
+        let (tid, mut engine) = Engine::new_for(target, phys, sf);
         post_engine_init(&mut engine);
         sid_to_tid.insert(*sid, tid);
 
         for (&sid, rec) in st.surfaces.iter().skip(1) {
+            let sf = rec.scale_factor.max(1) as f64;
+            let phys = Size::new(
+                rec.size.width * rec.scale_factor.max(1) as u32,
+                rec.size.height * rec.scale_factor.max(1) as u32,
+            );
             let target = Arc::new(RawWaylandHandles::new(&conn, &rec.wl_surface));
-            let tid = engine.attach_target(target, rec.size);
+            let tid = engine.attach_target(target, phys, sf);
             sid_to_tid.insert(sid, tid);
         }
         engine
@@ -554,9 +573,14 @@ where
                     };
 
                     for (sid, size) in new_surfaces {
-                        let target =
-                            Arc::new(RawWaylandHandles::new(&conn, &st.surfaces[&sid].wl_surface));
-                        let tid = engine.attach_target(target, size);
+                        let rec = &st.surfaces[&sid];
+                        let sf = rec.scale_factor.max(1) as f64;
+                        let phys = Size::new(
+                            size.width * rec.scale_factor.max(1) as u32,
+                            size.height * rec.scale_factor.max(1) as u32,
+                        );
+                        let target = Arc::new(RawWaylandHandles::new(&conn, &rec.wl_surface));
+                        let tid = engine.attach_target(target, phys, sf);
                         sid_to_tid.insert(sid, tid);
                     }
                 }
