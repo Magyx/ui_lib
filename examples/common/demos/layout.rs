@@ -217,7 +217,7 @@ fn view_grid() -> Element<Message> {
         })
         .collect();
 
-    Grid::new(NonZero::new(4).unwrap(), cells)
+    WrappingRows::new(NonZero::new(4).unwrap(), cells)
         .col_spacing(10)
         .row_spacing(10)
         .padding(Vec4::splat(10))

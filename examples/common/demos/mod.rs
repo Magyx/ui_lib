@@ -5,8 +5,8 @@ use ui::{
     graphics::TargetId,
     model::*,
     widget::{
-        Button, Column, Element, Grid, Length, Overlay, Rectangle, Row, Scrollable, Slider, Spacer,
-        Text, TextArea, TextField,
+        Button, Column, Element, Length, Overlay, Rectangle, Row, Scrollable, Slider, Spacer, Text,
+        TextArea, TextField, WrappingRows,
     },
 };
 
@@ -197,7 +197,7 @@ pub mod texture {
 
         let png_panel = Column::new(el![
             Text::new("PNG", 16.0).color(Color::BLACK),
-            Grid::new(NonZero::new(GRID_COLS).unwrap(), png_cells)
+            WrappingRows::new(NonZero::new(GRID_COLS).unwrap(), png_cells)
                 .col_spacing(8)
                 .row_spacing(8)
                 .size(Size::new(Fit, Fit))
@@ -222,7 +222,7 @@ pub mod texture {
 
             Column::new(el![
                 Text::new("SVG", 16.0).color(Color::BLACK),
-                Grid::new(NonZero::new(GRID_COLS).unwrap(), svg_cells)
+                WrappingRows::new(NonZero::new(GRID_COLS).unwrap(), svg_cells)
                     .col_spacing(8)
                     .row_spacing(8)
                     .size(Size::new(Fit, Fit))

@@ -46,7 +46,7 @@ Priorities:
 - [x] **Slider value pinned at edges.** `slider.rs:10797` maps cursor across `[self.x, self.x + self.w]` without accounting for knob radius. Click at the very left edge → knob center is forced inside the track but value is `lo`; the knob jumps off the cursor. Either subtract half the knob width on both sides for the value calculation, or document that the track is the value range.
 - [x] **Slider value-change epsilon is meaningless.** `slider.rs:10799` uses `f32::EPSILON ≈ 1.19e-7` as the change threshold — any movement clears it. Either always emit on drag, or use a sensible threshold (e.g. one pixel of cursor movement at the current width).
 - [x] **Click-to-cursor in `TextInput` is wrong inside scrollables.** `text_input.rs:12148` uses `inner_bounds()` derived from `self.x`/`self.y`, which carry the unscrolled position (see #1). Fixed automatically once #1 lands; flagging because it's user-visible.
-- [ ] **Grid doesn't actually align columns.** `grid.rs` builds rows of independently-laid-out `Row`s, so column widths drift across rows. A grid that doesn't align columns isn't a grid. Either rename (`WrappingRows`?) or do a real grid pass that finds per-column max widths first.
+- [x] **Grid doesn't actually align columns.** `grid.rs` builds rows of independently-laid-out `Row`s, so column widths drift across rows. A grid that doesn't align columns isn't a grid. Either rename (`WrappingRows`?) or do a real grid pass that finds per-column max widths first.
 
 ### P2 — fix when adjacent
 

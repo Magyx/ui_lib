@@ -131,8 +131,8 @@ pub use text::Text;
 mod slider;
 pub use slider::Slider;
 
-mod grid;
-pub use grid::Grid;
+mod wrapping_rows;
+pub use wrapping_rows::WrappingRows;
 
 mod text_input;
 pub use text_input::{TextArea, TextColors, TextField};

@@ -2,7 +2,7 @@ use std::num::NonZero;
 
 use super::*;
 
-pub struct Grid<M> {
+pub struct WrappingRows<M> {
     x: i32,
     y: i32,
     w: i32,
@@ -17,7 +17,7 @@ pub struct Grid<M> {
     max: Size<i32>,
 }
 
-impl<M> Grid<M> {
+impl<M> WrappingRows<M> {
     pub fn new<I, E>(columns: NonZero<usize>, children: I) -> Self
     where
         I: IntoIterator<Item = E>,
@@ -82,9 +82,9 @@ impl<M> Grid<M> {
     }
 }
 
-impl<M> IntoElement for Grid<M> {}
+impl<M> IntoElement for WrappingRows<M> {}
 
-impl<M: 'static> Widget<M> for Grid<M> {
+impl<M: 'static> Widget<M> for WrappingRows<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
             size: self.size,
