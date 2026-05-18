@@ -50,7 +50,7 @@ Priorities:
 
 ### P2 — fix when adjacent
 
-- [ ] **`Text` reshapes on every layout, prepare, and `min_height_for_width`.** `text.rs:11385–11424, 11447, 11489` — three full `set_text` + `shape_until_scroll` cycles per frame per text node. TODO at `text.rs:11483` acknowledges it. Cache shaped output keyed on `(text, attrs, wrap, width)`.
+- [x] **`Text` reshapes on every layout, prepare, and `min_height_for_width`.** `text.rs:11385–11424, 11447, 11489` — three full `set_text` + `shape_until_scroll` cycles per frame per text node. TODO at `text.rs:11483` acknowledges it. Cache shaped output keyed on `(text, attrs, wrap, width)`.
 - [ ] **`Text` min-width uses `split_whitespace`.** `text.rs:11405` — wrong for CJK / Thai / any script without whitespace word boundaries. Returns the whole string as one "word," producing a min-width that prevents wrapping. Use cosmic-text's Unicode line-break opportunities.
 - [ ] **No event consumption.** `Button::handle` (`button.rs:9375`) sets `active_item = self.id` on press regardless of whether another widget already claimed it. Overlapping widgets all set themselves; the last in iteration order wins. Works by accident for overlays because handle order ≈ paint order, but fragile. Add explicit "topmost hit consumes the event."
 - [ ] **`Scrollable` HIT_SLOP overlaps content.** `scroll.rs:10495` — 4px slop on a 6px track produces a ~14px hit zone that overlaps surrounding content. Outside-bounds clicks just inside the right edge accidentally start scroll drags. Tighten or differentiate thumb vs track slop.

@@ -1,11 +1,145 @@
 use std::borrow::Cow;
 
-use cosmic_text::{Attrs, Buffer, Metrics, Shaping};
+use cosmic_text::{Attrs, Buffer, FontSystem, Metrics, Shaping};
 
 use super::*;
 
 struct TextViewState {
     buffer: Buffer,
+
+    shaped_text: Option<String>,
+    shaped_width: f32,
+    shaped_wrap: Wrap,
+
+    layout_text: Option<String>,
+    layout_font_size: f32,
+    layout_line_height: f32,
+    layout_wrap: Wrap,
+    layout_family: Option<Family>,
+    layout_style: Option<Style>,
+    layout_weight: Option<Weight>,
+    layout_intrinsic_w: i32,
+    layout_line_count: usize,
+}
+
+impl TextViewState {
+    fn new(fs: &mut FontSystem, desired: Metrics) -> Self {
+        Self {
+            buffer: Buffer::new(fs, desired),
+            shaped_text: None,
+            shaped_width: 0.0,
+            shaped_wrap: Wrap::None,
+            layout_text: None,
+            layout_font_size: 0.0,
+            layout_line_height: 0.0,
+            layout_wrap: Wrap::None,
+            layout_family: None,
+            layout_style: None,
+            layout_weight: None,
+            layout_intrinsic_w: 0,
+            layout_line_count: 0,
+        }
+    }
+
+    fn layout_hit(&self, widget: &Text) -> bool {
+        self.layout_text.as_deref() == Some(&*widget.text)
+            && self.layout_font_size == widget.font_size
+            && self.layout_line_height == widget.line_height
+            && self.layout_wrap == widget.wrap
+            && self.layout_family == widget.family
+            && self.layout_style == widget.style
+            && self.layout_weight == widget.weight
+    }
+
+    fn ensure_layout(&mut self, widget: &Text, fs: &mut FontSystem) -> (i32, usize) {
+        if self.layout_hit(widget) {
+            (self.layout_intrinsic_w, self.layout_line_count)
+        } else {
+            let wrap = widget.wrap;
+
+            let (intrinsic_w, line_count) = {
+                let b = &mut self.buffer;
+
+                // (a) Unwrapped measurement
+                b.set_wrap(fs, Wrap::None);
+                b.set_text(fs, &widget.text, &widget.attrs(), Shaping::Basic);
+                b.set_size(fs, None, None);
+                b.shape_until_scroll(fs, false);
+
+                let mut unwrapped_w = 0.0f32;
+                let mut lines = 0usize;
+                let mut prev_y: Option<f32> = None;
+                for run in b.layout_runs() {
+                    unwrapped_w = unwrapped_w.max(run.line_w);
+                    if prev_y != Some(run.line_y) {
+                        lines += 1;
+                        prev_y = Some(run.line_y);
+                    }
+                }
+
+                let unwrapped_w_i = unwrapped_w.ceil() as i32;
+
+                // (b) Minimal useful width with wrapping
+                let min_break_w_i = if wrap != Wrap::None {
+                    let mut longest = 0.0f32;
+                    for piece in widget.text.split_whitespace().filter(|s| !s.is_empty()) {
+                        b.set_wrap(fs, Wrap::None);
+                        b.set_text(fs, piece, &widget.attrs(), Shaping::Basic);
+                        b.set_size(fs, None, None);
+                        b.shape_until_scroll(fs, false);
+                        for run in b.layout_runs() {
+                            longest = longest.max(run.line_w);
+                        }
+                    }
+                    longest.ceil() as i32
+                } else {
+                    unwrapped_w_i
+                };
+
+                let intrinsic_w = if widget.wrap == Wrap::None {
+                    unwrapped_w_i
+                } else {
+                    min_break_w_i
+                };
+
+                (intrinsic_w, lines.max(1))
+            };
+
+            self.shaped_text = None;
+
+            self.layout_text = Some(widget.text.to_string());
+            self.layout_font_size = widget.font_size;
+            self.layout_line_height = widget.line_height;
+            self.layout_wrap = widget.wrap;
+            self.layout_family = widget.family.clone();
+            self.layout_style = widget.style;
+            self.layout_weight = widget.weight;
+            self.layout_intrinsic_w = intrinsic_w;
+            self.layout_line_count = line_count;
+
+            (intrinsic_w, line_count)
+        }
+    }
+
+    fn is_shaped(&self, widget: &Text, target_w: f32) -> bool {
+        self.shaped_text.as_deref() == Some(&*widget.text)
+            && self.shaped_width == target_w
+            && self.shaped_wrap == widget.wrap
+    }
+
+    fn ensure_shaped(&mut self, widget: &Text, target_w: f32, fs: &mut FontSystem) {
+        if !self.is_shaped(widget, target_w) {
+            let b = &mut self.buffer;
+            b.set_wrap(fs, widget.wrap);
+            b.set_text(fs, &widget.text, &widget.attrs(), Shaping::Basic);
+            b.set_size(fs, Some(target_w), None);
+            b.shape_until_scroll(fs, false);
+
+            self.shaped_text = Some(widget.text.to_string());
+            self.shaped_width = target_w;
+            self.shaped_wrap = widget.wrap;
+        }
+    }
 }
 
 pub struct Text {
@@ -108,82 +242,48 @@ impl Text {
 
         attrs
     }
-    fn get_buffer<'b>(&self, view_state: &'b ViewState) -> Option<&'b Buffer> {
-        view_state.get::<TextViewState>(&self.id).map(|s| &s.buffer)
+    fn get_state<'b>(&self, view_state: &'b ViewState) -> Option<&'b TextViewState> {
+        view_state.get::<TextViewState>(&self.id)
     }
-    fn ensure_buffer<'b>(
+    fn ensure_state<'b>(
         &self,
         view_state: &'b mut ViewState,
         fs: &mut cosmic_text::FontSystem,
-    ) -> &'b mut Buffer {
+    ) -> &'b mut TextViewState {
         let desired = Metrics::relative(self.font_size, self.line_height);
-        let state = view_state.ensure(self.id, || TextViewState {
-            buffer: Buffer::new(fs, desired),
-        });
+        let state = view_state.ensure(self.id, || TextViewState::new(fs, desired));
 
         if state.buffer.metrics().font_size != desired.font_size
             || state.buffer.metrics().line_height != desired.line_height
         {
             state.buffer.set_metrics(fs, desired);
+            state.shaped_text = None;
+            state.layout_text = None;
         }
 
-        &mut state.buffer
+        state
     }
 }
 
 impl IntoElement for Text {}
 
 impl<M> Widget<M> for Text {
+    fn set_id(&mut self, id: Id) {
+        self.id = id;
+    }
+
+    fn child_count(&self) -> usize {
+        0
+    }
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+        unreachable!()
+    }
+
     fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
-        let wrap = self.wrap;
+        let fs = ctx.text.font_system_mut();
+        let state = self.ensure_state(&mut ctx.ui.view_state, fs);
+        let (intrinsic_w, line_count) = state.ensure_layout(self, fs);
 
-        let (intrinsic_w, line_count) = {
-            let fs = ctx.text.font_system_mut();
-            let b = self.ensure_buffer(&mut ctx.ui.view_state, fs);
-
-            // (a) Unwrapped measurement
-            b.set_wrap(fs, Wrap::None);
-            b.set_text(fs, &self.text, &self.attrs(), Shaping::Basic);
-            b.set_size(fs, None, None);
-            b.shape_until_scroll(fs, false);
-
-            let mut unwrapped_w = 0.0f32;
-            let mut lines = 0usize;
-            let mut prev_y: Option<f32> = None;
-            for run in b.layout_runs() {
-                unwrapped_w = unwrapped_w.max(run.line_w);
-                if prev_y != Some(run.line_y) {
-                    lines += 1;
-                    prev_y = Some(run.line_y);
-                }
-            }
-            let unwrapped_w_i = unwrapped_w.ceil() as i32;
-
-            // (b) Minimal useful width with wrapping
-            let min_break_w_i = if wrap != Wrap::None {
-                let mut longest = 0.0f32;
-                for piece in self.text.split_whitespace().filter(|s| !s.is_empty()) {
-                    b.set_wrap(fs, Wrap::None);
-                    b.set_text(fs, piece, &self.attrs(), Shaping::Basic);
-                    b.set_size(fs, None, None);
-                    b.shape_until_scroll(fs, false);
-                    for run in b.layout_runs() {
-                        longest = longest.max(run.line_w);
-                    }
-                }
-                longest.ceil() as i32
-            } else {
-                unwrapped_w_i
-            };
-
-            let intrinsic_w = if self.wrap == Wrap::None {
-                unwrapped_w_i
-            } else {
-                min_break_w_i
-            };
-
-            (intrinsic_w, lines.max(1))
-        };
         let line_px = (self.font_size * self.line_height).ceil() as i32;
         let intrinsic_h = (line_count as i32).saturating_mul(line_px);
 
@@ -199,17 +299,14 @@ impl<M> Widget<M> for Text {
     }
 
     fn min_height_for_width<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>, width: i32) -> Option<i32> {
+        let target_w = width.max(1) as f32;
         let fs = ctx.text.font_system_mut();
-
-        let b = self.ensure_buffer(&mut ctx.ui.view_state, fs);
-        b.set_wrap(fs, self.wrap);
-        b.set_text(fs, &self.text, &self.attrs(), Shaping::Basic);
-        b.set_size(fs, Some(width.max(1) as f32), None);
-        b.shape_until_scroll(fs, false);
+        let state = self.ensure_state(&mut ctx.ui.view_state, fs);
+        state.ensure_shaped(self, target_w, fs);
 
         let mut lines = 0usize;
         let mut last = f32::NAN;
-        for run in b.layout_runs() {
+        for run in state.buffer.layout_runs() {
             if run.line_y != last {
                 lines += 1;
                 last = run.line_y;
@@ -229,27 +326,11 @@ impl<M> Widget<M> for Text {
         self.h = h;
     }
 
-    fn set_id(&mut self, id: Id) {
-        self.id = id;
-    }
-
-    fn child_count(&self) -> usize {
-        0
-    }
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
-        unreachable!()
-    }
-
-    // TODO: cache shape and compare to avoid reshaping every (re)paint
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
-        let fs = ctx.text.font_system_mut();
-        let buf = self.ensure_buffer(ctx.view_state, fs);
-        buf.set_wrap(fs, self.wrap);
-        buf.set_text(fs, &self.text, &self.attrs(), Shaping::Basic);
-        buf.set_size(fs, Some(self.w.max(1) as f32), None);
-        buf.shape_until_scroll(fs, false);
-
-        for key in buf.layout_runs().flat_map(|r| r.glyphs) {
+        let Some(state) = self.get_state(ctx.view_state) else {
+            return;
+        };
+        for key in state.buffer.layout_runs().flat_map(|r| r.glyphs) {
             if let Some((size, key)) = ctx.text.prepare_glyph_data(key) {
                 let _ = ctx
                     .text
@@ -261,7 +342,7 @@ impl<M> Widget<M> for Text {
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         const BASE_COLOR: Color = Color::rgba(255, 255, 255, 255);
 
-        let Some(buf) = self.get_buffer(ctx.view_state) else {
+        let Some(buf) = self.get_state(ctx.view_state).map(|vs| &vs.buffer) else {
             return;
         };
 
