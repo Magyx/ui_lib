@@ -57,6 +57,7 @@ Priorities:
 - [x] **`Scrollable` redraws every drag-frame even without movement.** `scroll.rs:10571` recomputes and `request_redraw`s whether or not `my` changed. Cheap fix: only redraw if `st.y` actually changed.
 - [x] **`Grid::new` uses `cells.remove(0)` in a loop.** `grid.rs:9550` — O(n²). Use `drain(..take)` or chunk a slice.
 - [ ] **Texture-handle generation miss returns blue.** `ui_shader.wgsl:1927` returns `vec4(0, 0, 1, 0)`. Alpha=0 hides it under premultiplied compositing but bleeds blue under straight alpha. Return `vec4(0)`.
+- [x] **Texture-handle generation miss returns blue.** `ui_shader.wgsl:1927` returns `vec4(0, 0, 1, 0)`. Alpha=0 hides it under premultiplied compositing but bleeds blue under straight alpha. Return `vec4(0)`.
 - [ ] **`Text::layout` uses unwrapped intrinsic for line count.** `text.rs:11425` — `lines` always 1 for any text that fits unwrapped; `Length::Fit` text wraps maximally aggressively as a result. Either document or use a smarter intrinsic.
 
 ### P3 — polish
@@ -68,6 +69,7 @@ Priorities:
 - [ ] `consts.rs` TODO list — `// TODO: should add configurability` at `graphics.rs:2863`, `// TODO: maybe return a result` at `graphics.rs:3022, 3129, 3241`.
 - [ ] `// TODO: winit can only have 1 target` at `winit.rs:12498`.
 - [ ] `// TODO: propagate new_output and output_destroyed` at `sctk/state.rs:8775`.
+- [ ] `Scrollable` doesn't scroll equally between different runtimes.
 
 ---
 

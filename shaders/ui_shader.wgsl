@@ -78,7 +78,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let idx = in.slot_plus_one - 1u;
     if (gens[idx] & GEN_MASK) != in.gen {
-        return vec4<f32>(0.0, 0.0, 1.0, 0.0);
+        return vec4<f32>(0.0);
     }
 
     let c = textureSample(tex_arr[idx], samp, in.uv_tex);
