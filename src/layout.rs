@@ -8,6 +8,8 @@ use crate::{
     widget::{Axis, Length, Padding, Widget},
 };
 
+const ROOT_SEED: u64 = 0xCBF2_9CE4_8422_2325;
+
 #[inline]
 fn mix64(parent: Id, idx: usize) -> Id {
     let mut z =
@@ -45,7 +47,7 @@ pub fn run_layout<'a, M>(
     // 1) Build engine graph from the widget tree
     let root_id = {
         crate::scope!("layout::build_tree");
-        build_tree(layout_engine, ctx, root)
+        build_tree(layout_engine, ctx, root, ROOT_SEED)
     };
 
     // 2) Width phases
@@ -91,7 +93,6 @@ pub fn run_layout<'a, M>(
             &mut ctx.ui.view_state,
             0,
             0,
-            0xCBF2_9CE4_8422_2325u64,
         );
     }
     root_id
@@ -101,11 +102,13 @@ fn build_tree<'a, M>(
     layout_engine: &mut LayoutEngine,
     ctx: &mut LayoutCtx<'a, M>,
     w: &mut dyn Widget<M>,
+    seed: u64,
 ) -> usize {
+    w.set_id(seed);
     let desc = w.layout(ctx);
-    let id = layout_engine.create_node(desc.size, desc.layout_dir, desc.is_absolute);
+    let i = layout_engine.create_node(desc.size, desc.layout_dir, desc.is_absolute);
     {
-        let n = &mut layout_engine.nodes[id];
+        let n = &mut layout_engine.nodes[i];
         n.min = desc.min;
         n.max = desc.max;
         n.padding = desc.padding;
@@ -115,13 +118,17 @@ fn build_tree<'a, M>(
     }
 
     let count = w.child_count();
-    for i in 0..count {
-        let child = w.child_mut(i);
-        let cid = build_tree(layout_engine, ctx, child);
-        layout_engine.add_child(id, cid);
+    for y in 0..count {
+        let child = w.child_mut(y);
+        let child_seed = match child.identity_key() {
+            Some(k) => mix64(seed, k as usize),
+            None => mix64(seed, y + 1),
+        };
+        let ci = build_tree(layout_engine, ctx, child, child_seed);
+        layout_engine.add_child(i, ci);
     }
 
-    id
+    i
 }
 
 fn post_width_query<'a, M>(
@@ -337,7 +344,6 @@ fn write_back<M>(
     view_state: &mut ViewState,
     off_x: i32,
     off_y: i32,
-    root_seed: u64,
 ) {
     let id = *cursor;
     let n = layout_engine.nodes[id];
@@ -347,7 +353,6 @@ fn write_back<M>(
         n.current_size.width,
         n.current_size.height,
     );
-    w.set_id(root_seed);
 
     *cursor += 1;
 
@@ -358,10 +363,6 @@ fn write_back<M>(
     let count = w.child_count();
     for i in 0..count {
         let child = w.child_mut(i);
-        let child_seed = match child.identity_key() {
-            Some(k) => mix64(root_seed, k as usize),
-            None => mix64(root_seed, i + 1),
-        };
         write_back(
             child,
             layout_engine,
@@ -369,7 +370,6 @@ fn write_back<M>(
             view_state,
             child_off_x,
             child_off_y,
-            child_seed,
         );
     }
 }
@@ -471,20 +471,20 @@ impl LayoutEngine {
         }
     }
     fn create_node(&mut self, size: Size<Length>, layout_dir: Axis, is_absolute: bool) -> usize {
-        let id = self.node_count;
+        let i = self.node_count;
         let node = __Node {
             size,
             layout_dir,
             is_absolute,
             ..Default::default()
         };
-        if id < self.nodes.len() {
-            self.nodes[id] = node;
+        if i < self.nodes.len() {
+            self.nodes[i] = node;
         } else {
             self.nodes.push(node);
         }
         self.node_count += 1;
-        id
+        i
     }
     fn add_child(&mut self, parent: usize, child: usize) {
         self.nodes[child].parent = Some(parent);
