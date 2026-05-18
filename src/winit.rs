@@ -133,9 +133,9 @@ impl<M> ToEvent<M, winit::event::WindowEvent> for winit::event::WindowEvent {
             }
             WE::MouseWheel { delta, .. } => {
                 let (dx, dy, units) = match delta {
-                    MouseScrollDelta::LineDelta(x, y) => (*x, *y, ScrollUnits::Lines),
+                    MouseScrollDelta::LineDelta(x, y) => (*x, -*y, ScrollUnits::Lines),
                     MouseScrollDelta::PixelDelta(p) => {
-                        (p.x as f32, p.y as f32, ScrollUnits::Pixels)
+                        (p.x as f32, -(p.y as f32), ScrollUnits::Pixels)
                     }
                 };
                 Event::MouseWheel(ScrollDelta { dx, dy, units })
