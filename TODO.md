@@ -55,8 +55,7 @@ Priorities:
 - [ ] **No event consumption.** `Button::handle` (`button.rs:9375`) sets `active_item = self.id` on press regardless of whether another widget already claimed it. Overlapping widgets all set themselves; the last in iteration order wins. Works by accident for overlays because handle order ≈ paint order, but fragile. Add explicit "topmost hit consumes the event."
 - [ ] **`Scrollable` HIT_SLOP overlaps content.** `scroll.rs:10495` — 4px slop on a 6px track produces a ~14px hit zone that overlaps surrounding content. Outside-bounds clicks just inside the right edge accidentally start scroll drags. Tighten or differentiate thumb vs track slop.
 - [x] **`Scrollable` redraws every drag-frame even without movement.** `scroll.rs:10571` recomputes and `request_redraw`s whether or not `my` changed. Cheap fix: only redraw if `st.y` actually changed.
-- [ ] **`Grid::new` uses `cells.remove(0)` in a loop.** `grid.rs:9550` — O(n²). Use `drain(..take)` or chunk a slice.
-- [ ] **sRGB compositing in shader.** `ui_shader.wgsl:1922, 1931` does `color * texture` without linearization, but the surface format is sRGB (`graphics.rs:2867`). Visible on tinted glyphs and AA edges against colored backgrounds. Convert to linear before multiplying or use a linear render target.
+- [x] **`Grid::new` uses `cells.remove(0)` in a loop.** `grid.rs:9550` — O(n²). Use `drain(..take)` or chunk a slice.
 - [ ] **Texture-handle generation miss returns blue.** `ui_shader.wgsl:1927` returns `vec4(0, 0, 1, 0)`. Alpha=0 hides it under premultiplied compositing but bleeds blue under straight alpha. Return `vec4(0)`.
 - [ ] **`Text::layout` uses unwrapped intrinsic for line count.** `text.rs:11425` — `lines` always 1 for any text that fits unwrapped; `Length::Fit` text wraps maximally aggressively as a result. Either document or use a smarter intrinsic.
 

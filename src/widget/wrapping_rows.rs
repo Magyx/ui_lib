@@ -28,11 +28,11 @@ impl<M> WrappingRows<M> {
 
         while !cells.is_empty() {
             let take = cells.len().min(columns.into());
-            let mut row_cells = Vec::with_capacity(take);
-            for _ in 0..take {
-                row_cells.push(cells.remove(0));
-            }
-            rows.push(Row::new(row_cells).spacing(8).color(Color::TRANSPARENT));
+            rows.push(
+                Row::new(cells.drain(..take))
+                    .spacing(8)
+                    .color(Color::TRANSPARENT),
+            );
         }
 
         Self {
