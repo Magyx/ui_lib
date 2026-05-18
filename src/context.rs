@@ -11,6 +11,8 @@ use crate::{
     render::{text::TextSystem, texture::TextureRegistry},
 };
 
+// TODO: would be nice if widgets didn't have to remember their ids, and just got their view_state
+// automatically
 pub type Id = u64;
 
 pub struct SweepCtx<'a> {
@@ -96,7 +98,7 @@ impl ViewState {
         entry.value.downcast_mut::<T>().unwrap()
     }
 
-    pub fn was_touched(&self, id: &Id) -> bool {
+    pub(crate) fn was_touched(&self, id: &Id) -> bool {
         self.touched.contains(id)
     }
 
@@ -117,7 +119,7 @@ impl ViewState {
         out
     }
 
-    pub fn sweep(&mut self, cx: &mut SweepCtx) {
+    pub(crate) fn sweep(&mut self, cx: &mut SweepCtx) {
         for (_, mut entry) in self.drain_stale() {
             if let Some(f) = entry.on_sweep {
                 f(entry.value.as_mut(), cx);
