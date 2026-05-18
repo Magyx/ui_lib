@@ -230,9 +230,12 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             };
             if delta.dy != 0.0 {
                 let st = self.ensure_state(&mut ctx.ui.view_state);
+                let old_y = st.y;
                 let ny = (st.y as f32 + delta.dy * step).round() as i32;
                 st.y = ny.clamp(0, max);
-                ctx.ui.request_redraw();
+                if st.y != old_y {
+                    ctx.ui.request_redraw();
+                }
             }
         }
 
@@ -273,31 +276,35 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
                 st.grab = Some(grab);
 
                 if over_track && !over_thumb {
+                    let old_y = st.y;
                     let desired = (my - grab).clamp(track_y, track_y + track_h - th);
                     let denom = (track_h - th).max(1.0);
                     let t = (desired - track_y) / denom;
                     st.y = (t * max as f32).round() as i32;
-                    ctx.ui.request_redraw();
+                    if st.y != old_y {
+                        ctx.ui.request_redraw();
+                    }
                 }
             }
 
             if ctx.ui.active_item == Some(self.id) && down {
                 let st = self.ensure_state(&mut ctx.ui.view_state);
+                let old_y = st.y;
                 let mut pos = my - st.grab.unwrap_or(th / 2.0);
                 pos = pos.clamp(track_y, track_y + track_h - th);
 
                 let denom = (track_h - th).max(1.0);
                 let t = (pos - track_y) / denom;
                 st.y = (t * max as f32).round() as i32;
-
-                ctx.ui.request_redraw();
+                if st.y != old_y {
+                    ctx.ui.request_redraw();
+                }
             }
 
             if released && ctx.ui.active_item == Some(self.id) {
                 ctx.ui.active_item = None;
                 let st = self.ensure_state(&mut ctx.ui.view_state);
                 st.grab = None;
-                ctx.ui.request_redraw();
             }
         } else if released && ctx.ui.active_item == Some(self.id) {
             ctx.ui.active_item = None;
