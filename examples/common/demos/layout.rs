@@ -20,10 +20,7 @@ pub fn view(_state: &State) -> Element<Message> {
     .spacing(14)
     .size(Size::new(Grow, Fit));
 
-    Scrollable::new(main)
-        .size(Size::new(Grow, Grow))
-        .bg(Color::rgb(100, 80, 100))
-        .into()
+    Scrollable::new(main).size(Size::new(Grow, Grow)).into()
 }
 
 /// 1) Fixed + Fixed, zero padding baseline

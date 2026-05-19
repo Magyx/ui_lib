@@ -284,6 +284,10 @@ impl Color {
     pub fn a(&self) -> u8 {
         ((self.0 & 0xFF_00_00_00) >> 24) as u8
     }
+
+    pub fn into_cosmic(self) -> cosmic_text::Color {
+        cosmic_text::Color::rgba(self.r(), self.g(), self.b(), self.a())
+    }
 }
 
 use std::borrow::Cow;

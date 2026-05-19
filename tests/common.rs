@@ -15,6 +15,7 @@ mod harness {
         model::{Color, Size},
         primitive::Instance,
         render::text::TextSystem,
+        theme::Theme,
         widget::{Element, IntoElement, Length, Rectangle, Widget},
     };
 
@@ -71,6 +72,7 @@ mod harness {
         pub ctx: Context<TopMsg>,
         pub text: TextSystem,
         pub engine: LayoutEngine,
+        pub theme: Theme,
     }
 
     impl Harness {
@@ -80,6 +82,7 @@ mod harness {
                 globals: &self.globals,
                 ui: &mut self.ctx,
                 text: &mut self.text,
+                theme: &self.theme,
             };
             run_layout(&mut self.engine, &mut lctx, root, max_w, max_h)
         }
@@ -116,6 +119,7 @@ mod harness {
                 &self.text,
                 &self.engine,
                 &mut self.ctx.view_state,
+                &self.theme,
             );
             let screen_clip = Some([
                 0,
@@ -150,6 +154,7 @@ mod harness {
                 ctx: Context::new(),
                 text: TextSystem::default(),
                 engine: LayoutEngine::new(),
+                theme: Theme::dark(),
             }
         }
     }

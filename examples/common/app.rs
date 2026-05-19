@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use ui::{
     event::{KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
+    theme::Theme,
     widget::{Element, Rectangle},
 };
 
@@ -16,11 +17,12 @@ pub enum View {
     Texture = 3,
     Text = 4,
     Scrollable = 5,
+    ThemeEditor = 6,
 }
 
 #[allow(dead_code)]
 impl View {
-    const COUNT: u8 = 6;
+    const COUNT: u8 = 7;
 
     fn from_u8(v: u8) -> Self {
         match v {
@@ -30,18 +32,8 @@ impl View {
             3 => Self::Texture,
             4 => Self::Text,
             5 => Self::Scrollable,
+            6 => Self::ThemeEditor,
             _ => unreachable!("value out of range"),
-        }
-    }
-
-    fn to_str(self) -> &'static str {
-        match self {
-            View::Layout => "Layout",
-            View::Interaction => "Interaction",
-            View::Pipeline => "Pipeline",
-            View::Texture => "Texture",
-            View::Text => "Text",
-            View::Scrollable => "Scrollable",
         }
     }
 
@@ -59,6 +51,10 @@ pub enum Message {
     ButtonPressed,
     SliderChanged(f32),
     NameChanged(String),
+    ThemeSetDark,
+    ThemeSetLight,
+    ThemeCornerRadius(f32),
+    ThemeBorderWidth(f32),
 }
 
 #[derive(Clone)]
@@ -90,6 +86,7 @@ impl Default for Target {
 pub struct State {
     pub per_target: HashMap<TargetId, Target>,
 
+    pub theme: Theme,
     pub background: Option<ui::render::texture::TextureHandle>,
     pub icon_atlas: Option<ui::render::texture::Atlas>,
     pub icons: Vec<ui::render::texture::TextureHandle>,
@@ -285,6 +282,26 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
         crate::Event::Message(Message::ButtonPressed) => update::increment_counter(target),
         crate::Event::Message(Message::SliderChanged(v)) => update::set_slider(target, *v),
         crate::Event::Message(Message::NameChanged(s)) => update::submit_name(target, s.clone()),
+        crate::Event::Message(Message::ThemeSetDark) => {
+            state.theme = Theme::dark();
+            engine.set_theme(state.theme);
+            true
+        }
+        crate::Event::Message(Message::ThemeSetLight) => {
+            state.theme = Theme::light();
+            engine.set_theme(state.theme);
+            true
+        }
+        crate::Event::Message(Message::ThemeCornerRadius(r)) => {
+            state.theme.corner_radius = *r;
+            engine.set_theme(state.theme);
+            true
+        }
+        crate::Event::Message(Message::ThemeBorderWidth(w)) => {
+            state.theme.border_width = *w as i32;
+            engine.set_theme(state.theme);
+            true
+        }
         _ => false,
     }
 }
@@ -301,5 +318,6 @@ pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
         View::Texture => demos::texture::view(state),
         View::Text => demos::text::view(state),
         View::Scrollable => demos::scrollable::view(tid, state),
+        View::ThemeEditor => demos::theme_editor::view(state),
     }
 }

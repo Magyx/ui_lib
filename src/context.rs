@@ -9,6 +9,7 @@ use crate::{
     layout::LayoutEngine,
     model::{Position, Size},
     render::{text::TextSystem, texture::TextureRegistry},
+    theme::Theme,
 };
 
 // TODO: would be nice if widgets didn't have to remember their ids, and just got their view_state
@@ -227,6 +228,7 @@ pub struct LayoutCtx<'a, M> {
     pub globals: &'a Globals,
     pub ui: &'a mut Context<M>,
     pub text: &'a mut TextSystem,
+    pub theme: &'a Theme,
 }
 
 impl<'a, M> LayoutCtx<'a, M> {
@@ -247,6 +249,7 @@ pub struct PrepareCtx<'a> {
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
     pub view_state: &'a mut ViewState,
+    pub theme: &'a Theme,
 }
 
 impl<'a> PrepareCtx<'a> {
@@ -281,6 +284,7 @@ pub struct PaintCtx<'a> {
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
     pub view_state: &'a mut ViewState,
+    pub theme: &'a Theme,
 }
 
 impl<'a> PaintCtx<'a> {
@@ -289,6 +293,7 @@ impl<'a> PaintCtx<'a> {
         text: &'a TextSystem,
         layout: &'a LayoutEngine,
         view_state: &'a mut ViewState,
+        theme: &'a Theme,
     ) -> Self {
         Self {
             globals,
@@ -296,6 +301,7 @@ impl<'a> PaintCtx<'a> {
             layout,
             current_node: 0,
             view_state,
+            theme,
         }
     }
 

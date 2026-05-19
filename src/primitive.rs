@@ -295,10 +295,10 @@ impl Instance {
         size: Size<f32>,
         fill: Color,
         corner_radius: f32,
-        border_width: f32,
+        border_width: i32,
         border_color: Color,
     ) -> Self {
-        let style = PrimitiveStyle::flat(fill).with_border(border_width, border_color);
+        let style = PrimitiveStyle::flat(fill).with_border(border_width as f32, border_color);
         let style = PrimitiveStyle {
             corner_radius,
             ..style
@@ -472,7 +472,7 @@ mod tests {
             Size::new(100.0, 40.0),
             Color::BLUE,
             8.0,
-            1.0,
+            1,
             Color::WHITE,
         );
 
@@ -501,7 +501,7 @@ mod tests {
             Size::new(50.0, 50.0),
             Color::RED,
             12.0,
-            0.0,
+            0,
             Color::TRANSPARENT,
         );
 

@@ -14,6 +14,7 @@ pub mod profile;
 pub mod render;
 #[cfg(feature = "sctk")]
 pub mod sctk;
+pub mod theme;
 pub mod widget;
 #[cfg(feature = "winit")]
 pub mod winit;

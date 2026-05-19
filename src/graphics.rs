@@ -14,6 +14,7 @@ use crate::{
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
     },
+    theme::Theme,
     widget::Element,
 };
 
@@ -82,6 +83,7 @@ pub struct Engine<'a, M> {
     instance_buf: Vec<Instance>,
     primitive_buf: Vec<Primitive>,
     layout_engine: LayoutEngine,
+    theme: Theme,
 
     gpu: Arc<Gpu>,
     target_alloc: TargetIdAlloc,
@@ -155,6 +157,7 @@ impl<'a, M> Default for Engine<'a, M> {
             layout_engine: LayoutEngine::new(),
             instance_buf: Vec::new(),
             primitive_buf: Vec::new(),
+            theme: Theme::dark(),
 
             gpu: Arc::new(gpu),
             target_alloc,
@@ -347,6 +350,16 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         self.layout_engine.toggle_debug();
     }
 
+    pub fn theme(&self) -> &Theme {
+        &self.theme
+    }
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.theme = theme;
+        for t in self.targets.values_mut() {
+            t.ctx.request_redraw();
+        }
+    }
+
     pub fn globals(&self, tid: &TargetId) -> Option<&Globals> {
         self.targets.get(tid).map(|t| &t.globals)
     }
@@ -527,6 +540,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 globals: &target.globals,
                 ui: &mut target.ctx,
                 text: &mut self.renderer.text,
+                theme: &self.theme,
             };
             layout::run_layout(
                 &mut self.layout_engine,
@@ -549,6 +563,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 view_state: &mut target.ctx.view_state,
                 layout: &self.layout_engine,
                 current_node: root_id,
+                theme: &self.theme,
             };
             let mut cursor = root_id;
             layout::prepare_tree(root.as_mut(), &mut prepare_ctx, &mut cursor);
@@ -562,6 +577,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 view_state: &mut target.ctx.view_state,
                 layout: &self.layout_engine,
                 current_node: root_id,
+                theme: &self.theme,
             };
 
             let mut cursor = root_id;
@@ -572,6 +588,12 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 target.globals.window_size[1] as i32,
             ]);
             self.instance_buf.clear();
+            self.instance_buf.push(Instance::ui(
+                Position::default(),
+                Size::from(target.globals.window_size),
+                self.theme.bg,
+            ));
+
             layout::paint_tree(
                 root.as_mut(),
                 &mut paint_ctx,

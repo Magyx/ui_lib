@@ -61,7 +61,7 @@ pub mod interaction {
                 Button::new_with(
                     Column::new(el![
                         Spacer::new(Size::new(Grow, Grow)),
-                        Text::new("Click Me!", 18.0).wrap(cosmic_text::Wrap::None),
+                        Text::new("Click Me!", 18.0).wrap(Wrap::None),
                         Spacer::new(Size::new(Grow, Grow)),
                     ])
                     .size(Size::new(Fit, Grow)),
@@ -86,7 +86,7 @@ pub mod interaction {
         let slider_value = format!("Slider value: {:>5.1}", target.slider);
         let slider_row = Row::new(el![
             Text::new(slider_value, 16.0)
-                .wrap(cosmic_text::Wrap::None)
+                .wrap(Wrap::None)
                 .size(Size::new(Fit, Fixed(36)))
                 .color(Color::BLACK),
             Spacer::new(Size::new(Fixed(12), Fixed(1))),
@@ -423,6 +423,113 @@ pub mod text {
         .spacing(12)
         .padding(Vec4::splat(12))
         .color(bg_app)
+        .size(Size::new(Grow, Grow))
+        .into()
+    }
+}
+
+pub mod theme_editor {
+
+    use super::*;
+
+    pub fn view(state: &State) -> Element<Message> {
+        use Length::{Fit, Fixed, Grow};
+
+        let t = state.theme;
+
+        // -- Corner radius slider --
+        let radius_row = Row::new(el![
+            Text::new(format!("Corner Radius: {:.0}", t.corner_radius), 14.0)
+                .wrap(Wrap::None)
+                .size(Size::new(Fixed(160), Grow)),
+            Slider::new(Size::new(Grow, Fixed(28)), (0.0, 24.0), t.corner_radius)
+                .on_change(Message::ThemeCornerRadius),
+        ])
+        .spacing(12)
+        .padding(Vec4::splat(8))
+        .size(Size::new(Grow, Fixed(44)));
+
+        // -- Border width slider --
+        let border_row = Row::new(el![
+            Text::new(format!("Border Width: {}", t.border_width), 14.0)
+                .wrap(Wrap::None)
+                .size(Size::new(Fixed(160), Grow)),
+            Slider::new(
+                Size::new(Grow, Fixed(28)),
+                (0.0, 6.0),
+                t.border_width as f32,
+            )
+            .on_change(Message::ThemeBorderWidth),
+        ])
+        .spacing(12)
+        .padding(Vec4::splat(8))
+        .size(Size::new(Grow, Fixed(44)));
+
+        // -- Dark / Light toggle --
+        let toggle_row = Row::new(el![
+            Button::new_with(
+                Text::new("Dark", 14.0)
+                    .wrap(Wrap::None)
+                    .size(Size::new(Fit, Grow)),
+            )
+            .on_press(Message::ThemeSetDark)
+            .size(Size::new(Fixed(80), Fixed(32))),
+            Button::new_with(
+                Text::new("Light", 14.0)
+                    .wrap(Wrap::None)
+                    .size(Size::new(Fit, Grow)),
+            )
+            .on_press(Message::ThemeSetLight)
+            .size(Size::new(Fixed(80), Fixed(32))),
+        ])
+        .spacing(8)
+        .padding(Vec4::splat(8))
+        .size(Size::new(Grow, Fixed(48)));
+
+        // -- Preview widgets --
+        let preview = Column::new(el![
+            Text::new("Preview", 16.0).size(Size::new(Grow, Fit)),
+            // Button using theme defaults
+            Button::new_with(
+                Text::new("Theme Button", 14.0)
+                    .wrap(Wrap::None)
+                    .size(Size::new(Fit, Grow)),
+            )
+            .on_press(Message::ButtonPressed)
+            .size(Size::new(Fixed(160), Fixed(36))),
+            // Input using theme defaults
+            TextField::new(Size::new(Grow, Fixed(36))).placeholder("Preview input"),
+            // Slider using theme defaults
+            Slider::new(Size::new(Grow, Fixed(28)), (0.0, 100.0), 65.0),
+            // Nested container
+            Column::new(el![
+                Text::new("Nested container", 13.0),
+                Row::new(el![
+                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(200, 60, 60)),
+                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(60, 200, 60)),
+                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(60, 60, 200)),
+                ])
+                .spacing(8)
+                .size(Size::new(Grow, Fit)),
+            ])
+            .spacing(8)
+            .padding(Vec4::splat(12))
+            .size(Size::new(Grow, Fit)),
+        ])
+        .spacing(12)
+        .padding(Vec4::splat(12))
+        .size(Size::new(Grow, Fit));
+
+        // -- Layout --
+        Column::new(el![
+            Text::new("Theme Editor", 20.0).size(Size::new(Grow, Fit)),
+            toggle_row,
+            radius_row,
+            border_row,
+            preview,
+        ])
+        .spacing(12)
+        .padding(Vec4::splat(16))
         .size(Size::new(Grow, Grow))
         .into()
     }
