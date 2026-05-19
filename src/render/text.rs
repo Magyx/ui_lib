@@ -9,12 +9,23 @@ use crate::{
     },
 };
 
+fn linear_coverage_to_srgb_u8(c: u8) -> u8 {
+    let f = c as f32 / 255.0;
+    let encoded = if f <= 0.0031308 {
+        f * 12.92
+    } else {
+        1.055 * f.powf(1.0 / 2.4) - 0.055
+    };
+    (encoded * 255.0).round().clamp(0.0, 255.0) as u8
+}
+
 fn premul_rgba(img: &SwashImage) -> Vec<u8> {
     match img.content {
         SwashContent::Mask => {
             let a = &img.data;
             let mut out = Vec::with_capacity(a.len() * 4);
             for &aa in a {
+                let aa = linear_coverage_to_srgb_u8(aa);
                 out.extend_from_slice(&[aa, aa, aa, aa]); // RGB=A, A=A
             }
             out
@@ -23,7 +34,11 @@ fn premul_rgba(img: &SwashImage) -> Vec<u8> {
             let m = &img.data;
             let mut out = Vec::with_capacity(m.len() / 3 * 4);
             for px in m.chunks_exact(3) {
-                let (r, g, b) = (px[0], px[1], px[2]);
+                let (r, g, b) = (
+                    linear_coverage_to_srgb_u8(px[0]),
+                    linear_coverage_to_srgb_u8(px[1]),
+                    linear_coverage_to_srgb_u8(px[2]),
+                );
                 let a = r.max(g).max(b);
                 out.extend_from_slice(&[r, g, b, a]); // RGB=RGB, A=max(R,G,B)
             }
