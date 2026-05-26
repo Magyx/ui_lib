@@ -51,7 +51,7 @@ pub trait Widget<M>: IntoElement {
     fn prepare(&mut self, _ctx: &mut PrepareCtx) {}
     fn prepare_overlay(&mut self, _ctx: &mut PrepareCtx) {}
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
-    fn paint_overlay(&mut self, _ctx: &mut PaintCtx, _instancess: &mut Vec<Instance>) {}
+    fn paint_overlay(&mut self, _ctx: &mut PaintCtx, _instances: &mut Vec<Instance>) {}
 
     /* ----- interaction ----- */
     fn handle(&mut self, _ctx: &mut EventCtx<M>) {}
