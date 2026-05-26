@@ -104,6 +104,7 @@ Priorities:
 - [ ] **`prelude` module.** Public re-exports are scattered across `model`, `widget`, `event`. A curated prelude saves users from spelunking.
 - [ ] **Column-builder helpers.** `Column::new().push(x).push(y)` alongside the existing `el!` macro form.
 - [ ] **Multiple winit targets** (subsumed by `winit.rs:12498` TODO).
+- [ ] Sound!
 
 ---
 
