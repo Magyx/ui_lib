@@ -4,10 +4,10 @@ use cosmic_text::{Attrs, Buffer, FontSystem, Metrics, Shaping};
 
 use super::*;
 
-struct TextViewState {
-    buffer: Buffer,
+pub(super) struct TextViewState {
+    pub(super) buffer: Buffer,
 
-    shaped_text: Option<String>,
+    pub(super) shaped_text: Option<String>,
     shaped_width: f32,
     shaped_wrap: Wrap,
 
@@ -23,7 +23,7 @@ struct TextViewState {
 }
 
 impl TextViewState {
-    fn new(fs: &mut FontSystem, desired: Metrics) -> Self {
+    pub(super) fn new(fs: &mut FontSystem, desired: Metrics) -> Self {
         Self {
             buffer: Buffer::new(fs, desired),
             shaped_text: None,
@@ -164,7 +164,7 @@ pub struct Text {
 }
 
 impl Text {
-    pub fn new<S: Into<Cow<'static, str>>>(content: S, font_size: f32) -> Self {
+    pub fn new<S: Into<Cow<'static, str>>>(content: S) -> Self {
         Self {
             x: 0,
             y: 0,
@@ -172,7 +172,7 @@ impl Text {
             h: 0,
             id: 0,
             text: content.into(),
-            font_size,
+            font_size: 14.0,
             line_height: 1.2,
             family: None,
             style: None,
@@ -200,6 +200,10 @@ impl Text {
         self.color_opt = Some(color);
         self
     }
+    pub fn font_size(mut self, font_size: f32) -> Self {
+        self.font_size = font_size;
+        self
+    }
     pub fn line_height(mut self, line_height: f32) -> Self {
         self.line_height = line_height;
         self
@@ -219,6 +223,11 @@ impl Text {
     pub fn max(mut self, size: Size<i32>) -> Self {
         self.max = size;
         self
+    }
+
+    pub(super) fn set_content(&mut self, t: impl Into<Cow<'static, str>>, c: Color) {
+        self.text = t.into();
+        self.color_opt = Some(c);
     }
 
     fn attrs(&self) -> Attrs<'_> {

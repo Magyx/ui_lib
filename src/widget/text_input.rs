@@ -2,33 +2,47 @@ use std::any::TypeId;
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
-use cosmic_text::{Attrs, Buffer, Cursor, Metrics, Motion, Shaping};
+use cosmic_text::{Buffer, Cursor, Motion};
 
 use super::*;
-use crate::event::{KeyState, LogicalKey, MouseButton, UiEventRef};
+use crate::{
+    event::{KeyState, LogicalKey, MouseButton, UiEventRef},
+    layout::mix64,
+};
+
+#[derive(Clone, Copy, PartialEq)]
+struct CaretKey {
+    cursor: Cursor,
+    l: i32,
+    t: i32,
+    w: i32,
+    focused: bool,
+}
+
+#[derive(Default)]
+struct CaretCache {
+    key: Option<CaretKey>,
+    rect: Option<(f32, f32, f32)>,
+}
 
 pub struct TextInputViewState {
     hovered: bool,
     focused: bool,
 
-    buffer: Buffer,
     value: String,
-    width: i32,
     cursor: Cursor,
-    cursor_rect: Option<(f32, f32, f32)>,
+    caret_cache: CaretCache,
 }
 
 impl TextInputViewState {
-    fn new(fs: &mut cosmic_text::FontSystem, font_size: f32, line_height: f32) -> Self {
+    fn new() -> Self {
         Self {
             hovered: false,
             focused: false,
 
-            buffer: Buffer::new(fs, Metrics::relative(font_size, line_height)),
             value: String::new(),
-            width: 0,
             cursor: Cursor::new(0, 0),
-            cursor_rect: None,
+            caret_cache: CaretCache::default(),
         }
     }
 
@@ -72,33 +86,11 @@ impl TextInputViewState {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct TextColors {
-    pub text: Color,
-    pub placeholder: Color,
-    pub caret: Color,
-    pub bg: Color,
-    pub border: Color,
-    pub focus_border: Color,
-}
-
-impl Default for TextColors {
-    fn default() -> Self {
-        Self {
-            text: Color::rgb(240, 240, 245),
-            placeholder: Color::rgb(140, 140, 150),
-            caret: Color::rgb(240, 240, 245),
-            bg: Color::rgb(30, 30, 36),
-            border: Color::rgb(60, 60, 70),
-            focus_border: Color::rgb(90, 120, 210),
-        }
-    }
-}
-
 pub type Handler<M> = dyn Fn(&str) -> M + Send + Sync + 'static;
 
 pub trait TextMode {
     fn wrap() -> Wrap;
+    fn line_height() -> f32;
 }
 
 #[derive(Debug, Default)]
@@ -111,12 +103,20 @@ impl TextMode for SingleLine {
     fn wrap() -> Wrap {
         Wrap::None
     }
+    #[inline]
+    fn line_height() -> f32 {
+        1.2
+    }
 }
 
 impl TextMode for MultiLine {
     #[inline]
     fn wrap() -> Wrap {
         Wrap::Word
+    }
+    #[inline]
+    fn line_height() -> f32 {
+        1.3
     }
 }
 
@@ -130,14 +130,16 @@ pub struct TextInput<M, Mode: TextMode = SingleLine> {
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
-
     padding: Vec4<i32>,
+    border: i32,
 
     placeholder: Option<Cow<'static, str>>,
-    font_size: f32,
-    line_height: f32,
-    attrs: Attrs<'static>,
-    colors: TextColors,
+    bg: Option<Color>,
+    text_color: Option<Color>,
+    caret: Option<Color>,
+
+    child_id: Id,
+    child: Text,
 
     on_change: Option<Box<Handler<M>>>,
     on_submit: Option<Box<Handler<M>>>,
@@ -157,21 +159,45 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             min: Size::splat(28),
             max: Size::splat(i32::MAX),
             padding: Vec4::new(8, 6, 8, 6),
+            border: 0,
             placeholder: None,
-            font_size: 14.0,
-            line_height: if std::any::TypeId::of::<Mode>() == std::any::TypeId::of::<MultiLine>() {
-                1.3
-            } else {
-                1.2
-            },
-            attrs: Attrs::new(),
-            colors: TextColors::default(),
+            bg: None,
+            text_color: None,
+            caret: None,
+            child_id: 0,
+            child: Text::new("")
+                .font_size(14.0)
+                .line_height(Mode::line_height())
+                .wrap(Mode::wrap()),
             on_change: None,
             on_submit: None,
             _mode: PhantomData,
         }
     }
-
+    pub fn family(mut self, family: Family) -> Self {
+        self.child = self.child.family(family);
+        self
+    }
+    pub fn style(mut self, style: Style) -> Self {
+        self.child = self.child.style(style);
+        self
+    }
+    pub fn weight(mut self, weight: Weight) -> Self {
+        self.child = self.child.weight(weight);
+        self
+    }
+    pub fn bg(mut self, color: Color) -> Self {
+        self.bg = Some(color);
+        self
+    }
+    pub fn text_color(mut self, color: Color) -> Self {
+        self.text_color = Some(color);
+        self
+    }
+    pub fn caret_color(mut self, color: Color) -> Self {
+        self.caret = Some(color);
+        self
+    }
     pub fn placeholder(mut self, text: impl Into<Cow<'static, str>>) -> Self {
         self.placeholder = Some(text.into());
         self
@@ -180,12 +206,8 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         self.padding = p;
         self
     }
-    pub fn colors(mut self, c: TextColors) -> Self {
-        self.colors = c;
-        self
-    }
     pub fn font_size(mut self, size: f32) -> Self {
-        self.font_size = size;
+        self.child = self.child.font_size(size);
         self
     }
     pub fn min(mut self, s: Size<i32>) -> Self {
@@ -214,42 +236,24 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
     }
 
     #[inline]
-    fn inner_bounds(&self) -> (i32, i32, i32, i32) {
-        let l = self.x + self.padding.x;
-        let t = self.y + self.padding.y;
-        let r = self.x + self.w - self.padding.z;
-        let b = self.y + self.h - self.padding.w;
-        (l, t, r, b)
+    fn text_origin(&self) -> (i32, i32) {
+        (
+            self.x + self.padding.x + self.border,
+            self.y + self.padding.y + self.border,
+        )
     }
 
-    fn ensure_state<'b>(
-        &self,
-        view_state: &'b mut ViewState,
-        fs: &mut cosmic_text::FontSystem,
-    ) -> &'b mut TextInputViewState {
-        let desired = Metrics::relative(self.font_size, self.line_height);
-
-        let state = view_state.ensure(self.id, || {
-            TextInputViewState::new(fs, self.font_size, self.line_height)
-        });
-
-        if state.buffer.metrics().font_size != desired.font_size
-            || state.buffer.metrics().line_height != desired.line_height
-        {
-            state.buffer.set_metrics(fs, desired);
-        }
-
-        state
+    fn ensure_state<'b>(&self, view_state: &'b mut ViewState) -> &'b mut TextInputViewState {
+        view_state.ensure(self.id, TextInputViewState::new)
     }
-
     fn state<'b>(&self, view_state: &'b ViewState) -> Option<&'b TextInputViewState> {
         view_state.get::<TextInputViewState>(&self.id)
     }
-
     fn state_mut<'b>(&self, view_state: &'b mut ViewState) -> Option<&'b mut TextInputViewState> {
         view_state.get_mut::<TextInputViewState>(&self.id)
     }
 
+    // TODO: this should be cached.
     /// Compute the pixel (x, y, height) of the cursor by finding the glyph at cursor.index
     /// in the layout runs, using cosmic_text's own layout data.
     fn compute_cursor_rect(
@@ -257,9 +261,11 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         cursor: Cursor,
         l: i32,
         t: i32,
-        font_size: f32,
-        line_height: f32,
     ) -> Option<(f32, f32, f32)> {
+        let cosmic_text::Metrics {
+            font_size,
+            line_height,
+        } = buffer.metrics();
         let line_advance = font_size * line_height;
         let caret_h = font_size * 1.1;
 
@@ -339,138 +345,6 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         Some((cx, cy, caret_h))
     }
 
-    fn prepare_text_and_caret(&mut self, ctx: &mut PrepareCtx) {
-        let (l, t, r, _b) = self.inner_bounds();
-        let available_w = (r - l).max(1) as f32;
-
-        let fs = ctx.text.font_system_mut();
-        let st = self.ensure_state(ctx.view_state, fs);
-
-        let show_placeholder = st.value.is_empty();
-        let text = if show_placeholder {
-            self.placeholder.as_deref().unwrap_or("")
-        } else {
-            st.value.as_str()
-        };
-
-        let mut attrs = self.attrs.clone();
-        if show_placeholder {
-            attrs = attrs.color(cosmic_text::Color::rgba(
-                self.colors.placeholder.r(),
-                self.colors.placeholder.g(),
-                self.colors.placeholder.b(),
-                self.colors.placeholder.a(),
-            ));
-        } else {
-            attrs = attrs.color(cosmic_text::Color::rgba(
-                self.colors.text.r(),
-                self.colors.text.g(),
-                self.colors.text.b(),
-                self.colors.text.a(),
-            ));
-        }
-
-        // Shape the main buffer.
-        {
-            let b = &mut st.buffer;
-            if st.width != self.w {
-                st.width = self.w;
-            }
-            b.set_wrap(fs, Mode::wrap());
-            b.set_text(fs, text, &attrs, Shaping::Basic);
-            b.set_size(fs, Some(available_w), None);
-            b.shape_until_scroll(fs, false);
-        }
-        for glyph in st.buffer.layout_runs().flat_map(|r| r.glyphs) {
-            if let Some((size, key)) = ctx.text.prepare_glyph_data(glyph) {
-                let _ = ctx
-                    .text
-                    .upload_glyph(ctx.gpu, ctx.texture, key, size.width, size.height);
-            }
-        }
-
-        // Compute cursor rect if focused and not placeholder.
-        let Some(st) = self.state_mut(ctx.view_state) else {
-            return;
-        };
-        st.cursor_rect = if st.focused && !show_placeholder {
-            Self::compute_cursor_rect(
-                &st.buffer,
-                st.cursor,
-                l,
-                t,
-                self.font_size,
-                self.line_height,
-            )
-        } else {
-            None
-        };
-    }
-
-    fn paint_text_and_caret(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        // Border and background.
-        let border_color = if self.state(ctx.view_state).is_some_and(|s| s.focused) {
-            self.colors.focus_border
-        } else {
-            self.colors.border
-        };
-        instances.push(Instance::ui(
-            Position::new(self.x as f32, self.y as f32),
-            Size::new(self.w as f32, self.h as f32),
-            border_color,
-        ));
-        instances.push(Instance::ui(
-            Position::new((self.x + 1) as f32, (self.y + 1) as f32),
-            Size::new((self.w - 2) as f32, (self.h - 2) as f32),
-            self.colors.bg,
-        ));
-
-        let (l, t, _r, _b) = self.inner_bounds();
-
-        // Pure state access.
-        let Some(st) = self.state(ctx.view_state) else {
-            return;
-        };
-
-        const BASE_COLOR: Color = Color::rgba(255, 255, 255, 255);
-
-        for run in st.buffer.layout_runs() {
-            for glyph in run.glyphs {
-                let Some((Position { x: left, y: top }, Size { width, height }, cache_key)) = ctx
-                    .text
-                    .get_glyph_data(glyph, (l as f32, t as f32), run.line_y)
-                else {
-                    continue;
-                };
-
-                let tint = glyph
-                    .color_opt
-                    .map(|c| Color::rgba(c.r(), c.g(), c.b(), c.a()))
-                    .unwrap_or(BASE_COLOR);
-
-                let Some(handle) = ctx.text.lookup_glyph_handle(cache_key) else {
-                    continue;
-                };
-
-                instances.push(Instance::ui_tex(
-                    Position::new(left, top),
-                    Size::new(width, height),
-                    tint,
-                    handle,
-                ));
-            }
-        }
-
-        // Caret.
-        if let Some((cx, cy, ch)) = st.cursor_rect {
-            instances.push(Instance::ui(
-                Position::new(cx, cy),
-                Size::new(1.0, ch),
-                self.colors.caret,
-            ));
-        }
-    }
-
     /// Apply a `cosmic_text::Motion` to the cursor stored in view state.
     /// Returns true if the cursor actually moved.
     fn apply_motion(
@@ -479,15 +353,20 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         fs: &mut cosmic_text::FontSystem,
         motion: Motion,
     ) -> bool {
-        let st = match self.state_mut(view_state) {
-            Some(s) => s,
-            None => return false,
+        let Some(cursor) = self.state(view_state).map(|s| s.cursor) else {
+            return false;
         };
-        let old = st.cursor;
-        if let Some((new_cursor, _)) = st.buffer.cursor_motion(fs, st.cursor, None, motion) {
-            st.cursor = new_cursor;
-        }
-        st.cursor != old
+        let new = view_state
+            .get_mut::<text::TextViewState>(&self.child_id)
+            .and_then(|tv| tv.buffer.cursor_motion(fs, cursor, None, motion))
+            .map(|(c, _)| c);
+        new.is_some_and(|nc| {
+            self.state_mut(view_state).is_some_and(|st| {
+                let moved = st.cursor != nc;
+                st.cursor = nc;
+                moved
+            })
+        })
     }
 
     /// Insert text at the current cursor position, advancing the cursor.
@@ -549,11 +428,35 @@ impl<M> TextInput<M, MultiLine> {
 impl<M, Mode: TextMode> IntoElement for TextInput<M, Mode> {}
 
 impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
-    fn layout<'b>(&mut self, _ctx: &mut LayoutCtx<'b, M>) -> Node {
+    fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
+        let value = self.ensure_state(&mut ctx.ui.view_state).value.clone();
+        let placeholder = value.is_empty();
+
+        let text = if placeholder {
+            self.placeholder.clone().unwrap_or_default()
+        } else {
+            Cow::Owned(value)
+        };
+        let color = if placeholder {
+            ctx.theme.on_surface_variant
+        } else {
+            self.text_color.unwrap_or(ctx.theme.on_surface)
+        };
+        self.child.set_content(text, color);
+
+        let b = ctx.theme.border_width;
+        self.border = b;
         Node {
             size: self.size,
             min: self.min,
             max: self.max,
+            clip_children: true,
+            padding: Padding {
+                left: self.padding.x + b,
+                top: self.padding.y + b,
+                right: self.padding.z + b,
+                bottom: self.padding.w + b,
+            },
             ..Default::default()
         }
     }
@@ -565,25 +468,90 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     }
     fn set_id(&mut self, id: Id) {
         self.id = id;
+        self.child_id = mix64(id, 1);
     }
     fn child_count(&self) -> usize {
-        0
+        1
     }
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
-        unreachable!()
+        &mut self.child
     }
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
-        self.prepare_text_and_caret(ctx);
+        let Some((cursor, focused)) = self.state(ctx.view_state).map(|s| (s.cursor, s.focused))
+        else {
+            return;
+        };
+        let (l, t) = self.text_origin();
+        let key = CaretKey {
+            cursor,
+            l,
+            t,
+            w: self.w,
+            focused,
+        };
+        if self
+            .state(ctx.view_state)
+            .is_some_and(|s| s.caret_cache.key == Some(key))
+        {
+            return; // nothing relevant changed -> skip layout_runs scan
+        }
+        let rect = if focused {
+            ctx.view_state
+                .get::<text::TextViewState>(&self.child_id)
+                .and_then(|tv| Self::compute_cursor_rect(&tv.buffer, cursor, l, t))
+        } else {
+            None
+        };
+        if let Some(st) = self.state_mut(ctx.view_state) {
+            st.caret_cache.key = Some(key);
+            st.caret_cache.rect = rect;
+        }
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        self.paint_text_and_caret(ctx, instances);
+        let theme = ctx.theme;
+        let focused = self.state(ctx.view_state).is_some_and(|s| s.focused);
+        let fill = self.bg.unwrap_or(theme.surface_variant);
+        let border = if focused {
+            theme.focus_outline
+        } else {
+            theme.outline
+        };
+        instances.push(Instance::ui_rounded(
+            Position::new(self.x as f32, self.y as f32),
+            Size::new(self.w as f32, self.h as f32),
+            fill,
+            theme.corner_radius,
+            theme.border_width,
+            border,
+        ));
+    }
+
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        let Some(st) = self.state(ctx.view_state) else {
+            return;
+        };
+        if !st.focused {
+            return;
+        }
+        if let Some((cx, cy, ch)) = st.caret_cache.rect {
+            // no h-scroll yet: hide caret once it leaves the field
+            if cx < self.x as f32 || cx > (self.x + self.w) as f32 {
+                return;
+            }
+            let caret = self.caret.unwrap_or(ctx.theme.on_surface);
+            instances.push(Instance::ui(
+                Position::new(cx, cy),
+                Size::new(1.0, ch),
+                caret,
+            ));
+        }
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
         let (was_hovered, hovered, focused) = {
-            let st = self.ensure_state(&mut ctx.ui.view_state, ctx.text.font_system_mut());
+            let st = self.ensure_state(&mut ctx.ui.view_state);
             let inside = ctx.ui.mouse_pos.x >= self.x as f32
                 && ctx.ui.mouse_pos.x < (self.x + self.w) as f32
                 && ctx.ui.mouse_pos.y >= self.y as f32
@@ -594,25 +562,22 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             (was_hovered, st.hovered, st.focused)
         };
 
-        let mut needs_redraw = false;
-        let mut queued_emit: Option<M> = None;
-
         if hovered && ctx.is_mouse_released(MouseButton::Left) {
-            let (l, t, _r, _b) = self.inner_bounds();
+            let (l, t) = self.text_origin();
             let click_x = ctx.ui.mouse_pos.x - l as f32;
             let click_y = ctx.ui.mouse_pos.y - t as f32;
 
+            let hit_cursor = ctx
+                .ui
+                .view_state
+                .get::<text::TextViewState>(&self.child_id)
+                .and_then(|tv| tv.buffer.hit(click_x, click_y));
+            ctx.ui.kbd_focus_item = Some(self.id);
             if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                ctx.ui.kbd_focus_item = Some(self.id);
                 st.focused = true;
-                if let Some(hit_cursor) = st.buffer.hit(click_x, click_y) {
-                    st.cursor = hit_cursor;
-                } else {
-                    // Click didn't hit any glyph — place at end.
-                    st.cursor = Cursor::new(0, st.value.len());
-                }
+                st.cursor = hit_cursor.unwrap_or_else(|| Cursor::new(0, st.value.len()));
             }
-            needs_redraw = true;
+            ctx.ui.request_redraw();
         }
 
         if ctx.is_mouse_pressed(MouseButton::Left) && !hovered && focused {
@@ -629,6 +594,8 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             return;
         }
 
+        let mut needs_redraw = false;
+        let mut queued_emit: Option<M> = None;
         if let Some(ev) = ctx.event {
             match ev {
                 UiEventRef::Text(t) => {
@@ -665,43 +632,37 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                         }
                         ArrowLeft => {
                             let fs = ctx.text.font_system_mut();
-                            if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Left) {
-                                needs_redraw = true;
-                            }
+                            needs_redraw |=
+                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Left);
                         }
                         ArrowRight => {
                             let fs = ctx.text.font_system_mut();
-                            if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Right) {
-                                needs_redraw = true;
-                            }
+                            needs_redraw |=
+                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Right);
                         }
                         ArrowUp => {
                             if TypeId::of::<Mode>() == TypeId::of::<MultiLine>() {
                                 let fs = ctx.text.font_system_mut();
-                                if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Up) {
-                                    needs_redraw = true;
-                                }
+                                needs_redraw |=
+                                    self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Up);
                             }
                         }
                         ArrowDown => {
                             if TypeId::of::<Mode>() == TypeId::of::<MultiLine>() {
                                 let fs = ctx.text.font_system_mut();
-                                if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Down) {
-                                    needs_redraw = true;
-                                }
+                                needs_redraw |=
+                                    self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Down);
                             }
                         }
                         Home => {
                             let fs = ctx.text.font_system_mut();
-                            if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Home) {
-                                needs_redraw = true;
-                            }
+                            needs_redraw |=
+                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Home);
                         }
                         End => {
                             let fs = ctx.text.font_system_mut();
-                            if self.apply_motion(&mut ctx.ui.view_state, fs, Motion::End) {
-                                needs_redraw = true;
-                            }
+                            needs_redraw |=
+                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::End);
                         }
                         Enter => {
                             if TypeId::of::<Mode>() == TypeId::of::<SingleLine>() {

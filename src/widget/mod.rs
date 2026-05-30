@@ -135,7 +135,7 @@ mod wrapping_rows;
 pub use wrapping_rows::WrappingRows;
 
 mod text_input;
-pub use text_input::{TextArea, TextColors, TextField};
+pub use text_input::{TextArea, TextField};
 
 mod scroll;
 pub use scroll::Scrollable;

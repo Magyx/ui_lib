@@ -18,12 +18,14 @@ pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
     };
 
     let header = Row::new(el![
-        Text::new("Scrollable demo", 20.0)
+        Text::new("Scrollable demo")
+            .font_size(20.0)
             .wrap(Wrap::None)
             .color(TEXT)
             .size(Size::new(Fit, Grow)),
         Spacer::new(Size::new(Grow, Grow)),
-        Text::new(format!("button presses: {}", target.counter), 16.0)
+        Text::new(format!("button presses: {}", target.counter))
+            .font_size(16.0)
             .wrap(Wrap::None)
             .color(ACCENT)
             .size(Size::new(Fit, Grow)),
@@ -120,7 +122,8 @@ fn nested_panel() -> Element<Message> {
 
 fn labeled_button(label: String) -> Button<Message> {
     Button::new_with(
-        Row::new(el![Text::new(label, 14.0)
+        Row::new(el![Text::new(label)
+            .font_size(14.0)
             .wrap(cosmic_text::Wrap::None)
             .color(Color::WHITE),])
         .padding(Vec4::new(12, 0, 12, 0))
@@ -135,21 +138,24 @@ fn labeled_button(label: String) -> Button<Message> {
 }
 
 fn panel_label(s: &'static str) -> Element<Message> {
-    Text::new(s, 14.0)
+    Text::new(s)
+        .font_size(14.0)
         .color(TEXT)
         .size(Size::new(Grow, Fixed(20)))
         .into()
 }
 
 fn section_text(s: &'static str) -> Element<Message> {
-    Text::new(s, 13.0)
+    Text::new(s)
+        .font_size(13.0)
         .color(Color::rgb(160, 170, 190))
         .size(Size::new(Grow, Fit))
         .into()
 }
 
 fn filler_block(label: &'static str, h: i32) -> Element<Message> {
-    Row::new(el![Text::new(label, 14.0)
+    Row::new(el![Text::new(label)
+        .font_size(14.0)
         .color(Color::rgb(200, 205, 215))
         .size(Size::new(Fit, Grow)),])
     .padding(Vec4::splat(12))

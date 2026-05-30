@@ -61,7 +61,7 @@ pub mod interaction {
                 Button::new_with(
                     Column::new(el![
                         Spacer::new(Size::new(Grow, Grow)),
-                        Text::new("Click Me!", 18.0).wrap(Wrap::None),
+                        Text::new("Click Me!").font_size(18.0).wrap(Wrap::None),
                         Spacer::new(Size::new(Grow, Grow)),
                     ])
                     .size(Size::new(Fit, Grow)),
@@ -85,7 +85,8 @@ pub mod interaction {
         /* 2) slider */
         let slider_value = format!("Slider value: {:>5.1}", target.slider);
         let slider_row = Row::new(el![
-            Text::new(slider_value, 16.0)
+            Text::new(slider_value)
+                .font_size(16.0)
                 .wrap(Wrap::None)
                 .size(Size::new(Fit, Fixed(36)))
                 .color(Color::BLACK),
@@ -111,7 +112,8 @@ pub mod interaction {
                 .placeholder("Your name")
                 .on_change(|s| Message::NameChanged(s.to_string())),
             // Live feedback
-            Text::new(greeting, 16.0)
+            Text::new(greeting)
+                .font_size(16.0)
                 .size(Size::new(Grow, Fit))
                 .color(Color::BLACK),
             // Multi-line TextArea
@@ -154,13 +156,11 @@ pub mod pipeline {
             ),
             Row::new(el![
                 Spacer::new(Size::new(Grow, Fit)),
-                Text::new(
-                    format!(
-                        "{:.0}",
-                        target.fps.iter().sum::<f32>() / target.fps.len().max(1) as f32
-                    ),
-                    16.0,
-                )
+                Text::new(format!(
+                    "{:.0}",
+                    target.fps.iter().sum::<f32>() / target.fps.len().max(1) as f32
+                ),)
+                .font_size(16.0,)
                 .size(Size::new(Fit, Fit))
                 .color(Color::BLUE)
                 .weight(Weight::SEMIBOLD),
@@ -196,7 +196,7 @@ pub mod texture {
             .collect();
 
         let png_panel = Column::new(el![
-            Text::new("PNG", 16.0).color(Color::BLACK),
+            Text::new("PNG").font_size(16.0).color(Color::BLACK),
             WrappingRows::new(NonZero::new(GRID_COLS).unwrap(), png_cells)
                 .col_spacing(8)
                 .row_spacing(8)
@@ -221,7 +221,7 @@ pub mod texture {
                 .collect();
 
             Column::new(el![
-                Text::new("SVG", 16.0).color(Color::BLACK),
+                Text::new("SVG").font_size(16.0).color(Color::BLACK),
                 WrappingRows::new(NonZero::new(GRID_COLS).unwrap(), svg_cells)
                     .col_spacing(8)
                     .row_spacing(8)
@@ -236,8 +236,10 @@ pub mod texture {
 
         #[cfg(not(feature = "svg"))]
         let svg_panel = Column::new(el![
-            Text::new("SVG", 16.0).color(Color::BLACK),
-            Text::new("Enable with --features svg", 14.0).color(Color::rgb(50, 50, 50)),
+            Text::new("SVG").font_size(16.0).color(Color::BLACK),
+            Text::new("Enable with --features svg")
+                .font_size(14.0)
+                .color(Color::rgb(50, 50, 50)),
         ])
         .spacing(10)
         .padding(Vec4::splat(12))
@@ -288,15 +290,17 @@ pub mod text {
         // Sidebar (fixed width)
         let sidebar = Column::new(el![
             // Sidebar header
-            Row::new(el![Text::new("Project Nimbus", 20.0).color(fg_title)])
-                .padding(Vec4::new(16, 16, 16, 8))
-                .color(Color::TRANSPARENT)
-                .size(Size::new(Grow, Fixed(40))),
+            Row::new(el![Text::new("Project Nimbus")
+                .font_size(20.0)
+                .color(fg_title)])
+            .padding(Vec4::new(16, 16, 16, 8))
+            .color(Color::TRANSPARENT)
+            .size(Size::new(Grow, Fixed(40))),
             // Sidebar items
             Column::new(el![
-                Text::new("Overview", 16.0).color(fg_text),
-                Text::new("Assets", 16.0).color(fg_text),
-                Text::new("Settings", 16.0).color(fg_text),
+                Text::new("Overview").font_size(16.0).color(fg_text),
+                Text::new("Assets").font_size(16.0).color(fg_text),
+                Text::new("Settings").font_size(16.0).color(fg_text),
             ])
             .spacing(8)
             .padding(Vec4::new(16, 8, 16, 16))
@@ -310,10 +314,10 @@ pub mod text {
 
         // Top bar (fixed height)
         let topbar = Row::new(el![
-            Text::new("Dashboard", 22.0).color(fg_title),
+            Text::new("Dashboard").font_size(22.0).color(fg_title),
             Spacer::new(Size::new(Grow, Grow)),
             // a little “pill” on the right
-            Row::new(el![Text::new("LIVE", 14.0).weight(Weight::BLACK)])
+            Row::new(el![Text::new("LIVE").font_size(14.0).weight(Weight::BLACK)])
                 .padding(Vec4::new(10, 6, 10, 6))
                 .color(accent)
                 .size(Size::new(Fit, Grow)),
@@ -352,48 +356,54 @@ pub mod text {
 
         let content = Column::new(el![
             // Title
-            Text::new("Welcome to the Showcase", 20.0)
+            Text::new("Welcome to the Showcase")
+                .font_size(20.0)
                 .size(Size::new(Grow, Fit))
                 .color(fg_title),
             // Body (multiline)
-            Text::new(hero_text, 16.0)
+            Text::new(hero_text)
+                .font_size(16.0)
                 .size(Size::new(Grow, Fit))
                 .color(fg_text),
             // Body (fit checks)
             Column::new(el![
                 Row::new(el![
-                    Text::new(long, 16.0).size(Size::new(Grow, Fit)),
-                    Text::new(long, 16.0).size(Size::new(Grow, Fit)),
+                    Text::new(long).font_size(16.0).size(Size::new(Grow, Fit)),
+                    Text::new(long).font_size(16.0).size(Size::new(Grow, Fit)),
                 ])
                 .size(Size::new(Grow, Fit))
                 .spacing(12),
-                Text::new(long, 16.0).size(Size::new(Grow, Fit)),
+                Text::new(long).font_size(16.0).size(Size::new(Grow, Fit)),
             ])
             .size(Size::new(Grow, Fit))
             .spacing(12),
             // List of text with scrolling
-            Scrollable::new(Text::new(list, 16.0))
+            Scrollable::new(Text::new(list).font_size(16.0))
                 .size(Size::new(Grow, Fixed(140)))
                 .bg(Color::rgb(72, 78, 90)),
             // A couple of stat tiles
             Row::new(el![
                 Column::new(el![
-                    Text::new("Builds", 16.0).color(fg_text),
-                    Text::new("128", 28.0).color(fg_title),
+                    Text::new("Builds").font_size(16.0).color(fg_text),
+                    Text::new("128").font_size(28.0).color(fg_title),
                 ])
                 .padding(Vec4::splat(12))
                 .color(bg_panel)
                 .size(Size::new(Grow, Fixed(88))),
                 Column::new(el![
-                    Text::new("Warnings", 16.0).color(fg_text),
-                    Text::new("3", 28.0).color(Color::rgb(255, 206, 86)),
+                    Text::new("Warnings").font_size(16.0).color(fg_text),
+                    Text::new("3")
+                        .font_size(28.0)
+                        .color(Color::rgb(255, 206, 86)),
                 ])
                 .padding(Vec4::splat(12))
                 .color(bg_panel)
                 .size(Size::new(Grow, Fixed(88))),
                 Column::new(el![
-                    Text::new("Errors", 16.0).color(fg_text),
-                    Text::new("0", 28.0).color(Color::rgb(76, 217, 100)),
+                    Text::new("Errors").font_size(16.0).color(fg_text),
+                    Text::new("0")
+                        .font_size(28.0)
+                        .color(Color::rgb(76, 217, 100)),
                 ])
                 .padding(Vec4::splat(12))
                 .color(bg_panel)
@@ -439,7 +449,8 @@ pub mod theme_editor {
 
         // -- Corner radius slider --
         let radius_row = Row::new(el![
-            Text::new(format!("Corner Radius: {:.0}", t.corner_radius), 14.0)
+            Text::new(format!("Corner Radius: {:.0}", t.corner_radius))
+                .font_size(14.0)
                 .wrap(Wrap::None)
                 .size(Size::new(Fixed(160), Grow)),
             Slider::new(Size::new(Grow, Fixed(28)), (0.0, 24.0), t.corner_radius)
@@ -451,7 +462,8 @@ pub mod theme_editor {
 
         // -- Border width slider --
         let border_row = Row::new(el![
-            Text::new(format!("Border Width: {}", t.border_width), 14.0)
+            Text::new(format!("Border Width: {}", t.border_width))
+                .font_size(14.0)
                 .wrap(Wrap::None)
                 .size(Size::new(Fixed(160), Grow)),
             Slider::new(
@@ -468,14 +480,16 @@ pub mod theme_editor {
         // -- Dark / Light toggle --
         let toggle_row = Row::new(el![
             Button::new_with(
-                Text::new("Dark", 14.0)
+                Text::new("Dark")
+                    .font_size(14.0)
                     .wrap(Wrap::None)
                     .size(Size::new(Fit, Grow)),
             )
             .on_press(Message::ThemeSetDark)
             .size(Size::new(Fixed(80), Fixed(32))),
             Button::new_with(
-                Text::new("Light", 14.0)
+                Text::new("Light")
+                    .font_size(14.0)
                     .wrap(Wrap::None)
                     .size(Size::new(Fit, Grow)),
             )
@@ -488,10 +502,13 @@ pub mod theme_editor {
 
         // -- Preview widgets --
         let preview = Column::new(el![
-            Text::new("Preview", 16.0).size(Size::new(Grow, Fit)),
+            Text::new("Preview")
+                .font_size(16.0)
+                .size(Size::new(Grow, Fit)),
             // Button using theme defaults
             Button::new_with(
-                Text::new("Theme Button", 14.0)
+                Text::new("Theme Button")
+                    .font_size(14.0)
                     .wrap(Wrap::None)
                     .size(Size::new(Fit, Grow)),
             )
@@ -503,7 +520,7 @@ pub mod theme_editor {
             Slider::new(Size::new(Grow, Fixed(28)), (0.0, 100.0), 65.0),
             // Nested container
             Column::new(el![
-                Text::new("Nested container", 13.0),
+                Text::new("Nested container").font_size(13.0),
                 Row::new(el![
                     Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(200, 60, 60)),
                     Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(60, 200, 60)),
@@ -522,7 +539,9 @@ pub mod theme_editor {
 
         // -- Layout --
         Column::new(el![
-            Text::new("Theme Editor", 20.0).size(Size::new(Grow, Fit)),
+            Text::new("Theme Editor")
+                .font_size(20.0)
+                .size(Size::new(Grow, Fit)),
             toggle_row,
             radius_row,
             border_row,
