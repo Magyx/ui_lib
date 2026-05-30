@@ -11,7 +11,7 @@ use crate::{
 const ROOT_SEED: u64 = 0xCBF2_9CE4_8422_2325;
 
 #[inline]
-fn mix64(parent: Id, idx: usize) -> Id {
+pub fn mix64(parent: Id, idx: usize) -> Id {
     let mut z =
         (parent ^ 0x9E37_79B9_7F4A_7C15u64) ^ (idx as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15u64);
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9u64);
@@ -552,9 +552,12 @@ impl LayoutEngine {
                 _ => 0,
             };
 
-            let resolved_w = max(total_min_w, base_w).min(self.nodes[id].max.width);
-            self.nodes[id].current_size.width = resolved_w;
-            self.nodes[id].min.width = total_min_w;
+            let natural_w = max(total_min_w, base_w);
+            self.nodes[id].content_size.width = natural_w;
+            self.nodes[id].current_size.width = natural_w;
+            if !self.nodes[id].clip_children {
+                self.nodes[id].min.width = total_min_w;
+            }
         } else {
             let base_w = match self.nodes[id].size.width {
                 Length::Fixed(w) => {
@@ -564,8 +567,9 @@ impl LayoutEngine {
                 }
                 _ => 0,
             };
-            let resolved_w = max(self.nodes[id].min.width, base_w).min(self.nodes[id].max.width);
-            self.nodes[id].current_size.width = resolved_w;
+            let natural_w = max(self.nodes[id].min.width, base_w);
+            self.nodes[id].content_size.width = natural_w;
+            self.nodes[id].current_size.width = natural_w.min(self.nodes[id].max.width);
         }
     }
 
