@@ -244,15 +244,22 @@ impl Color {
     pub const fn splat(c: u8) -> Self {
         Self::rgba(c, c, c, c)
     }
-
     #[inline]
     pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self::rgba(r, g, b, 0xFF)
     }
-
     #[inline]
     pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self((r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24))
+    }
+    #[inline]
+    pub const fn from_hex(hex: u32) -> Self {
+        let r = ((hex >> 24) & 0xFF) as u8;
+        let g = ((hex >> 16) & 0xFF) as u8;
+        let b = ((hex >> 8) & 0xFF) as u8;
+        let a = (hex & 0xFF) as u8;
+
+        Self::rgba(r, g, b, a)
     }
 
     #[inline]
@@ -285,7 +292,7 @@ impl Color {
         ((self.0 & 0xFF_00_00_00) >> 24) as u8
     }
 
-    pub fn into_cosmic(self) -> cosmic_text::Color {
+    pub fn as_cosmic(self) -> cosmic_text::Color {
         cosmic_text::Color::rgba(self.r(), self.g(), self.b(), self.a())
     }
 }

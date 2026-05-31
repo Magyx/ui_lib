@@ -31,9 +31,9 @@ pub struct Scrollable<M> {
 
     scrollbar_behavior: ScrollBarBehavior,
 
-    bar_color: Color,
-    thumb_color: Color,
-    bg: Color,
+    bar_color: Option<Color>,
+    thumb_color: Option<Color>,
+    bg: Option<Color>,
 }
 
 impl<M: 'static> Scrollable<M> {
@@ -49,9 +49,9 @@ impl<M: 'static> Scrollable<M> {
             id: 0,
             child: child.into(),
             scrollbar_behavior: ScrollBarBehavior::Auto,
-            bar_color: Color::rgba(70, 70, 80, 128),
-            thumb_color: Color::rgb(200, 200, 210),
-            bg: Color::TRANSPARENT,
+            bar_color: None,
+            thumb_color: None,
+            bg: None,
         }
     }
 
@@ -68,7 +68,7 @@ impl<M: 'static> Scrollable<M> {
         self
     }
     pub fn bg(mut self, c: Color) -> Self {
-        self.bg = c;
+        self.bg = Some(c);
         self
     }
     pub fn with_scrollbar(mut self, behavior: ScrollBarBehavior) -> Self {
@@ -76,8 +76,8 @@ impl<M: 'static> Scrollable<M> {
         self
     }
     pub fn scrollbar_color(mut self, bar: Color, thumb: Color) -> Self {
-        self.bar_color = bar;
-        self.thumb_color = thumb;
+        self.bar_color = Some(bar);
+        self.thumb_color = Some(thumb);
         self
     }
 
@@ -169,18 +169,19 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         (0, -st.y)
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        if self.bg.a() > 0 {
-            out.push(Instance::ui(
-                Position::new(self.x as f32, self.y as f32),
-                Size::new(self.w as f32, self.h as f32),
-                self.bg,
-            ));
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+        if let Some(bg) = self.bg {
+            ctx.fill(out, (self.x, self.y, self.w, self.h), bg);
         }
     }
 
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         let content_h = ctx.child_content_height();
+        let bar = self.bar_color.unwrap_or_else(|| {
+            let s = ctx.theme.surface_variant;
+            Color::rgba(s.r(), s.g(), s.b(), 128)
+        });
+        let thumb = self.thumb_color.unwrap_or(ctx.theme.on_surface_variant);
         let state = self.ensure_state(ctx.view_state);
         state.content_h = content_h;
         if let Some((tx, ty, tw, th)) = self.thumb_rect(state, content_h) {
@@ -188,12 +189,12 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             out.push(Instance::ui(
                 Position::new(track_x, track_y),
                 Size::new(track_w, track_h),
-                self.bar_color,
+                bar,
             ));
             out.push(Instance::ui(
                 Position::new(tx, ty),
                 Size::new(tw, th),
-                self.thumb_color,
+                thumb,
             ));
         }
     }

@@ -15,14 +15,15 @@ pub struct Button<M> {
 
     id: Id,
     size: Size<Length>,
-    content: Option<Element<M>>,
-
-    normal_color: Color,
-    hover_color: Color,
-    pressed_color: Color,
-
     min: Size<i32>,
     max: Size<i32>,
+
+    content: Option<Element<M>>,
+
+    normal_color: Option<Color>,
+    hover_color: Option<Color>,
+    pressed_color: Option<Color>,
+    border: bool,
 
     on_press: Option<M>,
 }
@@ -36,12 +37,13 @@ impl<M: Clone + 'static> Button<M> {
             h: 0,
             id: 0,
             size,
-            content: None,
-            normal_color: color,
-            hover_color: color,
-            pressed_color: color,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
+            content: None,
+            normal_color: Some(color),
+            hover_color: Some(color),
+            pressed_color: Some(color),
+            border: false,
             on_press: None,
         }
     }
@@ -57,26 +59,31 @@ impl<M: Clone + 'static> Button<M> {
             h: 0,
             id: 0,
             size: Size::splat(Length::Fit),
-            content: Some(content.into()),
-            normal_color: Color::TRANSPARENT,
-            hover_color: Color::TRANSPARENT,
-            pressed_color: Color::TRANSPARENT,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
+            content: Some(content.into()),
+            normal_color: None,
+            hover_color: None,
+            pressed_color: None,
+            border: false,
             on_press: None,
         }
     }
 
     pub fn color(mut self, c: Color) -> Self {
-        self.normal_color = c;
+        self.normal_color = Some(c);
         self
     }
     pub fn hover_color(mut self, c: Color) -> Self {
-        self.hover_color = c;
+        self.hover_color = Some(c);
         self
     }
     pub fn pressed_color(mut self, c: Color) -> Self {
-        self.pressed_color = c;
+        self.pressed_color = Some(c);
+        self
+    }
+    pub fn border(mut self) -> Self {
+        self.border = true;
         self
     }
     pub fn size(mut self, size: Size<Length>) -> Self {
@@ -141,18 +148,20 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         let st = ctx.view_state.get::<ButtonState>(&self.id);
         let hovered = st.is_some_and(|s| s.hovered);
         let pressed = st.is_some_and(|s| s.pressed);
-        let color = if pressed {
-            self.pressed_color
+        let theme = ctx.theme;
+        let fill = if pressed {
+            self.pressed_color.unwrap_or(theme.primary_container)
         } else if hovered {
-            self.hover_color
+            self.hover_color.unwrap_or(theme.primary_container)
         } else {
-            self.normal_color
+            self.normal_color.unwrap_or(theme.primary)
         };
-        instances.push(Instance::ui(
-            Position::new(self.x as f32, self.y as f32),
-            Size::new(self.w as f32, self.h as f32),
-            color,
-        ));
+        let border = if self.border {
+            theme.outline
+        } else {
+            Color::TRANSPARENT
+        };
+        ctx.surface(instances, (self.x, self.y, self.w, self.h), fill, border);
     }
 
     fn handle_after(&mut self, ctx: &mut EventCtx<M>) {

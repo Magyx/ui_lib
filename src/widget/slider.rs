@@ -22,10 +22,10 @@ pub struct Slider<M> {
     value: f32,
 
     track_h: i32,
-    track_color: Color,
-    fill_color: Color,
-    knob_color: Color,
-    bg_color: Color,
+    track_color: Option<Color>,
+    fill_color: Option<Color>,
+    knob_color: Option<Color>,
+    bg_color: Option<Color>,
 
     on_change: Option<Box<dyn Fn(f32) -> M + Send + Sync + 'static>>,
 }
@@ -49,10 +49,10 @@ impl<M> Slider<M> {
             value,
 
             track_h: 6,
-            track_color: Color::rgb(70, 70, 80),
-            fill_color: Color::rgb(45, 150, 245),
-            knob_color: Color::rgb(220, 220, 230),
-            bg_color: Color::TRANSPARENT,
+            track_color: None,
+            fill_color: None,
+            knob_color: None,
+            bg_color: None,
 
             on_change: None,
         }
@@ -64,14 +64,20 @@ impl<M> Slider<M> {
         self.on_change = Some(Box::new(f));
         self
     }
-    pub fn colors(mut self, track: Color, fill: Color, knob: Color) -> Self {
-        self.track_color = track;
-        self.fill_color = fill;
-        self.knob_color = knob;
+    pub fn track_color(mut self, c: Color) -> Self {
+        self.track_color = Some(c);
+        self
+    }
+    pub fn fill_color(mut self, c: Color) -> Self {
+        self.fill_color = Some(c);
+        self
+    }
+    pub fn knob_color(mut self, c: Color) -> Self {
+        self.knob_color = Some(c);
         self
     }
     pub fn background(mut self, c: Color) -> Self {
-        self.bg_color = c;
+        self.bg_color = Some(c);
         self
     }
     pub fn min(mut self, s: Size<i32>) -> Self {
@@ -189,38 +195,53 @@ impl<M: 'static> Widget<M> for Slider<M> {
         unreachable!()
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        if self.bg_color.a() != 0 {
-            out.push(Instance::ui(
-                Position::new(self.x as f32, self.y as f32),
-                Size::new(self.w as f32, self.h as f32),
-                self.bg_color,
-            ));
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+        let theme = ctx.theme;
+        let track = self.track_color.unwrap_or(theme.surface_variant);
+        let fill_c = self.fill_color.unwrap_or(theme.primary);
+        let knob = self.knob_color.unwrap_or(theme.on_surface);
+        if let Some(bg) = self.bg_color {
+            ctx.fill(out, (self.x, self.y, self.w, self.h), bg);
         }
 
         let th = self.track_h.clamp(2, self.h.max(2)) as f32;
         let ty = self.y as f32 + (self.h as f32 - th) / 2.0;
-
-        out.push(Instance::ui(
+        out.push(Instance::ui_rounded(
             Position::new(self.x as f32, ty),
             Size::new(self.w as f32, th),
-            self.track_color,
+            track,
+            theme.corner_radius,
+            0,
+            Color::TRANSPARENT,
         ));
 
         let kcx = self.knob_center_x();
         let kw = self.knob_size();
         let kx = kcx - kw / 2.0;
         let fw = (kx - self.x as f32).max(0.0);
-        out.push(Instance::ui(
+        out.push(Instance::ui_rounded(
             Position::new(self.x as f32, ty),
             Size::new(fw, th),
-            self.fill_color,
+            fill_c,
+            theme.corner_radius,
+            0,
+            Color::TRANSPARENT,
         ));
-        let ky = self.y as f32 + (self.h as f32 - kw) / 2.0;
+        // TODO: should probably add per stroke control for rounding
         out.push(Instance::ui(
+            Position::new((self.x + 6) as f32, ty),
+            Size::new(fw - 6.0, th),
+            fill_c,
+        ));
+
+        let ky = self.y as f32 + (self.h as f32 - kw) / 2.0;
+        out.push(Instance::ui_rounded(
             Position::new(kx, ky),
             Size::new(kw, kw),
-            self.knob_color,
+            knob,
+            theme.corner_radius,
+            theme.border_width / 2,
+            theme.outline,
         ));
     }
 

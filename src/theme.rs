@@ -1,4 +1,43 @@
+use cosmic_text::{Style, Weight};
+
 use crate::model::Color;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextStyle {
+    pub font_size: f32,
+    pub line_height: f32,
+    pub weight: Weight,
+    pub style: Style,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Typography {
+    pub h1: TextStyle,
+    pub h2: TextStyle,
+    pub h3: TextStyle,
+    pub body: TextStyle,
+    pub label: TextStyle,
+    pub caption: TextStyle,
+}
+
+impl Default for Typography {
+    fn default() -> Self {
+        let t = |font_size, line_height, weight, style| TextStyle {
+            font_size,
+            line_height,
+            weight,
+            style,
+        };
+        Self {
+            h1: t(32.0, 1.20, Weight::BOLD, Style::Normal),
+            h2: t(24.0, 1.25, Weight::BOLD, Style::Normal),
+            h3: t(18.0, 1.30, Weight::SEMIBOLD, Style::Normal),
+            body: t(14.0, 1.20, Weight::NORMAL, Style::Normal),
+            label: t(13.0, 1.20, Weight::MEDIUM, Style::Normal),
+            caption: t(12.0, 1.30, Weight::NORMAL, Style::Normal),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Theme {
@@ -46,6 +85,9 @@ pub struct Theme {
     pub corner_radius: f32,
     /// Default border width when a widget opts into having a border.
     pub border_width: i32,
+
+    /// Global typography styles for headers, body text, and labels.
+    pub typography: Typography,
 }
 
 impl Theme {
@@ -77,37 +119,41 @@ impl Theme {
 
             corner_radius: 0.0,
             border_width: 1,
+
+            typography: Typography::default(),
         }
     }
 
     /// Light theme.
     pub fn light() -> Self {
         Self {
-            bg: Color::rgb(224, 230, 240),
-            on_bg: Color::rgb(24, 31, 46),
+            bg: Color::rgb(224, 228, 235),
+            on_bg: Color::rgb(26, 30, 39),
 
-            surface: Color::rgb(253, 253, 255),
-            on_surface: Color::rgb(26, 33, 48),
-            surface_variant: Color::rgb(210, 217, 229),
-            on_surface_variant: Color::rgb(88, 99, 119),
+            surface: Color::rgb(249, 250, 253),
+            on_surface: Color::rgb(28, 32, 42),
+            surface_variant: Color::rgb(220, 224, 232),
+            on_surface_variant: Color::rgb(90, 97, 112),
 
-            primary: Color::rgb(37, 99, 235),
+            primary: Color::rgb(40, 112, 222),
             on_primary: Color::rgb(255, 255, 255),
-            primary_container: Color::rgb(209, 226, 252),
-            on_primary_container: Color::rgb(12, 44, 102),
+            primary_container: Color::rgb(210, 227, 250),
+            on_primary_container: Color::rgb(10, 48, 108),
 
-            secondary: Color::rgb(90, 101, 124),
+            secondary: Color::rgb(94, 103, 126),
             on_secondary: Color::rgb(255, 255, 255),
 
-            error: Color::rgb(220, 38, 38),
+            error: Color::rgb(201, 58, 58),
             on_error: Color::rgb(255, 255, 255),
 
-            outline: Color::rgb(190, 199, 214),
-            outline_variant: Color::rgb(216, 222, 232),
-            focus_outline: Color::rgb(37, 99, 235),
+            outline: Color::rgb(196, 202, 213),
+            outline_variant: Color::rgb(218, 223, 231),
+            focus_outline: Color::rgb(58, 120, 230),
 
             corner_radius: 0.0,
             border_width: 1,
+
+            typography: Typography::default(),
         }
     }
 }
@@ -152,6 +198,7 @@ impl Theme {
     with_color_property!(with_focus_outline, focus_outline);
     with_property!(with_corner_radius, corner_radius, Option<f32>);
     with_property!(with_border_width, border_width, Option<i32>);
+    with_property!(with_typography, typography, Option<Typography>);
 }
 
 #[cfg(test)]

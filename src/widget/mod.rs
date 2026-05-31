@@ -126,7 +126,7 @@ mod image;
 pub use image::{ContentFit, Image};
 
 mod text;
-pub use text::Text;
+pub use text::{Text, TextRole};
 
 mod slider;
 pub use slider::Slider;

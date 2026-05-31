@@ -7,7 +7,8 @@ use crate::{
     event::{KeyState, MouseButton, UiEventRef},
     graphics::{Globals, Gpu},
     layout::LayoutEngine,
-    model::{Position, Size},
+    model::{Color, Position, Size},
+    primitive::Instance,
     render::{text::TextSystem, texture::TextureRegistry},
     theme::Theme,
 };
@@ -330,6 +331,33 @@ impl<'a> PaintCtx<'a> {
             (logical.width as f32 * sf).round() as u32,
             (logical.height as f32 * sf).round() as u32,
         )
+    }
+
+    pub fn fill(&self, out: &mut Vec<Instance>, (x, y, w, h): (i32, i32, i32, i32), color: Color) {
+        if color.a() == 0 {
+            return;
+        }
+        out.push(Instance::ui(
+            Position::new(x as f32, y as f32),
+            Size::new(w as f32, h as f32),
+            color,
+        ));
+    }
+    pub fn surface(
+        &self,
+        out: &mut Vec<Instance>,
+        (x, y, w, h): (i32, i32, i32, i32),
+        fill: Color,
+        border: Color,
+    ) {
+        out.push(Instance::ui_rounded(
+            Position::new(x as f32, y as f32),
+            Size::new(w as f32, h as f32),
+            fill,
+            self.theme.corner_radius,
+            self.theme.border_width,
+            border,
+        ));
     }
 }
 

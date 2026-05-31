@@ -2,6 +2,8 @@ use std::borrow::Cow;
 
 use cosmic_text::{Attrs, Buffer, FontSystem, Metrics, Shaping};
 
+use crate::theme::{TextStyle, Theme, Typography};
+
 use super::*;
 
 pub(super) struct TextViewState {
@@ -41,18 +43,23 @@ impl TextViewState {
         }
     }
 
-    fn layout_hit(&self, widget: &Text) -> bool {
+    fn layout_hit(&self, widget: &Text, rs: &TextStyle) -> bool {
         self.layout_text.as_deref() == Some(&*widget.text)
-            && self.layout_font_size == widget.font_size
-            && self.layout_line_height == widget.line_height
+            && self.layout_font_size == rs.font_size
+            && self.layout_line_height == rs.line_height
             && self.layout_wrap == widget.wrap
             && self.layout_family == widget.family
             && self.layout_style == widget.style
             && self.layout_weight == widget.weight
     }
 
-    fn ensure_layout(&mut self, widget: &Text, fs: &mut FontSystem) -> (i32, usize) {
-        if self.layout_hit(widget) {
+    fn ensure_layout(
+        &mut self,
+        widget: &Text,
+        fs: &mut FontSystem,
+        rs: &TextStyle,
+    ) -> (i32, usize) {
+        if self.layout_hit(widget, rs) {
             (self.layout_intrinsic_w, self.layout_line_count)
         } else {
             let wrap = widget.wrap;
@@ -62,7 +69,7 @@ impl TextViewState {
 
                 // (a) Unwrapped measurement
                 b.set_wrap(fs, Wrap::None);
-                b.set_text(fs, &widget.text, &widget.attrs(), Shaping::Basic);
+                b.set_text(fs, &widget.text, &widget.attrs(rs), Shaping::Basic);
                 b.set_size(fs, None, None);
                 b.shape_until_scroll(fs, false);
 
@@ -84,7 +91,7 @@ impl TextViewState {
                     let mut longest = 0.0f32;
                     for piece in widget.text.split_whitespace().filter(|s| !s.is_empty()) {
                         b.set_wrap(fs, Wrap::None);
-                        b.set_text(fs, piece, &widget.attrs(), Shaping::Basic);
+                        b.set_text(fs, piece, &widget.attrs(rs), Shaping::Basic);
                         b.set_size(fs, None, None);
                         b.shape_until_scroll(fs, false);
                         for run in b.layout_runs() {
@@ -108,8 +115,8 @@ impl TextViewState {
             self.shaped_text = None;
 
             self.layout_text = Some(widget.text.to_string());
-            self.layout_font_size = widget.font_size;
-            self.layout_line_height = widget.line_height;
+            self.layout_font_size = rs.font_size;
+            self.layout_line_height = rs.line_height;
             self.layout_wrap = widget.wrap;
             self.layout_family = widget.family.clone();
             self.layout_style = widget.style;
@@ -127,17 +134,41 @@ impl TextViewState {
             && self.shaped_wrap == widget.wrap
     }
 
-    fn ensure_shaped(&mut self, widget: &Text, target_w: f32, fs: &mut FontSystem) {
+    fn ensure_shaped(&mut self, widget: &Text, target_w: f32, fs: &mut FontSystem, rs: &TextStyle) {
         if !self.is_shaped(widget, target_w) {
             let b = &mut self.buffer;
             b.set_wrap(fs, widget.wrap);
-            b.set_text(fs, &widget.text, &widget.attrs(), Shaping::Basic);
+            b.set_text(fs, &widget.text, &widget.attrs(rs), Shaping::Basic);
             b.set_size(fs, Some(target_w), None);
             b.shape_until_scroll(fs, false);
 
             self.shaped_text = Some(widget.text.to_string());
             self.shaped_width = target_w;
             self.shaped_wrap = widget.wrap;
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum TextRole {
+    H1,
+    H2,
+    H3,
+    #[default]
+    Body,
+    Label,
+    Caption,
+}
+
+impl TextRole {
+    fn style(self, typo: &Typography) -> TextStyle {
+        match self {
+            TextRole::H1 => typo.h1,
+            TextRole::H2 => typo.h2,
+            TextRole::H3 => typo.h3,
+            TextRole::Body => typo.body,
+            TextRole::Label => typo.label,
+            TextRole::Caption => typo.caption,
         }
     }
 }
@@ -150,8 +181,9 @@ pub struct Text {
 
     id: Id,
     text: Cow<'static, str>,
-    font_size: f32,
-    line_height: f32,
+    role: TextRole,
+    font_size: Option<f32>,
+    line_height: Option<f32>,
     family: Option<Family>,
     style: Option<Style>,
     weight: Option<Weight>,
@@ -172,8 +204,9 @@ impl Text {
             h: 0,
             id: 0,
             text: content.into(),
-            font_size: 14.0,
-            line_height: 1.2,
+            role: TextRole::default(),
+            font_size: None,
+            line_height: None,
             family: None,
             style: None,
             weight: None,
@@ -183,6 +216,30 @@ impl Text {
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
         }
+    }
+
+    pub fn h1<S: Into<Cow<'static, str>>>(c: S) -> Self {
+        Self::new(c).role(TextRole::H1)
+    }
+    pub fn h2<S: Into<Cow<'static, str>>>(c: S) -> Self {
+        Self::new(c).role(TextRole::H2)
+    }
+    pub fn h3<S: Into<Cow<'static, str>>>(c: S) -> Self {
+        Self::new(c).role(TextRole::H3)
+    }
+    pub fn body<S: Into<Cow<'static, str>>>(c: S) -> Self {
+        Self::new(c).role(TextRole::Body)
+    }
+    pub fn label<S: Into<Cow<'static, str>>>(c: S) -> Self {
+        Self::new(c).role(TextRole::Label)
+    }
+    pub fn caption<S: Into<Cow<'static, str>>>(c: S) -> Self {
+        Self::new(c).role(TextRole::Caption)
+    }
+
+    pub fn role(mut self, role: TextRole) -> Self {
+        self.role = role;
+        self
     }
     pub fn family(mut self, family: Family) -> Self {
         self.family = Some(family);
@@ -201,11 +258,11 @@ impl Text {
         self
     }
     pub fn font_size(mut self, font_size: f32) -> Self {
-        self.font_size = font_size;
+        self.font_size = Some(font_size);
         self
     }
     pub fn line_height(mut self, line_height: f32) -> Self {
-        self.line_height = line_height;
+        self.line_height = Some(line_height);
         self
     }
     pub fn wrap(mut self, wrap: Wrap) -> Self {
@@ -230,23 +287,26 @@ impl Text {
         self.color_opt = Some(c);
     }
 
-    fn attrs(&self) -> Attrs<'_> {
-        let mut attrs = Attrs::new();
+    fn resolved_style(&self, theme: &Theme) -> TextStyle {
+        let base = self.role.style(&theme.typography);
+        TextStyle {
+            font_size: self.font_size.unwrap_or(base.font_size),
+            line_height: self.line_height.unwrap_or(base.line_height),
+            weight: self.weight.unwrap_or(base.weight),
+            style: self.style.unwrap_or(base.style),
+        }
+    }
+    fn attrs(&self, rs: &TextStyle) -> Attrs<'_> {
+        let mut attrs = Attrs::new()
+            .style(self.style.unwrap_or(rs.style))
+            .weight(self.weight.unwrap_or(rs.weight));
 
         if let Some(family) = &self.family {
             attrs = attrs.family(family.as_cosmic());
         }
 
-        if let Some(style) = self.style {
-            attrs = attrs.style(style);
-        }
-
-        if let Some(weight) = self.weight {
-            attrs = attrs.weight(weight);
-        }
-
         if let Some(color) = self.color_opt {
-            attrs = attrs.color(cosmic_text::Color(color.0));
+            attrs = attrs.color(color.as_cosmic());
         }
 
         attrs
@@ -258,8 +318,9 @@ impl Text {
         &self,
         view_state: &'b mut ViewState,
         fs: &mut cosmic_text::FontSystem,
+        rs: &TextStyle,
     ) -> &'b mut TextViewState {
-        let desired = Metrics::relative(self.font_size, self.line_height);
+        let desired = Metrics::relative(rs.font_size, rs.line_height);
         let state = view_state.ensure(self.id, || TextViewState::new(fs, desired));
 
         if state.buffer.metrics().font_size != desired.font_size
@@ -289,11 +350,12 @@ impl<M> Widget<M> for Text {
     }
 
     fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
+        let rs = self.resolved_style(ctx.theme);
         let fs = ctx.text.font_system_mut();
-        let state = self.ensure_state(&mut ctx.ui.view_state, fs);
-        let (intrinsic_w, line_count) = state.ensure_layout(self, fs);
+        let state = self.ensure_state(&mut ctx.ui.view_state, fs, &rs);
+        let (intrinsic_w, line_count) = state.ensure_layout(self, fs, &rs);
 
-        let line_px = (self.font_size * self.line_height).ceil() as i32;
+        let line_px = (rs.font_size * rs.line_height).ceil() as i32;
         let intrinsic_h = (line_count as i32).saturating_mul(line_px);
 
         Node {
@@ -308,10 +370,11 @@ impl<M> Widget<M> for Text {
     }
 
     fn min_height_for_width<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>, width: i32) -> Option<i32> {
+        let rs = self.resolved_style(ctx.theme);
         let target_w = width.max(1) as f32;
         let fs = ctx.text.font_system_mut();
-        let state = self.ensure_state(&mut ctx.ui.view_state, fs);
-        state.ensure_shaped(self, target_w, fs);
+        let state = self.ensure_state(&mut ctx.ui.view_state, fs, &rs);
+        state.ensure_shaped(self, target_w, fs, &rs);
 
         let mut lines = 0usize;
         let mut last = f32::NAN;
@@ -322,7 +385,7 @@ impl<M> Widget<M> for Text {
             }
         }
         let lines = lines.max(1) as i32;
-        let line_px = (self.font_size * self.line_height).ceil() as i32;
+        let line_px = (rs.font_size * rs.line_height).ceil() as i32;
         let h = lines.saturating_mul(line_px);
 
         Some(h.clamp(self.min.height, self.max.height))
@@ -349,7 +412,7 @@ impl<M> Widget<M> for Text {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        const BASE_COLOR: Color = Color::rgba(255, 255, 255, 255);
+        let base_color = ctx.theme.on_surface;
 
         let Some(buf) = self.get_state(ctx.view_state).map(|vs| &vs.buffer) else {
             return;
@@ -367,7 +430,7 @@ impl<M> Widget<M> for Text {
                 let tint = glyph
                     .color_opt
                     .map(|c| Color::rgba(c.r(), c.g(), c.b(), c.a()))
-                    .unwrap_or(BASE_COLOR);
+                    .unwrap_or(base_color);
 
                 let Some(handle) = ctx.text.lookup_glyph_handle(cache_key) else {
                     continue;
