@@ -31,6 +31,8 @@ pub struct TextInputViewState {
 
     value: String,
     cursor: Cursor,
+    selection_anchor: Option<Cursor>,
+    dragging: bool,
     caret_cache: CaretCache,
 }
 
@@ -42,30 +44,61 @@ impl TextInputViewState {
 
             value: String::new(),
             cursor: Cursor::new(0, 0),
+            selection_anchor: None,
+            dragging: false,
             caret_cache: CaretCache::default(),
         }
     }
 
     fn cursor_to_byte_offset(&self) -> usize {
-        let mut offset = 0usize;
-        let mut line = 0usize;
-        // Walk through `value` counting newlines to find where cursor.line starts.
-        for (i, ch) in self.value.char_indices() {
-            if line == self.cursor.line {
-                // We've reached the target line. Add the within-line index.
-                return (i + self.cursor.index).min(self.value.len());
-            }
-            if ch == '\n' {
-                line += 1;
-                offset = i + 1;
-            }
+        cursor_byte_offset(&self.value, self.cursor)
+    }
+
+    /// The selected byte range as `(start, end)` with `start <= end`, or `None`
+    /// when there is no (non-empty) selection.
+    fn selection_range(&self) -> Option<(usize, usize)> {
+        let anchor = self.selection_anchor?;
+        let a = cursor_byte_offset(&self.value, anchor);
+        let c = self.cursor_to_byte_offset();
+        if a == c {
+            None
+        } else {
+            Some((a.min(c), a.max(c)))
         }
-        // If the cursor line matches the last line (no trailing \n found mid-loop)
-        if line == self.cursor.line {
-            return (offset + self.cursor.index).min(self.value.len());
+    }
+
+    fn has_selection(&self) -> bool {
+        self.selection_range().is_some()
+    }
+
+    /// The currently selected text, if any.
+    fn selected_text(&self) -> Option<String> {
+        let (s, e) = self.selection_range()?;
+        Some(self.value[s..e].to_string())
+    }
+
+    /// Delete the selected range, placing the cursor at its start. Returns true
+    /// if a non-empty selection was removed. Always clears the anchor.
+    fn delete_selection(&mut self) -> bool {
+        let removed = if let Some((s, e)) = self.selection_range() {
+            self.value.replace_range(s..e, "");
+            self.cursor = Self::byte_offset_to_cursor(&self.value, s);
+            true
+        } else {
+            false
+        };
+        self.selection_anchor = None;
+        removed
+    }
+
+    /// Select the entire contents. Returns true if there was anything to select.
+    fn select_all(&mut self) -> bool {
+        if self.value.is_empty() {
+            return false;
         }
-        // Cursor line is past all lines — clamp to end.
-        self.value.len()
+        self.selection_anchor = Some(Cursor::new(0, 0));
+        self.cursor = Self::byte_offset_to_cursor(&self.value, self.value.len());
+        true
     }
 
     /// Convert a flat byte offset into `value` to a `Cursor` (line, index-within-line).
@@ -87,6 +120,37 @@ impl TextInputViewState {
 }
 
 pub type Handler<M> = dyn Fn(&str) -> M + Send + Sync + 'static;
+
+fn cursor_byte_offset(value: &str, cursor: Cursor) -> usize {
+    let mut offset = 0usize;
+    let mut line = 0usize;
+    // Walk through `value` counting newlines to find where cursor.line starts.
+    for (i, ch) in value.char_indices() {
+        if line == cursor.line {
+            // We've reached the target line. Add the within-line index.
+            return (i + cursor.index).min(value.len());
+        }
+        if ch == '\n' {
+            line += 1;
+            offset = i + 1;
+        }
+    }
+    // If the cursor line matches the last line (no trailing \n found mid-loop)
+    if line == cursor.line {
+        return (offset + cursor.index).min(value.len());
+    }
+    // Cursor line is past all lines — clamp to end.
+    value.len()
+}
+
+/// Order two cursors so the returned pair is `(start, end)` in document order.
+fn order_cursors(a: Cursor, b: Cursor) -> (Cursor, Cursor) {
+    if (a.line, a.index) <= (b.line, b.index) {
+        (a, b)
+    } else {
+        (b, a)
+    }
+}
 
 pub trait TextMode {
     fn wrap() -> Wrap;
@@ -253,6 +317,10 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         view_state.get_mut::<TextInputViewState>(&self.id)
     }
 
+    fn is_empty(&self, view_state: &ViewState) -> bool {
+        self.state(view_state).is_none_or(|s| s.value.is_empty())
+    }
+
     // TODO: this should be cached.
     /// Compute the pixel (x, y, height) of the cursor by finding the glyph at cursor.index
     /// in the layout runs, using cosmic_text's own layout data.
@@ -314,13 +382,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             }
         }
 
-        // The cursor's line had runs but the index was past all glyphs (end of line).
         if let Some(line_y) = last_matching_line_y {
-            // Check if cursor is on a line with no layout runs of its own
-            // (e.g. an empty line after a newline). In that case,
-            // the cursor line_i won't have matched any run.line_i.
-            // We detect this: if we never found a run with run.line_i == cursor.line,
-            // place the cursor one line_advance below the last preceding run.
             let has_run_on_cursor_line = buffer.layout_runs().any(|r| r.line_i == cursor.line);
 
             if !has_run_on_cursor_line {
@@ -345,41 +407,86 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         Some((cx, cy, caret_h))
     }
 
-    /// Apply a `cosmic_text::Motion` to the cursor stored in view state.
-    /// Returns true if the cursor actually moved.
     fn apply_motion(
         &self,
         view_state: &mut ViewState,
         fs: &mut cosmic_text::FontSystem,
         motion: Motion,
+        extend: bool,
     ) -> bool {
-        let Some(cursor) = self.state(view_state).map(|s| s.cursor) else {
+        if self.is_empty(view_state) {
+            return false;
+        }
+        let Some((cursor, sel)) = self
+            .state(view_state)
+            .map(|s| (s.cursor, s.selection_range()))
+        else {
             return false;
         };
+        let mut changed = false;
+
+        if !extend {
+            if let Some((s, e)) = sel {
+                // Plain Left/Right collapses the selection to an edge.
+                let edge = match motion {
+                    Motion::Left => Some(s),
+                    Motion::Right => Some(e),
+                    _ => None,
+                };
+                if let Some(off) = edge {
+                    if let Some(st) = self.state_mut(view_state) {
+                        st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, off);
+                        st.selection_anchor = None;
+                    }
+                    return true;
+                }
+                // Other motions: drop the selection, then move from the cursor.
+                if let Some(st) = self.state_mut(view_state) {
+                    st.selection_anchor = None;
+                }
+                changed = true;
+            }
+        } else if let Some(st) = self.state_mut(view_state)
+            && st.selection_anchor.is_none()
+        {
+            st.selection_anchor = Some(cursor);
+            changed = true;
+        }
+
         let new = view_state
             .get_mut::<text::TextViewState>(&self.child_id)
             .and_then(|tv| tv.buffer.cursor_motion(fs, cursor, None, motion))
             .map(|(c, _)| c);
-        new.is_some_and(|nc| {
-            self.state_mut(view_state).is_some_and(|st| {
-                let moved = st.cursor != nc;
-                st.cursor = nc;
-                moved
-            })
-        })
+
+        if let Some(nc) = new
+            && let Some(st) = self.state_mut(view_state)
+        {
+            if st.cursor != nc {
+                changed = true;
+            }
+            st.cursor = nc;
+        }
+        changed
     }
 
     /// Insert text at the current cursor position, advancing the cursor.
+    /// If there is an active selection it is replaced.
     fn insert_at_cursor(st: &mut TextInputViewState, text: &str) {
+        st.delete_selection();
         let offset = st.cursor_to_byte_offset();
         st.value.insert_str(offset, text);
         let new_offset = offset + text.len();
         st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, new_offset);
+        st.selection_anchor = None;
     }
 
     /// Delete the grapheme before the cursor (backspace behaviour).
+    /// If there is an active selection it is removed instead.
     /// Returns true if anything was deleted.
     fn delete_before_cursor(st: &mut TextInputViewState) -> bool {
+        if st.delete_selection() {
+            return true;
+        }
         let offset = st.cursor_to_byte_offset();
         if offset == 0 || st.value.is_empty() {
             return false;
@@ -394,8 +501,12 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
     }
 
     /// Delete the grapheme after the cursor (delete key behaviour).
+    /// If there is an active selection it is removed instead.
     /// Returns true if anything was deleted.
     fn delete_after_cursor(st: &mut TextInputViewState) -> bool {
+        if st.delete_selection() {
+            return true;
+        }
         let offset = st.cursor_to_byte_offset();
         if offset >= st.value.len() {
             return false;
@@ -409,6 +520,20 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         // (e.g. deleting a \n merges two lines).
         st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, offset);
         true
+    }
+
+    /// Hit-test the current mouse position to a text cursor.
+    fn hit_cursor(&self, ctx: &EventCtx<M>) -> Option<Cursor> {
+        if self.is_empty(&ctx.ui.view_state) {
+            return Some(Cursor::new(0, 0));
+        }
+        let (l, t) = self.text_origin();
+        let cx = ctx.ui.mouse_pos.x - l as f32;
+        let cy = ctx.ui.mouse_pos.y - t as f32;
+        ctx.ui
+            .view_state
+            .get::<text::TextViewState>(&self.child_id)
+            .and_then(|tv| tv.buffer.hit(cx, cy))
     }
 }
 
@@ -529,12 +654,53 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     }
 
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        const SELECTION_ALPHA: u8 = 96;
+        const SELECTION_PAD_X: f32 = 1.5;
+        const SELECTION_PAD_Y: f32 = 1.0;
+
         let Some(st) = self.state(ctx.view_state) else {
             return;
         };
         if !st.focused {
             return;
         }
+
+        let clip_l = self.x as f32;
+        let clip_r = (self.x + self.w) as f32;
+
+        if !self.is_empty(ctx.view_state)
+            && let Some(anchor) = st.selection_anchor
+            && anchor != st.cursor
+        {
+            let (start, end) = order_cursors(anchor, st.cursor);
+            let (l, t) = self.text_origin();
+            let p = ctx.theme.primary_container;
+            let sel_color = Color::rgba(p.r(), p.g(), p.b(), SELECTION_ALPHA);
+            if let Some(buf) = ctx
+                .view_state
+                .get::<text::TextViewState>(&self.child_id)
+                .map(|tv| &tv.buffer)
+            {
+                for run in buf.layout_runs() {
+                    if let Some((rx, rw)) = run.highlight(start, end)
+                        && rw > 0.0
+                    {
+                        let x0 = (l as f32 + rx - SELECTION_PAD_X).max(clip_l);
+                        let x1 = (l as f32 + rx + rw + SELECTION_PAD_X).min(clip_r);
+                        let w = x1 - x0;
+                        if w <= 0.0 {
+                            continue;
+                        }
+                        instances.push(Instance::ui(
+                            Position::new(x0, t as f32 + run.line_top - SELECTION_PAD_Y),
+                            Size::new(w, run.line_height + 2.0 * SELECTION_PAD_Y),
+                            sel_color,
+                        ));
+                    }
+                }
+            }
+        }
+
         if let Some((cx, cy, ch)) = st.caret_cache.rect {
             // no h-scroll yet: hide caret once it leaves the field
             if cx < self.x as f32 || cx > (self.x + self.w) as f32 {
@@ -562,27 +728,76 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             (was_hovered, st.hovered, st.focused)
         };
 
-        if hovered && ctx.is_mouse_released(MouseButton::Left) {
-            let (l, t) = self.text_origin();
-            let click_x = ctx.ui.mouse_pos.x - l as f32;
-            let click_y = ctx.ui.mouse_pos.y - t as f32;
+        let shift = ctx.ui.modifiers.shift;
 
-            let hit_cursor = ctx
-                .ui
-                .view_state
-                .get::<text::TextViewState>(&self.child_id)
-                .and_then(|tv| tv.buffer.hit(click_x, click_y));
+        // Mouse press inside: focus, then either extend the selection (Shift) or
+        // place a fresh caret and arm a potential drag-select.
+        if hovered && ctx.is_mouse_pressed(MouseButton::Left) {
+            let hit = self.hit_cursor(ctx);
             ctx.ui.kbd_focus_item = Some(self.id);
             if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
                 st.focused = true;
-                st.cursor = hit_cursor.unwrap_or_else(|| Cursor::new(0, st.value.len()));
+                let c = hit.unwrap_or_else(|| Cursor::new(0, st.value.len()));
+                if shift {
+                    if st.selection_anchor.is_none() {
+                        st.selection_anchor = Some(st.cursor);
+                    }
+                } else {
+                    st.selection_anchor = Some(c);
+                }
+                st.cursor = c;
+                st.dragging = true;
             }
             ctx.ui.request_redraw();
         }
 
+        // Mouse drag: extend the selection while the button is held down.
+        if focused
+            && ctx.ui.is_button_down(MouseButton::Left)
+            && matches!(ctx.event, Some(UiEventRef::CursorMoved { .. }))
+        {
+            let dragging = self.state(&ctx.ui.view_state).is_some_and(|s| s.dragging);
+            if dragging && let Some(c) = self.hit_cursor(ctx) {
+                let moved = self.state_mut(&mut ctx.ui.view_state).is_some_and(|st| {
+                    let m = st.cursor != c;
+                    st.cursor = c;
+                    m
+                });
+                if moved {
+                    ctx.ui.request_redraw();
+                }
+            }
+        }
+
+        // Mouse release: end any drag. A plain release without a preceding press
+        // (e.g. a synthetic click) still places the caret.
+        if hovered && ctx.is_mouse_released(MouseButton::Left) {
+            let hit = self.hit_cursor(ctx);
+            ctx.ui.kbd_focus_item = Some(self.id);
+            if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                st.focused = true;
+                let was_dragging = st.dragging;
+                st.dragging = false;
+                if !was_dragging {
+                    let c = hit.unwrap_or_else(|| Cursor::new(0, st.value.len()));
+                    if shift {
+                        if st.selection_anchor.is_none() {
+                            st.selection_anchor = Some(st.cursor);
+                        }
+                    } else {
+                        st.selection_anchor = Some(c);
+                    }
+                    st.cursor = c;
+                }
+            }
+            ctx.ui.request_redraw();
+        }
+
+        // Click outside while focused: unfocus.
         if ctx.is_mouse_pressed(MouseButton::Left) && !hovered && focused {
             if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
                 st.focused = false;
+                st.dragging = false;
             }
             ctx.ui.kbd_focus_item = None;
         }
@@ -609,6 +824,35 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                 }
                 UiEventRef::Key(k) if k.state == KeyState::Pressed => {
                     use LogicalKey::*;
+                    let cmd = ctx.ui.modifiers.control || ctx.ui.modifiers.super_;
+
+                    if cmd && let Character(s) = &k.logical_key {
+                        match s.to_lowercase().as_str() {
+                            "a" => {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
+                                    && st.select_all()
+                                {
+                                    needs_redraw = true;
+                                }
+                            }
+                            "c" => { // Copy
+                            }
+                            "x" => { // Cut
+                            }
+                            "v" => { // Paste
+                            }
+                            // Any other Ctrl/Cmd+letter is swallowed (not typed).
+                            _ => {}
+                        }
+                        if let Some(msg) = queued_emit.take() {
+                            ctx.ui.emit(msg);
+                        }
+                        if needs_redraw {
+                            ctx.ui.request_redraw();
+                        }
+                        return;
+                    }
+                    let extend = shift;
                     match k.logical_key {
                         Backspace => {
                             if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
@@ -630,39 +874,70 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                                 needs_redraw = true;
                             }
                         }
+                        Escape => {
+                            // Clear a selection if present, otherwise unfocus.
+                            let had_sel = self
+                                .state(&ctx.ui.view_state)
+                                .is_some_and(|s| s.has_selection());
+                            if had_sel {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                    st.selection_anchor = None;
+                                }
+                            } else {
+                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
+                                    st.focused = false;
+                                }
+                                if ctx.ui.kbd_focus_item == Some(self.id) {
+                                    ctx.ui.kbd_focus_item = None;
+                                }
+                            }
+                            needs_redraw = true;
+                        }
                         ArrowLeft => {
                             let fs = ctx.text.font_system_mut();
                             needs_redraw |=
-                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Left);
+                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Left, extend);
                         }
                         ArrowRight => {
                             let fs = ctx.text.font_system_mut();
-                            needs_redraw |=
-                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Right);
+                            needs_redraw |= self.apply_motion(
+                                &mut ctx.ui.view_state,
+                                fs,
+                                Motion::Right,
+                                extend,
+                            );
                         }
                         ArrowUp => {
                             if TypeId::of::<Mode>() == TypeId::of::<MultiLine>() {
                                 let fs = ctx.text.font_system_mut();
-                                needs_redraw |=
-                                    self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Up);
+                                needs_redraw |= self.apply_motion(
+                                    &mut ctx.ui.view_state,
+                                    fs,
+                                    Motion::Up,
+                                    extend,
+                                );
                             }
                         }
                         ArrowDown => {
                             if TypeId::of::<Mode>() == TypeId::of::<MultiLine>() {
                                 let fs = ctx.text.font_system_mut();
-                                needs_redraw |=
-                                    self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Down);
+                                needs_redraw |= self.apply_motion(
+                                    &mut ctx.ui.view_state,
+                                    fs,
+                                    Motion::Down,
+                                    extend,
+                                );
                             }
                         }
                         Home => {
                             let fs = ctx.text.font_system_mut();
                             needs_redraw |=
-                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Home);
+                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Home, extend);
                         }
                         End => {
                             let fs = ctx.text.font_system_mut();
                             needs_redraw |=
-                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::End);
+                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::End, extend);
                         }
                         Enter => {
                             if TypeId::of::<Mode>() == TypeId::of::<SingleLine>() {
