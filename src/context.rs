@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    event::{KeyState, MouseButton, UiEventRef},
+    event::{KeyState, Modifiers, MouseButton, UiEventRef},
     graphics::{Globals, Gpu},
     layout::LayoutEngine,
     model::{Color, Position, Size},
@@ -141,6 +141,8 @@ pub struct Context<M> {
     pub mouse_buttons_pressed: u32,
     pub mouse_buttons_released: u32,
 
+    pub modifiers: Modifiers,
+
     pub hot_item: Option<Id>,
     pub active_item: Option<Id>,
     pub kbd_focus_item: Option<Id>,
@@ -164,6 +166,8 @@ impl<M> Context<M> {
             mouse_buttons_down: 0,
             mouse_buttons_pressed: 0,
             mouse_buttons_released: 0,
+
+            modifiers: Modifiers::default(),
 
             hot_item: None,
             active_item: None,

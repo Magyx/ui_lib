@@ -714,6 +714,9 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                     }
                 }
             }
+            Event::ModifiersChanged(m) => {
+                target.ctx.modifiers = m;
+            }
             _ => (),
         }
 
