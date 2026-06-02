@@ -4,22 +4,70 @@ use ui::{
     el,
     graphics::TargetId,
     model::*,
+    theme::Theme,
     widget::{
         Button, Column, Element, Length, Overlay, Rectangle, Row, Scrollable, Slider, Spacer, Text,
         TextArea, TextField, WrappingRows,
     },
 };
 
-fn small_block(r: u8, g: u8, b: u8) -> Element<Message> {
+/// Spacing scale, in logical pixels.
+#[allow(dead_code)]
+pub mod space {
+    pub const XS: i32 = 4;
+    pub const SM: i32 = 8;
+    pub const MD: i32 = 12;
+    pub const LG: i32 = 16;
+    pub const XL: i32 = 24;
+}
+
+/// Common control dimensions, in logical pixels.
+#[allow(dead_code)]
+pub mod size {
+    pub const CONTROL_H: i32 = 36;
+    pub const SLIDER_H: i32 = 28;
+    pub const ROW_H: i32 = 36;
+    pub const HEADER_H: i32 = 56;
+    pub const BLOCK: i32 = 24;
+}
+
+/// A fixed, categorical palette of distinct fills.
+pub mod palette {
+    use ui::model::Color;
+
+    pub const COLORS: [Color; 8] = [
+        Color::rgb(231, 76, 60),  // red
+        Color::rgb(230, 126, 34), // orange
+        Color::rgb(241, 196, 15), // yellow
+        Color::rgb(46, 204, 113), // green
+        Color::rgb(26, 188, 156), // teal
+        Color::rgb(52, 152, 219), // blue
+        Color::rgb(91, 105, 224), // indigo
+        Color::rgb(155, 89, 182), // purple
+    ];
+}
+
+/// Pick a marker color by index (wraps around the palette).
+pub fn swatch(i: usize) -> Color {
+    palette::COLORS[i % palette::COLORS.len()]
+}
+
+/// Apply a translucent alpha to a color (handy for overlays/scrim).
+pub fn with_alpha(c: Color, a: u8) -> Color {
+    Color::rgba(c.r(), c.g(), c.b(), a)
+}
+
+fn small_block(color: Color) -> Element<Message> {
     Rectangle::new(
-        Size::new(Length::Fixed(24), Length::Fixed(24)),
-        Color::rgb(r, g, b),
+        Size::new(Length::Fixed(size::BLOCK), Length::Fixed(size::BLOCK)),
+        color,
     )
     .into()
 }
 
 pub mod layout;
 pub mod scrollable;
+
 pub mod interaction {
 
     use super::*;
@@ -31,15 +79,13 @@ pub mod interaction {
             Some(t) => t,
             None => return Rectangle::placeholder().into(),
         };
+        let t = &state.theme;
 
         /* 1) button */
         let blocks = || {
             Row::new(
                 (0..(target.counter % 6))
-                    .map(|i| {
-                        let c = (i * 30 + 40) as u8;
-                        small_block(c, 30, 200u8.saturating_sub(c))
-                    })
+                    .map(|i| small_block(swatch(i as usize)))
                     .collect::<Vec<_>>(),
             )
             .color(Color::TRANSPARENT)
@@ -47,57 +93,56 @@ pub mod interaction {
         };
         let buttons = Column::new(el![
             Row::new(el![
-                Button::new(Size::new(Fixed(120), Fixed(36)), Color::rgb(200, 50, 50))
-                    .hover_color(Color::rgb(50, 200, 50))
-                    .pressed_color(Color::rgb(50, 50, 200))
+                Button::new(Size::new(Fixed(120), Fixed(size::CONTROL_H)), t.primary)
+                    .hover_color(t.primary_container)
+                    .pressed_color(t.primary_container)
                     .on_press(Message::ButtonPressed),
                 blocks()
             ])
-            .padding(Vec4::splat(10))
-            .spacing(10)
-            .color(Color::rgb(220, 220, 240))
+            .padding(Vec4::splat(space::SM))
+            .spacing(space::SM)
+            .color(t.surface)
             .size(Size::new(Grow, Fixed(60))),
             Row::new(el![
                 Button::new_with(
                     Column::new(el![
                         Spacer::new(Size::new(Grow, Grow)),
-                        Text::new("Click Me!").font_size(18.0).wrap(Wrap::None),
+                        Text::body("Click Me!").wrap(Wrap::None).color(t.on_primary),
                         Spacer::new(Size::new(Grow, Grow)),
                     ])
                     .size(Size::new(Fit, Grow)),
                 )
-                .color(Color::rgb(200, 50, 50))
-                .hover_color(Color::rgb(50, 200, 50))
-                .pressed_color(Color::rgb(50, 50, 200))
                 .on_press(Message::ButtonPressed)
                 .size(Size::new(Fit, Grow)),
                 blocks()
             ])
-            .padding(Vec4::splat(10))
-            .spacing(10)
-            .color(Color::rgb(220, 220, 240))
+            .padding(Vec4::splat(space::SM))
+            .spacing(space::SM)
+            .color(t.surface)
             .size(Size::new(Grow, Fixed(60))),
         ])
-        .color(Color::rgb(100, 80, 100))
-        .spacing(14)
+        .color(Color::TRANSPARENT)
+        .spacing(space::MD)
         .size(Size::new(Grow, Fit));
 
         /* 2) slider */
         let slider_value = format!("Slider value: {:>5.1}", target.slider);
         let slider_row = Row::new(el![
-            Text::new(slider_value)
-                .font_size(16.0)
+            Text::label(slider_value)
                 .wrap(Wrap::None)
-                .size(Size::new(Fit, Fixed(36)))
-                .color(Color::BLACK),
-            Spacer::new(Size::new(Fixed(12), Fixed(1))),
-            Slider::new(Size::new(Grow, Fixed(36)), (0.0, 100.0), target.slider)
-                .on_change(Message::SliderChanged), // emits f32 -> Message
+                .size(Size::new(Fit, Fixed(size::CONTROL_H))),
+            Spacer::new(Size::new(Fixed(space::MD), Fixed(1))),
+            Slider::new(
+                Size::new(Grow, Fixed(size::CONTROL_H)),
+                (0.0, 100.0),
+                target.slider,
+            )
+            .on_change(Message::SliderChanged), // emits f32 -> Message
         ])
-        .spacing(10)
-        .padding(Vec4::splat(10))
-        .color(Color::rgb(235, 235, 245))
-        .size(Size::new(Grow, Fixed(56)));
+        .spacing(space::SM)
+        .padding(Vec4::splat(space::SM))
+        .color(t.surface)
+        .size(Size::new(Grow, Fixed(size::HEADER_H)));
 
         /* 3) text input */
         let greeting = if target.name.is_empty() {
@@ -107,27 +152,24 @@ pub mod interaction {
         };
 
         let inputs = Column::new(el![
-            // Single-line TextField
-            TextField::new(Size::new(Grow, Fixed(36)))
+            // Single-line TextField (themed automatically)
+            TextField::new(Size::new(Grow, Fixed(size::CONTROL_H)))
                 .placeholder("Your name")
                 .on_change(|s| Message::NameChanged(s.to_string())),
             // Live feedback
-            Text::new(greeting)
-                .font_size(16.0)
-                .size(Size::new(Grow, Fit))
-                .color(Color::BLACK),
+            Text::body(greeting).size(Size::new(Grow, Fit)),
             // Multi-line TextArea
             TextArea::new(Size::new(Grow, Fixed(120))).placeholder("Notes (multi-line)")
         ])
-        .spacing(8)
-        .padding(Vec4::splat(10))
-        .color(Color::rgb(245, 245, 245))
+        .spacing(space::SM)
+        .padding(Vec4::splat(space::SM))
+        .color(t.surface)
         .size(Size::new(Grow, Fit));
 
         Column::new(el![buttons, slider_row, inputs,])
-            .spacing(10)
-            .padding(Vec4::splat(16))
-            .color(Color::rgb(100, 80, 100))
+            .spacing(space::SM)
+            .padding(Vec4::splat(space::LG))
+            .color(t.bg)
             .size(Size::new(Grow, Grow))
             .into()
     }
@@ -136,7 +178,6 @@ pub mod interaction {
 pub mod pipeline {
 
     use super::*;
-    use cosmic_text::Weight;
     use ui::widget::SimpleCanvas;
 
     pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
@@ -146,6 +187,8 @@ pub mod pipeline {
             Some(t) => t,
             None => return Rectangle::placeholder().into(),
         };
+        let t = &state.theme;
+
         Overlay::new(el![
             SimpleCanvas::new(
                 Size::new(Grow, Grow),
@@ -156,19 +199,17 @@ pub mod pipeline {
             ),
             Row::new(el![
                 Spacer::new(Size::new(Grow, Fit)),
-                Text::new(format!(
+                Text::h3(format!(
                     "{:.0}",
                     target.fps.iter().sum::<f32>() / target.fps.len().max(1) as f32
-                ),)
-                .font_size(16.0,)
+                ))
                 .size(Size::new(Fit, Fit))
-                .color(Color::BLUE)
-                .weight(Weight::SEMIBOLD),
+                .color(t.error),
             ])
-            .padding(Vec4::splat(10))
+            .padding(Vec4::splat(space::SM))
             .size(Size::new(Grow, Fit)),
         ])
-        .color(Color::rgb(20, 20, 40))
+        .color(t.bg)
         .padding(Vec4::splat(0))
         .size(Size::new(Grow, Grow))
         .into()
@@ -188,6 +229,8 @@ pub mod texture {
         const GRID_COLS: usize = 4;
         const MAX_DEMO_ICONS: usize = 16;
 
+        let t = &state.theme;
+
         let png_cells: Vec<Element<Message>> = state
             .icons
             .iter()
@@ -196,16 +239,16 @@ pub mod texture {
             .collect();
 
         let png_panel = Column::new(el![
-            Text::new("PNG").font_size(16.0).color(Color::BLACK),
+            Text::h3("PNG"),
             WrappingRows::new(NonZero::new(GRID_COLS).unwrap(), png_cells)
-                .col_spacing(8)
-                .row_spacing(8)
+                .col_spacing(space::SM)
+                .row_spacing(space::SM)
                 .size(Size::new(Fit, Fit))
                 .color(Color::TRANSPARENT),
         ])
-        .spacing(10)
-        .padding(Vec4::splat(12))
-        .color(Color::rgb(235, 235, 235))
+        .spacing(space::SM)
+        .padding(Vec4::splat(space::MD))
+        .color(t.surface)
         .size(Size::new(Grow, Fit));
 
         #[cfg(feature = "svg")]
@@ -221,46 +264,44 @@ pub mod texture {
                 .collect();
 
             Column::new(el![
-                Text::new("SVG").font_size(16.0).color(Color::BLACK),
+                Text::h3("SVG"),
                 WrappingRows::new(NonZero::new(GRID_COLS).unwrap(), svg_cells)
-                    .col_spacing(8)
-                    .row_spacing(8)
+                    .col_spacing(space::SM)
+                    .row_spacing(space::SM)
                     .size(Size::new(Fit, Fit))
                     .color(Color::TRANSPARENT),
             ])
-            .spacing(10)
-            .padding(Vec4::splat(12))
-            .color(Color::rgb(235, 235, 235))
+            .spacing(space::SM)
+            .padding(Vec4::splat(space::MD))
+            .color(t.surface)
             .size(Size::new(Grow, Fit))
         };
 
         #[cfg(not(feature = "svg"))]
         let svg_panel = Column::new(el![
-            Text::new("SVG").font_size(16.0).color(Color::BLACK),
-            Text::new("Enable with --features svg")
-                .font_size(14.0)
-                .color(Color::rgb(50, 50, 50)),
+            Text::h3("SVG"),
+            Text::caption("Enable with --features svg").color(t.on_surface_variant),
         ])
-        .spacing(10)
-        .padding(Vec4::splat(12))
-        .color(Color::rgb(235, 235, 235))
+        .spacing(space::SM)
+        .padding(Vec4::splat(space::MD))
+        .color(t.surface)
         .size(Size::new(Grow, Fit));
 
         let two_col = Row::new(el![png_panel, svg_panel])
-            .spacing(16)
+            .spacing(space::LG)
             .size(Size::new(Grow, Fit));
 
         Overlay::new(el![
             Image::new(Size::new(Grow, Grow), state.background.unwrap_or_default())
                 .fit(ContentFit::Cover),
             Column::new(el![
-                Rectangle::new(Size::new(Fixed(70), Fixed(20)), Color::rgb(100, 0, 100)),
-                Rectangle::new(Size::new(Fixed(40), Fixed(30)), Color::rgb(140, 0, 140)),
+                Rectangle::new(Size::new(Fixed(70), Fixed(20)), swatch(7)),
+                Rectangle::new(Size::new(Fixed(40), Fixed(30)), swatch(6)),
             ])
-            .spacing(10)
-            .padding(Vec4::splat(10))
-            .color(Color::rgba(220, 240, 240, 1))
-            .size(Size::new(Fixed(70), Fixed(80))),
+            .spacing(space::SM)
+            .padding(Vec4::splat(space::SM))
+            .color(with_alpha(t.surface, 235))
+            .size(Size::splat(Fit)),
             Row::new(el![two_col])
                 .padding(Vec4::splat(120))
                 .size(Size::new(Grow, Grow)),
@@ -274,56 +315,53 @@ pub mod texture {
 pub mod text {
 
     use super::*;
-    use cosmic_text::Weight;
 
-    pub fn view(_state: &State) -> Element<Message> {
+    pub fn view(state: &State) -> Element<Message> {
         use Length::{Fit, Fixed, Grow};
 
-        // Colors
-        let bg_app = Color::rgb(24, 26, 32);
-        let bg_panel = Color::rgb(34, 38, 46);
-        let bg_panel_alt = Color::rgb(40, 44, 54);
-        let fg_title = Color::rgb(235, 240, 255);
-        let fg_text = Color::rgb(210, 215, 230);
-        let accent = Color::rgb(88, 146, 255);
+        let t = &state.theme;
 
         // Sidebar (fixed width)
         let sidebar = Column::new(el![
-            // Sidebar header
-            Row::new(el![Text::new("Project Nimbus")
-                .font_size(20.0)
-                .color(fg_title)])
-            .padding(Vec4::new(16, 16, 16, 8))
-            .color(Color::TRANSPARENT)
-            .size(Size::new(Grow, Fixed(40))),
+            // Sidebar header — h3 + no-wrap so it stays on one line inside the
+            // narrow sidebar (h2 wrapped to two lines and overflowed its row).
+            Row::new(el![Text::h3("Project Nimbus").wrap(Wrap::None)])
+                .padding(Vec4::new(space::LG, space::LG, space::LG, space::SM))
+                .color(Color::TRANSPARENT)
+                .size(Size::new(Grow, Fit)),
             // Sidebar items
             Column::new(el![
-                Text::new("Overview").font_size(16.0).color(fg_text),
-                Text::new("Assets").font_size(16.0).color(fg_text),
-                Text::new("Settings").font_size(16.0).color(fg_text),
+                Text::body("Overview"),
+                Text::body("Assets"),
+                Text::body("Settings"),
             ])
-            .spacing(8)
-            .padding(Vec4::new(16, 8, 16, 16))
+            .spacing(space::SM)
+            .padding(Vec4::new(space::LG, space::SM, space::LG, space::LG))
             .color(Color::TRANSPARENT)
             .size(Size::new(Grow, Fit)),
         ])
-        .spacing(6)
-        .padding(Vec4::splat(8))
-        .color(bg_panel)
+        .spacing(space::XS)
+        .padding(Vec4::splat(space::SM))
+        .color(t.surface)
         .size(Size::new(Fixed(220), Grow));
 
         // Top bar (fixed height)
         let topbar = Row::new(el![
-            Text::new("Dashboard").font_size(22.0).color(fg_title),
+            Text::h2("Dashboard"),
             Spacer::new(Size::new(Grow, Grow)),
-            // a little “pill” on the right
-            Row::new(el![Text::new("LIVE").font_size(14.0).weight(Weight::BLACK)])
-                .padding(Vec4::new(10, 6, 10, 6))
-                .color(accent)
+            // a little "pill" on the right
+            Row::new(el![Text::label("LIVE").color(t.on_primary)])
+                .padding(Vec4::new(
+                    space::MD,
+                    space::XS + 2,
+                    space::MD,
+                    space::XS + 2
+                ))
+                .color(t.primary)
                 .size(Size::new(Fit, Grow)),
         ])
-        .padding(Vec4::new(16, 10, 16, 10))
-        .color(bg_panel_alt)
+        .padding(Vec4::new(space::LG, space::MD, space::LG, space::MD))
+        .color(t.surface_variant)
         .size(Size::new(Grow, Fixed(52)));
 
         // Main content
@@ -356,66 +394,50 @@ pub mod text {
 
         let content = Column::new(el![
             // Title
-            Text::new("Welcome to the Showcase")
-                .font_size(20.0)
-                .size(Size::new(Grow, Fit))
-                .color(fg_title),
+            Text::h1("Welcome to the Showcase").size(Size::new(Grow, Fit)),
             // Body (multiline)
-            Text::new(hero_text)
-                .font_size(16.0)
-                .size(Size::new(Grow, Fit))
-                .color(fg_text),
+            Text::body(hero_text).size(Size::new(Grow, Fit)),
             // Body (fit checks)
             Column::new(el![
                 Row::new(el![
-                    Text::new(long).font_size(16.0).size(Size::new(Grow, Fit)),
-                    Text::new(long).font_size(16.0).size(Size::new(Grow, Fit)),
+                    Text::body(long).size(Size::new(Grow, Fit)),
+                    Text::body(long).size(Size::new(Grow, Fit)),
                 ])
                 .size(Size::new(Grow, Fit))
-                .spacing(12),
-                Text::new(long).font_size(16.0).size(Size::new(Grow, Fit)),
+                .spacing(space::MD),
+                Text::body(long).size(Size::new(Grow, Fit)),
             ])
             .size(Size::new(Grow, Fit))
-            .spacing(12),
+            .spacing(space::MD),
             // List of text with scrolling
-            Scrollable::new(Text::new(list).font_size(16.0))
+            Scrollable::new(Text::body(list))
                 .size(Size::new(Grow, Fixed(140)))
-                .bg(Color::rgb(72, 78, 90)),
+                .bg(t.surface_variant),
             // A couple of stat tiles
             Row::new(el![
+                Column::new(el![Text::label("Builds"), Text::h1("128").color(t.primary),])
+                    .padding(Vec4::splat(space::MD))
+                    .color(t.surface)
+                    .size(Size::new(Grow, Fixed(88))),
                 Column::new(el![
-                    Text::new("Builds").font_size(16.0).color(fg_text),
-                    Text::new("128").font_size(28.0).color(fg_title),
+                    Text::label("Warnings"),
+                    Text::h1("3").color(t.secondary),
                 ])
-                .padding(Vec4::splat(12))
-                .color(bg_panel)
+                .padding(Vec4::splat(space::MD))
+                .color(t.surface)
                 .size(Size::new(Grow, Fixed(88))),
-                Column::new(el![
-                    Text::new("Warnings").font_size(16.0).color(fg_text),
-                    Text::new("3")
-                        .font_size(28.0)
-                        .color(Color::rgb(255, 206, 86)),
-                ])
-                .padding(Vec4::splat(12))
-                .color(bg_panel)
-                .size(Size::new(Grow, Fixed(88))),
-                Column::new(el![
-                    Text::new("Errors").font_size(16.0).color(fg_text),
-                    Text::new("0")
-                        .font_size(28.0)
-                        .color(Color::rgb(76, 217, 100)),
-                ])
-                .padding(Vec4::splat(12))
-                .color(bg_panel)
-                .size(Size::new(Grow, Fixed(88))),
+                Column::new(el![Text::label("Errors"), Text::h1("0").color(t.error),])
+                    .padding(Vec4::splat(space::MD))
+                    .color(t.surface)
+                    .size(Size::new(Grow, Fixed(88))),
             ])
-            .spacing(12)
+            .spacing(space::MD)
             .padding(Vec4::splat(0))
             .color(Color::TRANSPARENT)
             .size(Size::new(Grow, Fit)),
         ])
-        .spacing(12)
-        .padding(Vec4::splat(16))
+        .spacing(space::MD)
+        .padding(Vec4::splat(space::LG))
         .color(Color::TRANSPARENT)
         .size(Size::new(Grow, Fit));
 
@@ -424,15 +446,15 @@ pub mod text {
             sidebar,
             Scrollable::new(
                 Column::new(el![topbar, content,])
-                    .spacing(12)
+                    .spacing(space::MD)
                     .color(Color::TRANSPARENT)
                     .size(Size::new(Grow, Fit)),
             )
             .size(Size::new(Grow, Fit)),
         ])
-        .spacing(12)
-        .padding(Vec4::splat(12))
-        .color(bg_app)
+        .spacing(space::MD)
+        .padding(Vec4::splat(space::MD))
+        .color(t.bg)
         .size(Size::new(Grow, Grow))
         .into()
     }
@@ -449,106 +471,104 @@ pub mod theme_editor {
 
         // -- Corner radius slider --
         let radius_row = Row::new(el![
-            Text::new(format!("Corner Radius: {:.0}", t.corner_radius))
-                .font_size(14.0)
+            Text::label(format!("Corner Radius: {:.0}", t.corner_radius))
                 .wrap(Wrap::None)
                 .size(Size::new(Fixed(160), Grow)),
-            Slider::new(Size::new(Grow, Fixed(28)), (0.0, 24.0), t.corner_radius)
-                .on_change(Message::ThemeCornerRadius),
+            Slider::new(
+                Size::new(Grow, Fixed(size::SLIDER_H)),
+                (0.0, 24.0),
+                t.corner_radius,
+            )
+            .on_change(Message::ThemeCornerRadius),
         ])
-        .spacing(12)
-        .padding(Vec4::splat(8))
+        .spacing(space::MD)
+        .padding(Vec4::splat(space::SM))
         .size(Size::new(Grow, Fixed(44)));
 
         // -- Border width slider --
         let border_row = Row::new(el![
-            Text::new(format!("Border Width: {}", t.border_width))
-                .font_size(14.0)
+            Text::label(format!("Border Width: {}", t.border_width))
                 .wrap(Wrap::None)
                 .size(Size::new(Fixed(160), Grow)),
             Slider::new(
-                Size::new(Grow, Fixed(28)),
+                Size::new(Grow, Fixed(size::SLIDER_H)),
                 (0.0, 6.0),
                 t.border_width as f32,
             )
             .on_change(Message::ThemeBorderWidth),
         ])
-        .spacing(12)
-        .padding(Vec4::splat(8))
+        .spacing(space::MD)
+        .padding(Vec4::splat(space::SM))
         .size(Size::new(Grow, Fixed(44)));
 
         // -- Dark / Light toggle --
         let toggle_row = Row::new(el![
             Button::new_with(
-                Text::new("Dark")
-                    .font_size(14.0)
+                Text::label("Dark")
                     .wrap(Wrap::None)
                     .size(Size::new(Fit, Grow)),
             )
             .on_press(Message::ThemeSetDark)
             .size(Size::new(Fixed(80), Fixed(32))),
             Button::new_with(
-                Text::new("Light")
-                    .font_size(14.0)
+                Text::label("Light")
                     .wrap(Wrap::None)
                     .size(Size::new(Fit, Grow)),
             )
             .on_press(Message::ThemeSetLight)
             .size(Size::new(Fixed(80), Fixed(32))),
         ])
-        .spacing(8)
-        .padding(Vec4::splat(8))
+        .spacing(space::SM)
+        .padding(Vec4::splat(space::SM))
         .size(Size::new(Grow, Fixed(48)));
 
         // -- Preview widgets --
         let preview = Column::new(el![
-            Text::new("Preview")
-                .font_size(16.0)
-                .size(Size::new(Grow, Fit)),
+            Text::h3("Preview").size(Size::new(Grow, Fit)),
             // Button using theme defaults
             Button::new_with(
-                Text::new("Theme Button")
-                    .font_size(14.0)
+                Text::label("Theme Button")
                     .wrap(Wrap::None)
                     .size(Size::new(Fit, Grow)),
             )
             .on_press(Message::ButtonPressed)
-            .size(Size::new(Fixed(160), Fixed(36))),
+            .size(Size::new(Fixed(160), Fixed(size::CONTROL_H))),
             // Input using theme defaults
-            TextField::new(Size::new(Grow, Fixed(36))).placeholder("Preview input"),
+            TextField::new(Size::new(Grow, Fixed(size::CONTROL_H))).placeholder("Preview input"),
             // Slider using theme defaults
-            Slider::new(Size::new(Grow, Fixed(28)), (0.0, 100.0), 65.0),
-            // Nested container
+            Slider::new(Size::new(Grow, Fixed(size::SLIDER_H)), (0.0, 100.0), 65.0),
+            // Nested container — distinct marker blocks
             Column::new(el![
-                Text::new("Nested container").font_size(13.0),
+                Text::caption("Nested container"),
                 Row::new(el![
-                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(200, 60, 60)),
-                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(60, 200, 60)),
-                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(60, 60, 200)),
+                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), swatch(0)),
+                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), swatch(3)),
+                    Rectangle::new(Size::new(Fixed(40), Fixed(40)), swatch(5)),
                 ])
-                .spacing(8)
+                .spacing(space::SM)
                 .size(Size::new(Grow, Fit)),
             ])
-            .spacing(8)
-            .padding(Vec4::splat(12))
+            .spacing(space::SM)
+            .padding(Vec4::splat(space::MD))
+            .color(t.surface)
             .size(Size::new(Grow, Fit)),
         ])
-        .spacing(12)
-        .padding(Vec4::splat(12))
+        .spacing(space::MD)
+        .padding(Vec4::splat(space::MD))
+        .color(t.surface)
         .size(Size::new(Grow, Fit));
 
         // -- Layout --
         Column::new(el![
-            Text::new("Theme Editor")
-                .font_size(20.0)
-                .size(Size::new(Grow, Fit)),
+            Text::h1("Theme Editor").size(Size::new(Grow, Fit)),
             toggle_row,
             radius_row,
             border_row,
             preview,
         ])
-        .spacing(12)
-        .padding(Vec4::splat(16))
+        .spacing(space::MD)
+        .padding(Vec4::splat(space::LG))
+        .color(t.bg)
         .size(Size::new(Grow, Grow))
         .into()
     }

@@ -2,188 +2,183 @@ use super::*;
 
 use Length::{Fit, Fixed, Grow};
 
-pub fn view(_state: &State) -> Element<Message> {
+pub fn view(state: &State) -> Element<Message> {
+    let t = &state.theme;
+
     let main = Column::new(vec![
-        view_fixed_fixed(),
-        view_fixed_grow_fixed(),
-        view_multiple_grow(),
-        view_column_grow(),
-        view_fit_sizing(),
-        view_nested_grow(),
-        view_spacing_extremes(),
-        view_many_children(),
-        view_clamping(),
+        view_fixed_fixed(t),
+        view_fixed_grow_fixed(t),
+        view_multiple_grow(t),
+        view_column_grow(t),
+        view_fit_sizing(t),
+        view_nested_grow(t),
+        view_spacing_extremes(t),
+        view_many_children(t),
+        view_clamping(t),
         view_transparent_container(),
-        view_grid(),
+        view_grid(t),
     ])
-    .padding(Vec4::splat(16))
-    .spacing(14)
+    .padding(Vec4::splat(space::LG))
+    .spacing(space::MD)
     .size(Size::new(Grow, Fit));
 
     Scrollable::new(main).size(Size::new(Grow, Grow)).into()
 }
 
 /// 1) Fixed + Fixed, zero padding baseline
-fn view_fixed_fixed() -> Element<Message> {
+fn view_fixed_fixed(t: &Theme) -> Element<Message> {
     Row::new(el![
-        Rectangle::new(Size::new(Fixed(80), Fixed(40)), Color::RED),
-        Rectangle::new(Size::new(Fixed(120), Fixed(40)), Color::GREEN),
+        Rectangle::new(Size::new(Fixed(80), Fixed(40)), swatch(0)),
+        Rectangle::new(Size::new(Fixed(120), Fixed(40)), swatch(5)),
     ])
-    .spacing(8)
+    .spacing(space::SM)
     .padding(Vec4::splat(0))
-    .color(Color::rgb(240, 240, 240))
+    .color(t.surface_variant)
     .size(Size::new(Grow, Fixed(70)))
     .into()
 }
 
 /// 2) Fixed + Grow + Fixed; height fixed, width grow
-fn view_fixed_grow_fixed() -> Element<Message> {
+fn view_fixed_grow_fixed(t: &Theme) -> Element<Message> {
     Row::new(el![
-        Rectangle::new(Size::new(Fixed(60), Fixed(60)), Color::rgb(255, 200, 0)),
-        Rectangle::new(Size::new(Grow, Grow), Color::rgb(0, 180, 180)),
-        Rectangle::new(Size::new(Fixed(60), Fixed(60)), Color::rgb(255, 200, 0)),
+        Rectangle::new(Size::new(Fixed(60), Fixed(60)), swatch(2)),
+        Rectangle::new(Size::new(Grow, Grow), swatch(4)),
+        Rectangle::new(Size::new(Fixed(60), Fixed(60)), swatch(2)),
     ])
-    .spacing(10)
-    .padding(Vec4::splat(10))
-    .color(Color::rgb(240, 240, 240))
+    .spacing(space::SM)
+    .padding(Vec4::splat(space::SM))
+    .color(t.surface_variant)
     .size(Size::new(Grow, Fixed(80)))
     .into()
 }
 
 /// 3) Multiple Grow children in a Row (checks equalization)
-fn view_multiple_grow() -> Element<Message> {
+fn view_multiple_grow(t: &Theme) -> Element<Message> {
     Row::new(el![
-        Rectangle::new(Size::new(Grow, Fixed(50)), Color::rgb(200, 50, 50)),
-        Rectangle::new(Size::new(Grow, Fixed(50)), Color::rgb(50, 200, 50)),
-        Rectangle::new(Size::new(Grow, Fixed(50)), Color::rgb(50, 50, 200)),
+        Rectangle::new(Size::new(Grow, Fixed(50)), swatch(0)),
+        Rectangle::new(Size::new(Grow, Fixed(50)), swatch(3)),
+        Rectangle::new(Size::new(Grow, Fixed(50)), swatch(5)),
     ])
-    .spacing(6)
-    .padding(Vec4::splat(10))
-    .color(Color::rgb(240, 240, 240))
+    .spacing(space::XS + 2)
+    .padding(Vec4::splat(space::SM))
+    .color(t.surface_variant)
     .size(Size::new(Grow, Fixed(70)))
     .into()
 }
 
 /// 4) Column with Grow height distribution and fixed caps
-fn view_column_grow() -> Element<Message> {
+fn view_column_grow(t: &Theme) -> Element<Message> {
     Column::new(el![
-        Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(80, 80, 80)),
-        Rectangle::new(Size::new(Grow, Grow), Color::rgb(100, 200, 100)).min_y(20),
-        Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(80, 80, 150)),
+        Rectangle::new(Size::new(Grow, Fixed(20)), swatch(6)),
+        Rectangle::new(Size::new(Grow, Grow), swatch(3)).min_y(20),
+        Rectangle::new(Size::new(Grow, Fixed(20)), swatch(5)),
     ])
-    .spacing(8)
-    .padding(Vec4::splat(10))
-    .color(Color::rgb(240, 240, 240))
+    .spacing(space::SM)
+    .padding(Vec4::splat(space::SM))
+    .color(t.surface_variant)
     .size(Size::new(Grow, Fixed(120)))
     .into()
 }
 
 /// 5) Fit sizing demo: Column(Fit,Fit) measured by fixed children
-fn view_fit_sizing() -> Element<Message> {
+fn view_fit_sizing(t: &Theme) -> Element<Message> {
     use Length::{Fit, Fixed, Grow};
     Row::new(el![
         Column::new(el![
-            Rectangle::new(Size::new(Fixed(70), Fixed(20)), Color::rgb(100, 0, 100)),
-            Rectangle::new(Size::new(Fixed(40), Fixed(30)), Color::rgb(140, 0, 140)),
+            Rectangle::new(Size::new(Fixed(70), Fixed(20)), swatch(7)),
+            Rectangle::new(Size::new(Fixed(40), Fixed(30)), swatch(1)),
         ])
-        .spacing(4)
-        .padding(Vec4::splat(4))
+        .spacing(space::XS)
+        .padding(Vec4::splat(space::XS))
         .size(Size::new(Fit, Fit))
-        .color(Color::rgb(230, 200, 230)),
-        Rectangle::new(Size::new(Grow, Fixed(60)), Color::rgb(180, 180, 180)),
+        .color(t.surface),
+        Rectangle::new(Size::new(Grow, Fixed(60)), swatch(4)),
     ])
-    .spacing(10)
-    .padding(Vec4::splat(10))
-    .color(Color::rgb(240, 240, 240))
+    .spacing(space::SM)
+    .padding(Vec4::splat(space::SM))
+    .color(t.surface_variant)
     .size(Size::new(Grow, Fixed(80)))
     .into()
 }
 
 /// 6) Nested grow: Row of two Columns
-fn view_nested_grow() -> Element<Message> {
+fn view_nested_grow(t: &Theme) -> Element<Message> {
     Row::new(el![
         Column::new(el![
-            Rectangle::new(Size::new(Grow, Fixed(18)), Color::rgb(160, 160, 0)),
-            Rectangle::new(Size::new(Grow, Grow), Color::rgb(160, 100, 0)).min_y(20),
+            Rectangle::new(Size::new(Grow, Fixed(18)), swatch(2)),
+            Rectangle::new(Size::new(Grow, Grow), swatch(1)).min_y(20),
         ])
-        .spacing(6)
-        .padding(Vec4::splat(6))
+        .spacing(space::XS + 2)
+        .padding(Vec4::splat(space::XS + 2))
         .size(Size::new(Fixed(200), Grow))
-        .color(Color::rgb(250, 240, 200)),
+        .color(t.surface),
         Column::new(el![
-            Rectangle::new(Size::new(Grow, Grow), Color::rgb(0, 120, 160)).min_y(20),
-            Rectangle::new(Size::new(Grow, Fixed(24)), Color::rgb(0, 80, 120)),
+            Rectangle::new(Size::new(Grow, Grow), swatch(4)).min_y(20),
+            Rectangle::new(Size::new(Grow, Fixed(24)), swatch(5)),
         ])
-        .spacing(6)
-        .padding(Vec4::splat(6))
+        .spacing(space::XS + 2)
+        .padding(Vec4::splat(space::XS + 2))
         .size(Size::new(Grow, Grow))
-        .color(Color::rgb(200, 240, 250)),
+        .color(t.surface),
     ])
-    .spacing(10)
-    .padding(Vec4::splat(10))
-    .color(Color::rgb(240, 240, 240))
+    .spacing(space::SM)
+    .padding(Vec4::splat(space::SM))
+    .color(t.surface_variant)
     .size(Size::new(Grow, Fixed(100)))
     .into()
 }
 
 /// 7) Spacing extremes: zero vs nonzero, plus a Grow filler
-fn view_spacing_extremes() -> Element<Message> {
+fn view_spacing_extremes(t: &Theme) -> Element<Message> {
+    let block = || {
+        [
+            Rectangle::new(Size::new(Fixed(40), Fixed(40)), swatch(6)),
+            Rectangle::new(Size::new(Fixed(40), Fixed(40)), swatch(7)),
+        ]
+    };
     Row::new(el![
-        Row::new(el![
-            Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(0, 0, 0)),
-            Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(80, 80, 80))
-        ])
-        .spacing(0)
-        .padding(Vec4::splat(0))
-        .size(Size::new(Fixed(100), Fixed(40)))
-        .color(Color::rgb(220, 220, 220)),
-        Row::new(el![
-            Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(0, 0, 0)),
-            Rectangle::new(Size::new(Fixed(40), Fixed(40)), Color::rgb(80, 80, 80))
-        ])
-        .spacing(12)
-        .padding(Vec4::splat(0))
-        .size(Size::new(Fixed(120), Fixed(40)))
-        .color(Color::rgb(220, 220, 220)),
-        Rectangle::new(Size::new(Grow, Fixed(40)), Color::rgb(200, 200, 200)),
+        Row::new(block())
+            .spacing(0)
+            .padding(Vec4::splat(0))
+            .size(Size::new(Fixed(100), Fixed(40)))
+            .color(t.surface),
+        Row::new(block())
+            .spacing(space::MD)
+            .padding(Vec4::splat(0))
+            .size(Size::new(Fixed(120), Fixed(40)))
+            .color(t.surface),
+        Rectangle::new(Size::new(Grow, Fixed(40)), swatch(4)),
     ])
-    .spacing(10)
-    .padding(Vec4::splat(10))
-    .color(Color::rgb(240, 240, 240))
+    .spacing(space::SM)
+    .padding(Vec4::splat(space::SM))
+    .color(t.surface_variant)
     .size(Size::new(Grow, Fixed(60)))
     .into()
 }
 
 /// 8) Many children + padding stress
-fn view_many_children() -> Element<Message> {
-    Row::new(
-        (0..8)
-            .map(|i| {
-                let c = (i * 30 + 40) as u8;
-                small_block(c, 30, 200u8.saturating_sub(c))
-            })
-            .collect::<Vec<_>>(),
-    )
-    .spacing(6)
-    .padding(Vec4::splat(16))
-    .color(Color::rgb(240, 240, 240))
-    .size(Size::new(Grow, Fixed(56)))
-    .into()
+fn view_many_children(t: &Theme) -> Element<Message> {
+    Row::new((0..8).map(|i| small_block(swatch(i))).collect::<Vec<_>>())
+        .spacing(space::XS + 2)
+        .padding(Vec4::splat(space::LG))
+        .color(t.surface_variant)
+        .size(Size::new(Grow, Fixed(56)))
+        .into()
 }
 
 /// 9) Test clamping (min/max)
-fn view_clamping() -> Element<Message> {
+fn view_clamping(t: &Theme) -> Element<Message> {
     Row::new(el![
-        Rectangle::new(Size::new(Length::Grow, Length::Fixed(24)), Color::GREEN)
+        Rectangle::new(Size::new(Length::Grow, Length::Fixed(24)), swatch(3))
             .min(Size::new(120, 24)) // >= 120px wide
             .max(Size::new(300, 24)), // <= 300px wide
-        Rectangle::new(Size::new(Length::Fixed(100), Length::Grow), Color::BLUE)
+        Rectangle::new(Size::new(Length::Fixed(100), Length::Grow), swatch(5))
             .min(Size::new(100, 60)) // >= 60px tall
             .max(Size::new(100, 120)), // <= 120px tall
     ])
-    .spacing(6)
-    .padding(Vec4::splat(16))
-    .color(Color::rgb(240, 240, 240))
+    .spacing(space::XS + 2)
+    .padding(Vec4::splat(space::LG))
+    .color(t.surface_variant)
     .size(Size::new(Length::Grow, Length::Grow))
     .into()
 }
@@ -191,34 +186,27 @@ fn view_clamping() -> Element<Message> {
 /// 10) Transparent container background
 fn view_transparent_container() -> Element<Message> {
     Column::new(el![
-        Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(30, 200, 30)),
-        Rectangle::new(Size::new(Grow, Fixed(20)), Color::rgb(30, 30, 200)),
+        Rectangle::new(Size::new(Grow, Fixed(20)), swatch(3)),
+        Rectangle::new(Size::new(Grow, Fixed(20)), swatch(5)),
     ])
-    .spacing(6)
-    .padding(Vec4::splat(10))
+    .spacing(space::XS + 2)
+    .padding(Vec4::splat(space::SM))
     .color(Color::TRANSPARENT)
     .size(Size::new(Grow, Fixed(60)))
     .into()
 }
 
 /// 11) Grid layout example
-fn view_grid() -> Element<Message> {
+fn view_grid(t: &Theme) -> Element<Message> {
     use std::num::NonZero;
 
-    let cells: Vec<_> = (0..12)
-        .map(|i| {
-            let r = 60 + (i * 13) as u8;
-            let g = 180u8.saturating_sub((i * 11) as u8);
-            let b = 80 + (i * 7) as u8;
-            small_block(r, g, b)
-        })
-        .collect();
+    let cells: Vec<_> = (0..12).map(|i| small_block(swatch(i))).collect();
 
     WrappingRows::new(NonZero::new(4).unwrap(), cells)
-        .col_spacing(10)
-        .row_spacing(10)
-        .padding(Vec4::splat(10))
-        .color(Color::rgb(240, 240, 240))
+        .col_spacing(space::SM)
+        .row_spacing(space::SM)
+        .padding(Vec4::splat(space::SM))
+        .color(t.surface_variant)
         .size(Size::new(Grow, Fit))
         .into()
 }
