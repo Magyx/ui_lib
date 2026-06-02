@@ -1,9 +1,8 @@
-use std::error::Error as StdError;
-
 #[cfg(feature = "winit")]
 pub use winit::error::EventLoopError;
 
-type BoxError = Box<dyn StdError + Send + Sync + 'static>;
+#[cfg(feature = "sctk")]
+type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -116,49 +115,49 @@ impl From<SctkError> for Error {
 impl SctkError {
     pub fn connect<E>(e: E) -> Self
     where
-        E: StdError + Send + Sync + 'static,
+        E: std::error::Error + Send + Sync + 'static,
     {
         Self::Connect(Box::new(e))
     }
 
     pub fn registry_init<E>(e: E) -> Self
     where
-        E: StdError + Send + Sync + 'static,
+        E: std::error::Error + Send + Sync + 'static,
     {
         Self::RegistryInit(Box::new(e))
     }
 
     pub fn bind_global<E>(e: E) -> Self
     where
-        E: StdError + Send + Sync + 'static,
+        E: std::error::Error + Send + Sync + 'static,
     {
         Self::BindGlobal(Box::new(e))
     }
 
     pub fn dispatch<E>(e: E) -> Self
     where
-        E: StdError + Send + Sync + 'static,
+        E: std::error::Error + Send + Sync + 'static,
     {
         Self::Dispatch(Box::new(e))
     }
 
     pub fn flush<E>(e: E) -> Self
     where
-        E: StdError + Send + Sync + 'static,
+        E: std::error::Error + Send + Sync + 'static,
     {
         Self::Flush(Box::new(e))
     }
 
     pub fn roundtrip<E>(e: E) -> Self
     where
-        E: StdError + Send + Sync + 'static,
+        E: std::error::Error + Send + Sync + 'static,
     {
         Self::Roundtrip(Box::new(e))
     }
 
     pub fn session_lock<E>(e: E) -> Self
     where
-        E: StdError + Send + Sync + 'static,
+        E: std::error::Error + Send + Sync + 'static,
     {
         Self::SessionLock(Box::new(e))
     }
