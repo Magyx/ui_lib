@@ -93,3 +93,7 @@ required-features = ["sctk"]
 [[example]]
 name = "sctk-lock"
 required-features = ["sctk"]
+
+[[example]]
+name = "target-stress"
+required-features = ["sctk", "vulkan"]
