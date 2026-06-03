@@ -225,12 +225,14 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
 
         // TODO: should add configurability
         let surface_caps = surface.get_capabilities(&self.gpu.adapter);
-        let format = surface_caps
-            .formats
-            .iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(wgpu::TextureFormat::Bgra8UnormSrgb);
+        let format = {
+            use wgpu::TextureFormat::{Bgra8UnormSrgb, Rgba8UnormSrgb};
+            [Bgra8UnormSrgb, Rgba8UnormSrgb]
+                .into_iter()
+                .find(|f| surface_caps.formats.contains(f))
+                .or_else(|| surface_caps.formats.iter().copied().find(|f| f.is_srgb()))
+                .unwrap_or(Bgra8UnormSrgb)
+        };
 
         let present_mode = if surface_caps
             .present_modes
