@@ -35,6 +35,10 @@ wayland-backend = { version = "0.3", default-features = false, features = [
 ], optional = true }
 calloop = { version = "0.14", optional = true }
 
+# Clipboard dependencies
+arboard = { version = "3.6", default-features = false, optional = true }
+smithay-clipboard = { version = "0.7", optional = true }
+
 # svg widget
 resvg = { version = "0.46.0", default-features = false, optional = true }
 
@@ -63,6 +67,9 @@ tracy_full = [
 tracy_broadcast = ["tracy", "tracy-client/broadcast"]
 tracy_code_transfer = ["tracy", "tracy-client/code-transfer"]
 tracy_widgets = ["tracy"]
+
+clipboard-arboard = ["dep:arboard"]
+clipboard-smithay = ["dep:smithay-clipboard"]
 
 svg = [
   "dep:resvg",

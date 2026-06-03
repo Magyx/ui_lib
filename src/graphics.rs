@@ -2,6 +2,7 @@
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use crate::{
+    clipboard::{Clipboard, ClipboardProvider},
     consts::*,
     context::{Context, EventCtx, LayoutCtx, PaintCtx, PrepareCtx, SweepCtx},
     event::{Event, KeyState, ScrollDelta, ToEvent},
@@ -92,6 +93,7 @@ pub struct Engine<'a, M> {
     pub(crate) push_constant_ranges: Vec<wgpu::PushConstantRange>,
     pipeline_registry: PipelineRegistry,
     renderer: Renderer,
+    clipboard: Clipboard,
 }
 
 impl<'a, M> Default for Engine<'a, M> {
@@ -166,6 +168,7 @@ impl<'a, M> Default for Engine<'a, M> {
             push_constant_ranges,
             pipeline_registry,
             renderer,
+            clipboard: Clipboard::default(),
         }
     }
 }
@@ -358,6 +361,13 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         for t in self.targets.values_mut() {
             t.ctx.request_redraw();
         }
+    }
+
+    pub fn set_clipboard(&mut self, provider: impl ClipboardProvider + 'static) {
+        self.clipboard.set_provider(provider);
+    }
+    pub fn get_clipboard(&mut self) -> &mut Clipboard {
+        &mut self.clipboard
     }
 
     pub fn globals(&self, tid: &TargetId) -> Option<&Globals> {

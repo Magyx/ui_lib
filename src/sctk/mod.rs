@@ -533,6 +533,13 @@ where
             let tid = engine.attach_target(target, phys, sf);
             sid_to_tid.insert(sid, tid);
         }
+
+        #[cfg(feature = "clipboard-smithay")]
+        {
+            let display_ptr = conn.backend().display_ptr() as *mut std::ffi::c_void;
+            engine.set_clipboard(unsafe { crate::clipboard::SmithayClipboard::new(display_ptr) });
+        }
+
         engine
     };
 

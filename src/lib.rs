@@ -2,6 +2,7 @@
 use crate::model::*;
 pub use error::{Error, Result};
 
+pub mod clipboard;
 pub(crate) mod consts;
 pub mod context;
 pub mod error;

@@ -286,6 +286,11 @@ where
                 }
             }
 
+            #[cfg(feature = "clipboard-arboard")]
+            if let Some(cb) = crate::clipboard::ArboardClipboard::new() {
+                engine.set_clipboard(cb);
+            }
+
             self.frame_interval = frame_interval_from_monitor(&window);
             self.engine = Some(engine);
             self.target = Some(target);
