@@ -82,6 +82,9 @@ pub struct Overlay<M> {
 }
 
 impl<M> Overlay<M> {
+    pub fn empty() -> Self {
+        Self::new::<Vec<_>, Element<M>>(el!())
+    }
     pub fn new<I, E>(children: I) -> Self
     where
         I: IntoIterator<Item = E>,

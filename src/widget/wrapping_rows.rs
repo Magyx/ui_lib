@@ -18,6 +18,9 @@ pub struct WrappingRows<M> {
 }
 
 impl<M> WrappingRows<M> {
+    pub fn empty(columns: NonZero<usize>) -> Self {
+        Self::new::<Vec<_>, Element<M>>(columns, el!())
+    }
     pub fn new<I, E>(columns: NonZero<usize>, children: I) -> Self
     where
         I: IntoIterator<Item = E>,

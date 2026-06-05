@@ -15,6 +15,9 @@ pub struct Column<M> {
 }
 
 impl<M> Column<M> {
+    pub fn empty() -> Self {
+        Self::new::<Vec<_>, Element<M>>(el!())
+    }
     pub fn new<I, E>(children: I) -> Self
     where
         I: IntoIterator<Item = E>,
