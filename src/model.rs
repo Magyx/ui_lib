@@ -241,10 +241,6 @@ impl Color {
     pub const BLUE: Self = Self::rgba(0, 0, 255, 255);
 
     #[inline]
-    pub const fn splat(c: u8) -> Self {
-        Self::rgba(c, c, c, c)
-    }
-    #[inline]
     pub const fn rgb(r: u8, g: u8, b: u8) -> Self {
         Self::rgba(r, g, b, 0xFF)
     }
@@ -254,6 +250,14 @@ impl Color {
     }
     #[inline]
     pub const fn from_hex(hex: u32) -> Self {
+        let r = ((hex >> 16) & 0xFF) as u8;
+        let g = ((hex >> 8) & 0xFF) as u8;
+        let b = (hex & 0xFF) as u8;
+
+        Self::rgb(r, g, b)
+    }
+    #[inline]
+    pub const fn from_hexa(hex: u32) -> Self {
         let r = ((hex >> 24) & 0xFF) as u8;
         let g = ((hex >> 16) & 0xFF) as u8;
         let b = ((hex >> 8) & 0xFF) as u8;
@@ -441,12 +445,6 @@ mod tests {
         let c = Color::rgba(0x11, 0x22, 0x33, 0x44);
         assert_eq!(c.0, 0x44_33_22_11);
         assert_eq!(c.as_rgba_tuple(), (0x11, 0x22, 0x33, 0x44));
-    }
-
-    #[test]
-    fn color_splat() {
-        let c = Color::splat(0xAB);
-        assert_eq!(c.as_rgba(), [0xAB, 0xAB, 0xAB, 0xAB]);
     }
 
     #[test]

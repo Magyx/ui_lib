@@ -51,6 +51,7 @@ pub enum Message {
     ButtonPressed,
     SliderChanged(f32),
     NameChanged(String),
+    TextAreaContentChanged(String),
     ThemeSetDark,
     ThemeSetLight,
     ThemeCornerRadius(f32),
@@ -66,6 +67,7 @@ pub struct Target {
 
     pub slider: f32,
     pub name: String,
+    pub text_area_content: String,
 }
 
 impl Default for Target {
@@ -78,6 +80,7 @@ impl Default for Target {
 
             slider: 50.0,
             name: String::new(),
+            text_area_content: String::new(),
         }
     }
 }
@@ -246,8 +249,12 @@ mod update {
         target.slider = v;
         true
     }
-    pub fn submit_name(_target: &mut super::Target, _s: String) -> bool {
-        // no-op demo hook; could trigger toast, etc.
+    pub fn submit_name(target: &mut super::Target, s: String) -> bool {
+        target.name = s;
+        true
+    }
+    pub fn submit_text_area(target: &mut super::Target, s: String) -> bool {
+        target.text_area_content = s;
         true
     }
 }
@@ -282,6 +289,9 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
         crate::Event::Message(Message::ButtonPressed) => update::increment_counter(target),
         crate::Event::Message(Message::SliderChanged(v)) => update::set_slider(target, *v),
         crate::Event::Message(Message::NameChanged(s)) => update::submit_name(target, s.clone()),
+        crate::Event::Message(Message::TextAreaContentChanged(s)) => {
+            update::submit_text_area(target, s.clone())
+        }
         crate::Event::Message(Message::ThemeSetDark) => {
             state.theme = Theme::dark();
             engine.set_theme(state.theme);

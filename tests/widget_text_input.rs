@@ -44,7 +44,7 @@ mod text_input {
     fn focused_field(width: i32) -> (TextField<TopMsg>, Harness) {
         let mut h = Harness::default();
         let mut field: TextField<TopMsg> =
-            TextField::new(Size::new(Length::Fixed(width), Length::Fixed(30)))
+            TextField::new("", Size::new(Length::Fixed(width), Length::Fixed(30)))
                 .on_change(|s| TopMsg::from(Msg::Changed(s.to_string())))
                 .on_submit(|s| TopMsg::from(Msg::Submitted(s.to_string())));
 
@@ -69,7 +69,7 @@ mod text_input {
     fn focused_area(width: i32, height: i32) -> (TextArea<TopMsg>, Harness) {
         let mut h = Harness::default();
         let mut area: TextArea<TopMsg> =
-            TextArea::new(Size::new(Length::Fixed(width), Length::Fixed(height)))
+            TextArea::new("", Size::new(Length::Fixed(width), Length::Fixed(height)))
                 .on_change(|s| TopMsg::from(Msg::Changed(s.to_string())));
 
         h.layout(&mut area, 1000, 1000);
@@ -338,7 +338,7 @@ mod text_input {
     fn key_events_ignored_when_not_focused() {
         let mut h = Harness::default();
         let mut field: TextField<TopMsg> =
-            TextField::new(Size::new(Length::Fixed(200), Length::Fixed(30)))
+            TextField::new("", Size::new(Length::Fixed(200), Length::Fixed(30)))
                 .on_change(|s| TopMsg::from(Msg::Changed(s.to_string())));
 
         h.layout(&mut field, 1000, 1000);
@@ -385,7 +385,7 @@ mod text_input {
     fn no_on_change_handler_means_silent() {
         let mut h = Harness::default();
         let mut field: TextField<TopMsg> =
-            TextField::new(Size::new(Length::Fixed(200), Length::Fixed(30)));
+            TextField::new("", Size::new(Length::Fixed(200), Length::Fixed(30)));
         // No .on_change()
 
         h.layout(&mut field, 1000, 1000);

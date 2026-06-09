@@ -153,13 +153,18 @@ pub mod interaction {
 
         let inputs = Column::new(el![
             // Single-line TextField (themed automatically)
-            TextField::new(Size::new(Grow, Fixed(size::CONTROL_H)))
+            TextField::new(target.name.clone(), Size::new(Grow, Fixed(size::CONTROL_H)))
                 .placeholder("Your name")
                 .on_change(|s| Message::NameChanged(s.to_string())),
             // Live feedback
             Text::body(greeting).size(Size::new(Grow, Fit)),
             // Multi-line TextArea
-            TextArea::new(Size::new(Grow, Fixed(120))).placeholder("Notes (multi-line)")
+            TextArea::new(
+                target.text_area_content.clone(),
+                Size::new(Grow, Fixed(120))
+            )
+            .placeholder("Notes (multi-line)")
+            .on_change(|s| Message::TextAreaContentChanged(s.to_string()))
         ])
         .spacing(space::SM)
         .padding(Vec4::splat(space::SM))
@@ -534,7 +539,8 @@ pub mod theme_editor {
             .on_press(Message::ButtonPressed)
             .size(Size::new(Fixed(160), Fixed(size::CONTROL_H))),
             // Input using theme defaults
-            TextField::new(Size::new(Grow, Fixed(size::CONTROL_H))).placeholder("Preview input"),
+            TextField::new("", Size::new(Grow, Fixed(size::CONTROL_H)))
+                .placeholder("Preview input"),
             // Slider using theme defaults
             Slider::new(Size::new(Grow, Fixed(size::SLIDER_H)), (0.0, 100.0), 65.0),
             // Nested container — distinct marker blocks

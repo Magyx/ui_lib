@@ -29,7 +29,6 @@ pub struct TextInputViewState {
     hovered: bool,
     focused: bool,
 
-    value: String,
     cursor: Cursor,
     selection_anchor: Option<Cursor>,
     dragging: bool,
@@ -42,7 +41,6 @@ impl TextInputViewState {
             hovered: false,
             focused: false,
 
-            value: String::new(),
             cursor: Cursor::new(0, 0),
             selection_anchor: None,
             dragging: false,
@@ -50,16 +48,16 @@ impl TextInputViewState {
         }
     }
 
-    fn cursor_to_byte_offset(&self) -> usize {
-        cursor_byte_offset(&self.value, self.cursor)
+    fn cursor_to_byte_offset(&self, value: &str) -> usize {
+        cursor_byte_offset(value, self.cursor)
     }
 
     /// The selected byte range as `(start, end)` with `start <= end`, or `None`
     /// when there is no (non-empty) selection.
-    fn selection_range(&self) -> Option<(usize, usize)> {
+    fn selection_range(&self, value: &str) -> Option<(usize, usize)> {
         let anchor = self.selection_anchor?;
-        let a = cursor_byte_offset(&self.value, anchor);
-        let c = self.cursor_to_byte_offset();
+        let a = cursor_byte_offset(value, anchor);
+        let c = self.cursor_to_byte_offset(value);
         if a == c {
             None
         } else {
@@ -67,22 +65,23 @@ impl TextInputViewState {
         }
     }
 
-    fn has_selection(&self) -> bool {
-        self.selection_range().is_some()
+    fn has_selection(&self, value: &str) -> bool {
+        self.selection_range(value).is_some()
     }
 
     /// The currently selected text, if any.
-    fn selected_text(&self) -> Option<String> {
-        let (s, e) = self.selection_range()?;
-        Some(self.value[s..e].to_string())
+    fn selected_text(&self, value: &str) -> Option<String> {
+        let (s, e) = self.selection_range(value)?;
+        let len = value.len();
+        Some(value[s.min(len)..e.min(len)].to_string())
     }
 
     /// Delete the selected range, placing the cursor at its start. Returns true
     /// if a non-empty selection was removed. Always clears the anchor.
-    fn delete_selection(&mut self) -> bool {
-        let removed = if let Some((s, e)) = self.selection_range() {
-            self.value.replace_range(s..e, "");
-            self.cursor = Self::byte_offset_to_cursor(&self.value, s);
+    fn delete_selection(&mut self, value: &mut String) -> bool {
+        let removed = if let Some((s, e)) = self.selection_range(value) {
+            value.replace_range(s..e, "");
+            self.cursor = Self::byte_offset_to_cursor(value, s);
             true
         } else {
             false
@@ -92,12 +91,12 @@ impl TextInputViewState {
     }
 
     /// Select the entire contents. Returns true if there was anything to select.
-    fn select_all(&mut self) -> bool {
-        if self.value.is_empty() {
+    fn select_all(&mut self, value: &str) -> bool {
+        if value.is_empty() {
             return false;
         }
         self.selection_anchor = Some(Cursor::new(0, 0));
-        self.cursor = Self::byte_offset_to_cursor(&self.value, self.value.len());
+        self.cursor = Self::byte_offset_to_cursor(value, value.len());
         true
     }
 
@@ -197,6 +196,7 @@ pub struct TextInput<M, Mode: TextMode = SingleLine> {
     padding: Vec4<i32>,
     border: i32,
 
+    value: Cow<'static, str>,
     placeholder: Option<Cow<'static, str>>,
     bg: Option<Color>,
     text_color: Option<Color>,
@@ -212,7 +212,7 @@ pub struct TextInput<M, Mode: TextMode = SingleLine> {
 }
 
 impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
-    fn new_impl(size: Size<Length>) -> Self {
+    fn new_impl<S: Into<Cow<'static, str>>>(value: S, size: Size<Length>) -> Self {
         Self {
             x: 0,
             y: 0,
@@ -224,6 +224,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             max: Size::splat(i32::MAX),
             padding: Vec4::new(8, 6, 8, 6),
             border: 0,
+            value: value.into(),
             placeholder: None,
             bg: None,
             text_color: None,
@@ -315,10 +316,6 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
     }
     fn state_mut<'b>(&self, view_state: &'b mut ViewState) -> Option<&'b mut TextInputViewState> {
         view_state.get_mut::<TextInputViewState>(&self.id)
-    }
-
-    fn is_empty(&self, view_state: &ViewState) -> bool {
-        self.state(view_state).is_none_or(|s| s.value.is_empty())
     }
 
     // TODO: this should be cached.
@@ -414,12 +411,12 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         motion: Motion,
         extend: bool,
     ) -> bool {
-        if self.is_empty(view_state) {
+        if self.value.is_empty() {
             return false;
         }
         let Some((cursor, sel)) = self
             .state(view_state)
-            .map(|s| (s.cursor, s.selection_range()))
+            .map(|s| (s.cursor, s.selection_range(&self.value)))
         else {
             return false;
         };
@@ -435,7 +432,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
                 };
                 if let Some(off) = edge {
                     if let Some(st) = self.state_mut(view_state) {
-                        st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, off);
+                        st.cursor = TextInputViewState::byte_offset_to_cursor(&self.value, off);
                         st.selection_anchor = None;
                     }
                     return true;
@@ -471,60 +468,71 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
     /// Insert text at the current cursor position, advancing the cursor.
     /// If there is an active selection it is replaced.
-    fn insert_at_cursor(st: &mut TextInputViewState, text: &str) {
-        st.delete_selection();
-        let offset = st.cursor_to_byte_offset();
-        st.value.insert_str(offset, text);
+    fn insert_at_cursor(st: &mut TextInputViewState, value: &mut String, text: &str) {
+        st.delete_selection(value);
+        let offset = st.cursor_to_byte_offset(value);
+        value.insert_str(offset, text);
         let new_offset = offset + text.len();
-        st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, new_offset);
+        st.cursor = TextInputViewState::byte_offset_to_cursor(value, new_offset);
         st.selection_anchor = None;
     }
 
     /// Delete the grapheme before the cursor (backspace behaviour).
     /// If there is an active selection it is removed instead.
     /// Returns true if anything was deleted.
-    fn delete_before_cursor(st: &mut TextInputViewState) -> bool {
-        if st.delete_selection() {
+    fn delete_before_cursor(st: &mut TextInputViewState, value: &mut String) -> bool {
+        if st.delete_selection(value) {
             return true;
         }
-        let offset = st.cursor_to_byte_offset();
-        if offset == 0 || st.value.is_empty() {
+        let offset = st.cursor_to_byte_offset(value);
+        if offset == 0 || value.is_empty() {
             return false;
         }
         let mut new_offset = offset - 1;
-        while new_offset > 0 && !st.value.is_char_boundary(new_offset) {
+        while new_offset > 0 && !value.is_char_boundary(new_offset) {
             new_offset -= 1;
         }
-        st.value.replace_range(new_offset..offset, "");
-        st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, new_offset);
+        value.replace_range(new_offset..offset, "");
+        st.cursor = TextInputViewState::byte_offset_to_cursor(value, new_offset);
         true
     }
 
     /// Delete the grapheme after the cursor (delete key behaviour).
     /// If there is an active selection it is removed instead.
     /// Returns true if anything was deleted.
-    fn delete_after_cursor(st: &mut TextInputViewState) -> bool {
-        if st.delete_selection() {
+    fn delete_after_cursor(st: &mut TextInputViewState, value: &mut String) -> bool {
+        if st.delete_selection(value) {
             return true;
         }
-        let offset = st.cursor_to_byte_offset();
-        if offset >= st.value.len() {
+        let offset = st.cursor_to_byte_offset(value);
+        if offset >= value.len() {
             return false;
         }
         let mut end = offset + 1;
-        while end < st.value.len() && !st.value.is_char_boundary(end) {
+        while end < value.len() && !value.is_char_boundary(end) {
             end += 1;
         }
-        st.value.drain(offset..end);
+        value.drain(offset..end);
         // Cursor byte offset stays the same, but line/index may have changed
         // (e.g. deleting a \n merges two lines).
-        st.cursor = TextInputViewState::byte_offset_to_cursor(&st.value, offset);
+        st.cursor = TextInputViewState::byte_offset_to_cursor(value, offset);
         true
+    }
+
+    /// Apply an in-place edit to a fresh working copy of the current value.
+    fn edit_value(
+        &self,
+        view_state: &mut ViewState,
+        edit: impl FnOnce(&mut TextInputViewState, &mut String) -> bool,
+    ) -> Option<String> {
+        let mut value = self.value.as_ref().to_owned();
+        let st = self.state_mut(view_state)?;
+        edit(st, &mut value).then_some(value)
     }
 
     /// Hit-test the current mouse position to a text cursor.
     fn hit_cursor(&self, ctx: &EventCtx<M>) -> Option<Cursor> {
-        if self.is_empty(&ctx.ui.view_state) {
+        if self.value.is_empty() {
             return Some(Cursor::new(0, 0));
         }
         let (l, t) = self.text_origin();
@@ -538,13 +546,13 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 }
 
 impl<M> TextInput<M, SingleLine> {
-    pub fn new(size: Size<Length>) -> Self {
-        Self::new_impl(size)
+    pub fn new<S: Into<Cow<'static, str>>>(value: S, size: Size<Length>) -> Self {
+        Self::new_impl(value, size)
     }
 }
 impl<M> TextInput<M, MultiLine> {
-    pub fn new(size: Size<Length>) -> Self {
-        let mut s = Self::new_impl(size);
+    pub fn new<S: Into<Cow<'static, str>>>(value: S, size: Size<Length>) -> Self {
+        let mut s = Self::new_impl(value, size);
         s.min = Size::new(60, 60);
         s
     }
@@ -554,13 +562,13 @@ impl<M, Mode: TextMode> IntoElement for TextInput<M, Mode> {}
 
 impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
-        let value = self.ensure_state(&mut ctx.ui.view_state).value.clone();
-        let placeholder = value.is_empty();
+        self.ensure_state(&mut ctx.ui.view_state);
+        let placeholder = self.value.is_empty();
 
         let text = if placeholder {
             self.placeholder.clone().unwrap_or_default()
         } else {
-            Cow::Owned(value)
+            self.value.clone()
         };
         let color = if placeholder {
             ctx.theme.on_surface_variant
@@ -668,7 +676,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         let clip_l = self.x as f32;
         let clip_r = (self.x + self.w) as f32;
 
-        if !self.is_empty(ctx.view_state)
+        if !self.value.is_empty()
             && let Some(anchor) = st.selection_anchor
             && anchor != st.cursor
         {
@@ -737,7 +745,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             ctx.ui.kbd_focus_item = Some(self.id);
             if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
                 st.focused = true;
-                let c = hit.unwrap_or_else(|| Cursor::new(0, st.value.len()));
+                let c = hit.unwrap_or_else(|| Cursor::new(0, self.value.len()));
                 if shift {
                     if st.selection_anchor.is_none() {
                         st.selection_anchor = Some(st.cursor);
@@ -779,7 +787,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                 let was_dragging = st.dragging;
                 st.dragging = false;
                 if !was_dragging {
-                    let c = hit.unwrap_or_else(|| Cursor::new(0, st.value.len()));
+                    let c = hit.unwrap_or_else(|| Cursor::new(0, self.value.len()));
                     if shift {
                         if st.selection_anchor.is_none() {
                             st.selection_anchor = Some(st.cursor);
@@ -814,10 +822,12 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         if let Some(ev) = ctx.event {
             match ev {
                 UiEventRef::Text(t) => {
-                    if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                        Self::insert_at_cursor(st, &t.text);
+                    if let Some(v) = self.edit_value(&mut ctx.ui.view_state, |st, value| {
+                        Self::insert_at_cursor(st, value, &t.text);
+                        true
+                    }) {
                         if let Some(f) = &self.on_change {
-                            queued_emit = Some(f(&st.value));
+                            queued_emit = Some(f(&v));
                         }
                         ctx.ui.request_redraw();
                     }
@@ -830,16 +840,16 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                         match s.to_lowercase().as_str() {
                             "a" => {
                                 if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
-                                    && st.select_all()
+                                    && st.select_all(&self.value)
                                 {
                                     needs_redraw = true;
                                 }
                             }
-                            "c" => { // Copy
+                            "c" => { // TODO: Copy
                             }
-                            "x" => { // Cut
+                            "x" => { // TODO: Cut
                             }
-                            "v" => { // Paste
+                            "v" => { // TODO: Paste
                             }
                             // Any other Ctrl/Cmd+letter is swallowed (not typed).
                             _ => {}
@@ -852,24 +862,25 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                         }
                         return;
                     }
+
                     let extend = shift;
                     match k.logical_key {
                         Backspace => {
-                            if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
-                                && Self::delete_before_cursor(st)
-                            {
+                            if let Some(v) = self.edit_value(&mut ctx.ui.view_state, |st, value| {
+                                Self::delete_before_cursor(st, value)
+                            }) {
                                 if let Some(f) = &self.on_change {
-                                    queued_emit = Some(f(&st.value));
+                                    queued_emit = Some(f(&v));
                                 }
                                 needs_redraw = true;
                             }
                         }
                         Delete => {
-                            if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
-                                && Self::delete_after_cursor(st)
-                            {
+                            if let Some(v) = self.edit_value(&mut ctx.ui.view_state, |st, value| {
+                                Self::delete_after_cursor(st, value)
+                            }) {
                                 if let Some(f) = &self.on_change {
-                                    queued_emit = Some(f(&st.value));
+                                    queued_emit = Some(f(&v));
                                 }
                                 needs_redraw = true;
                             }
@@ -878,7 +889,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                             // Clear a selection if present, otherwise unfocus.
                             let had_sel = self
                                 .state(&ctx.ui.view_state)
-                                .is_some_and(|s| s.has_selection());
+                                .is_some_and(|s| s.has_selection(&self.value));
                             if had_sel {
                                 if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
                                     st.selection_anchor = None;
@@ -942,17 +953,19 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                         Enter => {
                             if TypeId::of::<Mode>() == TypeId::of::<SingleLine>() {
                                 // Submit
-                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state)
-                                    && let Some(f) = &self.on_submit
-                                {
-                                    queued_emit = Some(f(&st.value));
+                                if let Some(f) = &self.on_submit {
+                                    queued_emit = Some(f(&self.value));
                                 }
                             } else {
                                 // MultiLine: insert newline
-                                if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                                    Self::insert_at_cursor(st, "\n");
+                                if let Some(v) =
+                                    self.edit_value(&mut ctx.ui.view_state, |st, value| {
+                                        Self::insert_at_cursor(st, value, "\n");
+                                        true
+                                    })
+                                {
                                     if let Some(f) = &self.on_change {
-                                        queued_emit = Some(f(&st.value));
+                                        queued_emit = Some(f(&v));
                                     }
                                     needs_redraw = true;
                                 }
@@ -976,10 +989,12 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                             if s.is_empty() {
                                 return;
                             }
-                            if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
-                                Self::insert_at_cursor(st, s);
+                            if let Some(v) = self.edit_value(&mut ctx.ui.view_state, |st, value| {
+                                Self::insert_at_cursor(st, value, s);
+                                true
+                            }) {
                                 if let Some(f) = &self.on_change {
-                                    queued_emit = Some(f(&st.value));
+                                    queued_emit = Some(f(&v));
                                 }
                                 needs_redraw = true;
                             }
