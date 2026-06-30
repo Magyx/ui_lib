@@ -4,6 +4,7 @@ use crate::{
     graphics::Gpu,
     model::{Position, Size},
     render::{
+        AllocatorKind,
         glyph_atlas::GlyphAtlas,
         texture::{TextureHandle, TextureRegistry},
     },
@@ -67,19 +68,21 @@ pub struct TextSystem {
     font_system: FontSystem,
     scale_factor: f32,
 }
-
 impl Default for TextSystem {
     fn default() -> Self {
+        Self::with_allocator(AllocatorKind::Shelf)
+    }
+}
+impl TextSystem {
+    pub fn with_allocator(allocator: AllocatorKind) -> Self {
         Self {
-            glyph_atlas: GlyphAtlas::default(),
+            glyph_atlas: GlyphAtlas::new(allocator),
             swash_cache: SwashCache::new(),
             font_system: FontSystem::new(),
             scale_factor: 1.0,
         }
     }
-}
 
-impl TextSystem {
     pub fn font_system(&self) -> &FontSystem {
         &self.font_system
     }

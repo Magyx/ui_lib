@@ -28,6 +28,9 @@ pub enum InitError {
     RequestDevice,
     CreateSurface,
 
+    UnsupportedFeatureProfile,
+    NoInstance,
+
     #[cfg(feature = "winit")]
     CreateWindow(winit::error::OsError),
 }

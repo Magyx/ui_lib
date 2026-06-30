@@ -6,8 +6,10 @@ pub(crate) struct AtlasRect {
     pub h: u32,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AllocatorKind {
     /// Row-based shelf packing. Fast, minimal bookkeeping, no individual free.
+    #[default]
     Shelf,
     /// Skyline packing. Better density for mixed sizes; supports individual free.
     Skyline,

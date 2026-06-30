@@ -1,7 +1,7 @@
-// TODO: should cache calls when no targets are attached
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use crate::{
+    builder::{EngineBuilder, GpuSource, TargetConfig},
     consts::*,
     context::{Context, EventCtx, LayoutCtx, PaintCtx, PrepareCtx, SweepCtx},
     event::{Event, KeyState, ScrollDelta, ToEvent},
@@ -9,8 +9,8 @@ use crate::{
     model::*,
     primitive::{Instance, Primitive, Vertex},
     render::{
-        AllocatorKind,
-        pipeline::PipelineRegistry,
+        AllocatorKind, PipelineFactoryFn,
+        pipeline::{PipelineKey, PipelineRegistry},
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
     },
@@ -55,8 +55,9 @@ pub struct Globals {
 }
 
 pub struct Gpu {
-    pub instance: wgpu::Instance,
-    pub adapter: wgpu::Adapter,
+    pub instance: Option<wgpu::Instance>,
+    pub adapter: Option<wgpu::Adapter>,
+    pub adapter_info: wgpu::AdapterInfo,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 }
@@ -92,54 +93,118 @@ pub struct Engine<'a, M> {
     pub(crate) push_constant_ranges: Vec<wgpu::PushConstantRange>,
     pipeline_registry: PipelineRegistry,
     renderer: Renderer,
-}
 
+    target_defaults: TargetConfig,
+    pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
+}
 impl<'a, M> Default for Engine<'a, M> {
     fn default() -> Self {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: crate::consts::default_backends(),
-            flags: crate::consts::default_instance_flags(),
-            ..Default::default()
-        });
+        Engine::builder()
+            .build()
+            .expect("wgpu: failed to initialize default Engine")
+    }
+}
+impl<'a, M> Engine<'a, M> {
+    /// Start an [`EngineBuilder`]. This is the configurable entry point; see
+    /// [`crate::builder`] for the full set of knobs.
+    pub fn builder() -> EngineBuilder<M> {
+        EngineBuilder::default()
+    }
 
-        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::default(),
-            compatible_surface: None,
-            force_fallback_adapter: false,
-        }))
-        .expect("wgpu: no suitable adapter found for the current surface");
+    pub(crate) fn from_builder(builder: EngineBuilder<M>) -> crate::Result<Self> {
+        let EngineBuilder {
+            power_preference,
+            force_fallback_adapter,
+            profile,
+            extra_features,
+            limits_override,
+            max_instances,
+            allocator,
+            theme,
+            target_defaults,
+            gpu_source,
+            pending_pipelines,
+            _marker,
+        } = builder;
 
-        let is_metal = adapter.get_info().backend == wgpu::Backend::Metal;
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: None,
-            required_features: wgpu::Features::PUSH_CONSTANTS
-                | wgpu::Features::TEXTURE_BINDING_ARRAY
-                | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER
-                | if !is_metal {
-                    wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY
-                } else {
-                    wgpu::Features::empty()
-                },
-            required_limits: wgpu::Limits {
-                max_push_constant_size: 128,
-                max_binding_array_elements_per_shader_stage: DEFAULT_MAX_TEXTURES,
-                ..Default::default()
-            },
-            memory_hints: wgpu::MemoryHints::MemoryUsage,
-            trace: wgpu::Trace::Off,
-        }))
-        .expect("wgpu: failed to request logical device/queue (feature set unsupported?)");
-        #[cfg(feature = "tracing")]
-        device.on_uncaptured_error(Box::new(|err| {
-            tracing::warn!("wgpu uncaptured error: {err}");
-        }));
+        let base_features =
+            wgpu::Features::PUSH_CONSTANTS | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER;
 
-        let gpu = Gpu {
-            instance,
-            adapter,
-            device,
-            queue,
+        let gpu = match gpu_source {
+            GpuSource::Create => {
+                // Env overrides (UI_BACKEND / UI_WGPU_*) are applied here and so
+                // win last over any builder intent.
+                let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                    backends: crate::consts::default_backends(),
+                    flags: crate::consts::default_instance_flags(),
+                    ..Default::default()
+                });
+
+                let adapter =
+                    pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                        power_preference,
+                        compatible_surface: None,
+                        force_fallback_adapter,
+                    }))
+                    .map_err(|_| crate::error::InitError::NoAdapter)?;
+
+                let adapter_info = adapter.get_info();
+                let is_metal = adapter_info.backend == wgpu::Backend::Metal;
+
+                let profile_features = profile
+                    .binding_array_features(is_metal)
+                    .map_err(|_| crate::error::InitError::UnsupportedFeatureProfile)?;
+
+                let required_limits = limits_override(wgpu::Limits {
+                    max_push_constant_size: 128,
+                    max_binding_array_elements_per_shader_stage: DEFAULT_MAX_TEXTURES,
+                    ..Default::default()
+                });
+
+                let (device, queue) =
+                    pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                        label: None,
+                        required_features: base_features | profile_features | extra_features,
+                        required_limits,
+                        memory_hints: wgpu::MemoryHints::MemoryUsage,
+                        trace: wgpu::Trace::Off,
+                    }))
+                    .map_err(|_| crate::error::InitError::RequestDevice)?;
+
+                #[cfg(feature = "tracing")]
+                device.on_uncaptured_error(Box::new(|err| {
+                    tracing::warn!("wgpu uncaptured error: {err}");
+                }));
+
+                Gpu {
+                    instance: Some(instance),
+                    adapter: Some(adapter),
+                    adapter_info,
+                    device,
+                    queue,
+                }
+            }
+            GpuSource::Injected {
+                device,
+                queue,
+                adapter_info,
+            } => {
+                // The embedder already created the device with whatever features
+                // it needs; profile/limits/power-preference are not ours to apply.
+                // We still validate the profile so `Compat` fails consistently.
+                let is_metal = adapter_info.backend == wgpu::Backend::Metal;
+                profile
+                    .binding_array_features(is_metal)
+                    .map_err(|_| crate::error::InitError::UnsupportedFeatureProfile)?;
+
+                Gpu {
+                    instance: None,
+                    adapter: None,
+                    adapter_info,
+                    device,
+                    queue,
+                }
+            }
         };
 
         let push_constant_ranges = vec![wgpu::PushConstantRange {
@@ -147,32 +212,26 @@ impl<'a, M> Default for Engine<'a, M> {
             range: 0..std::mem::size_of::<Globals>() as u32,
         }];
 
-        let renderer = Renderer::new(&gpu.device);
+        let renderer = Renderer::with_capacity(&gpu.device, max_instances, allocator);
         let pipeline_registry = PipelineRegistry::new();
 
-        let target_alloc = TargetIdAlloc::default();
-        let targets = HashMap::with_capacity(1);
-
-        Self {
+        Ok(Self {
             layout_engine: LayoutEngine::new(),
             instance_buf: Vec::new(),
             primitive_buf: Vec::new(),
-            theme: Theme::dark(),
+            theme,
 
             gpu: Arc::new(gpu),
-            target_alloc,
+            target_alloc: TargetIdAlloc::default(),
             primary_target: None,
-            targets,
+            targets: HashMap::with_capacity(1),
             push_constant_ranges,
             pipeline_registry,
             renderer,
-        }
-    }
-}
 
-impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
-    pub fn new() -> Self {
-        Self::default()
+            target_defaults,
+            pending_pipelines,
+        })
     }
 
     pub fn new_for<T>(
@@ -188,9 +247,12 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             + std::marker::Send
             + 'a,
     {
-        let mut engine = Self::new();
+        let mut engine = Self::default();
 
-        let target = engine.create_target(target, physical_size, scale_factor);
+        let cfg = engine.target_defaults;
+        let target = engine
+            .create_target(target, physical_size, scale_factor, &cfg)
+            .expect("wgpu: failed to create target surface");
 
         (target, engine)
     }
@@ -200,7 +262,8 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         target: Arc<T>,
         physical_size: Size<u32>,
         scale_factor: f64,
-    ) -> TargetId
+        cfg: &TargetConfig,
+    ) -> crate::Result<TargetId>
     where
         T: wgpu::rwh::HasWindowHandle
             + wgpu::rwh::HasDisplayHandle
@@ -217,52 +280,72 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
         )
         .max(Size::new(1, 1));
 
-        let surface = self
+        let instance = self
             .gpu
             .instance
+            .as_ref()
+            .ok_or(crate::error::InitError::NoInstance)?;
+        let surface = instance
             .create_surface(target.clone())
-            .expect("wgpu: failed to create surface (window/display handle mismatch?)");
+            .map_err(|_| crate::error::InitError::CreateSurface)?;
 
-        // TODO: should add configurability
-        let surface_caps = surface.get_capabilities(&self.gpu.adapter);
-        let format = {
-            use wgpu::TextureFormat::{Bgra8UnormSrgb, Rgba8UnormSrgb};
-            [Bgra8UnormSrgb, Rgba8UnormSrgb]
-                .into_iter()
-                .find(|f| surface_caps.formats.contains(f))
-                .or_else(|| surface_caps.formats.iter().copied().find(|f| f.is_srgb()))
-                .unwrap_or(Bgra8UnormSrgb)
+        let adapter = self
+            .gpu
+            .adapter
+            .as_ref()
+            .ok_or(crate::error::InitError::NoInstance)?;
+        let surface_caps = surface.get_capabilities(adapter);
+        let format = match cfg.format {
+            Some(f) if surface_caps.formats.contains(&f) => f,
+            _ => {
+                use wgpu::TextureFormat::{Bgra8UnormSrgb, Rgba8UnormSrgb};
+                [Bgra8UnormSrgb, Rgba8UnormSrgb]
+                    .into_iter()
+                    .find(|f| surface_caps.formats.contains(f))
+                    .or_else(|| surface_caps.formats.iter().copied().find(|f| f.is_srgb()))
+                    .unwrap_or(Bgra8UnormSrgb)
+            }
         };
 
-        let present_mode = if surface_caps
-            .present_modes
-            .contains(&wgpu::PresentMode::AutoVsync)
-        {
-            wgpu::PresentMode::AutoVsync
-        } else {
-            surface_caps
-                .present_modes
-                .first()
-                .copied()
-                .unwrap_or(wgpu::PresentMode::Fifo)
+        let present_mode = match cfg.present_mode {
+            Some(pm) if surface_caps.present_modes.contains(&pm) => pm,
+            _ => {
+                if surface_caps
+                    .present_modes
+                    .contains(&wgpu::PresentMode::AutoVsync)
+                {
+                    wgpu::PresentMode::AutoVsync
+                } else {
+                    surface_caps
+                        .present_modes
+                        .first()
+                        .copied()
+                        .unwrap_or(wgpu::PresentMode::Fifo)
+                }
+            }
         };
 
-        let alpha_mode = if surface_caps
-            .alpha_modes
-            .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
-        {
-            wgpu::CompositeAlphaMode::PreMultiplied
-        } else if surface_caps
-            .alpha_modes
-            .contains(&wgpu::CompositeAlphaMode::Inherit)
-        {
-            wgpu::CompositeAlphaMode::Inherit
-        } else {
-            surface_caps
-                .alpha_modes
-                .first()
-                .copied()
-                .unwrap_or(wgpu::CompositeAlphaMode::PreMultiplied)
+        let alpha_mode = match cfg.alpha_mode {
+            Some(am) if surface_caps.alpha_modes.contains(&am) => am,
+            _ => {
+                if surface_caps
+                    .alpha_modes
+                    .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
+                {
+                    wgpu::CompositeAlphaMode::PreMultiplied
+                } else if surface_caps
+                    .alpha_modes
+                    .contains(&wgpu::CompositeAlphaMode::Inherit)
+                {
+                    wgpu::CompositeAlphaMode::Inherit
+                } else {
+                    surface_caps
+                        .alpha_modes
+                        .first()
+                        .copied()
+                        .unwrap_or(wgpu::CompositeAlphaMode::PreMultiplied)
+                }
+            }
         };
 
         let config = wgpu::SurfaceConfiguration {
@@ -273,7 +356,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             present_mode,
             alpha_mode,
             view_formats: vec![],
-            desired_maximum_frame_latency: 1,
+            desired_maximum_frame_latency: cfg.max_frame_latency.max(1),
         };
 
         surface.configure(&self.gpu.device, &config);
@@ -309,6 +392,18 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
                 self.renderer.textures.layout(),
                 &self.push_constant_ranges,
             );
+
+            let fmt = target.config.format;
+            for (key, factory) in std::mem::take(&mut self.pending_pipelines) {
+                let pipeline = factory(
+                    &self.gpu,
+                    &fmt,
+                    &[Vertex::desc(), Primitive::desc()],
+                    self.renderer.textures.layout(),
+                    &self.push_constant_ranges,
+                );
+                self.pipeline_registry.register_pipeline(key, pipeline);
+            }
         }
 
         let tid = self.target_alloc.alloc();
@@ -318,7 +413,7 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             self.primary_target = Some(tid);
         }
 
-        tid
+        Ok(tid)
     }
 
     #[inline]
@@ -380,7 +475,44 @@ impl<'a, M: std::fmt::Debug + 'static> Engine<'a, M> {
             + std::marker::Send
             + 'a,
     {
-        self.create_target(target, physical_size, scale_factor)
+        let cfg = self.target_defaults;
+        self.create_target(target, physical_size, scale_factor, &cfg)
+            .expect("wgpu: failed to create target surface")
+    }
+    pub fn attach_target_with<T>(
+        &mut self,
+        target: Arc<T>,
+        physical_size: Size<u32>,
+        scale_factor: f64,
+        cfg: TargetConfig,
+    ) -> TargetId
+    where
+        T: wgpu::rwh::HasWindowHandle
+            + wgpu::rwh::HasDisplayHandle
+            + Sized
+            + std::marker::Sync
+            + std::marker::Send
+            + 'a,
+    {
+        self.create_target(target, physical_size, scale_factor, &cfg)
+            .expect("wgpu: failed to create target surface")
+    }
+    pub fn try_attach_target_with<T>(
+        &mut self,
+        target: Arc<T>,
+        physical_size: Size<u32>,
+        scale_factor: f64,
+        cfg: TargetConfig,
+    ) -> crate::Result<TargetId>
+    where
+        T: wgpu::rwh::HasWindowHandle
+            + wgpu::rwh::HasDisplayHandle
+            + Sized
+            + std::marker::Sync
+            + std::marker::Send
+            + 'a,
+    {
+        self.create_target(target, physical_size, scale_factor, &cfg)
     }
     pub fn detach_target(&mut self, tid: &TargetId) {
         if self.targets.remove(tid).is_some() && self.primary_target == Some(*tid) {

@@ -76,6 +76,7 @@ impl PagePool {
 pub(crate) struct GlyphAtlas {
     buckets: [PagePool; NUM_BUCKETS],
     next_page_id: usize,
+    page_allocator: AllocatorKind,
 
     /// Maps a `CacheKey` to its `TextureHandle` and the `page_id` that owns it.
     glyph_map: HashMap<CacheKey, (TextureHandle, usize)>,
@@ -83,9 +84,13 @@ pub(crate) struct GlyphAtlas {
     page_last_used: HashMap<usize, u64>,
     frame: u64,
 }
-
 impl Default for GlyphAtlas {
     fn default() -> Self {
+        Self::new(AllocatorKind::Shelf)
+    }
+}
+impl GlyphAtlas {
+    pub(crate) fn new(page_allocator: AllocatorKind) -> Self {
         Self {
             buckets: [
                 PagePool::new(BUCKET_CAPS[0]),
@@ -93,14 +98,13 @@ impl Default for GlyphAtlas {
                 PagePool::new(BUCKET_CAPS[2]),
             ],
             next_page_id: 0,
+            page_allocator,
             glyph_map: HashMap::new(),
             page_last_used: HashMap::new(),
             frame: 0,
         }
     }
-}
 
-impl GlyphAtlas {
     /// Advance the frame counter. Must be called once per render pass,
     /// before the prepare phase, so that LRU timestamps are meaningful.
     pub(crate) fn tick(&mut self) {
@@ -226,7 +230,7 @@ impl GlyphAtlas {
         self.next_page_id = self.next_page_id.wrapping_add(1);
 
         let atlas =
-            texture_reg.create_atlas(gpu, GLYPH_PAGE_SIZE, GLYPH_PAGE_SIZE, AllocatorKind::Shelf);
+            texture_reg.create_atlas(gpu, GLYPH_PAGE_SIZE, GLYPH_PAGE_SIZE, self.page_allocator);
         let pool = &mut self.buckets[bucket_idx];
         pool.pages.push_back(Page { id, atlas });
         pool.current_page_id = Some(id);

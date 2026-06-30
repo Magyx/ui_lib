@@ -5,6 +5,8 @@ pub use error::{Error, Result};
 pub use wgpu;
 
 pub(crate) mod consts;
+
+pub mod builder;
 pub mod context;
 pub mod error;
 pub mod event;

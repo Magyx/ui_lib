@@ -1,7 +1,6 @@
 use wgpu::util::DeviceExt;
 
 use crate::{
-    consts::DEFAULT_MAX_INSTANCES,
     graphics::{Globals, Gpu, Target},
     primitive::{Instance, Primitive, QUAD_INDICES, QUAD_VERTICES},
     render::{
@@ -23,13 +22,19 @@ pub(crate) struct Renderer {
     index_buffer: wgpu::Buffer,
     number_of_indices: u32,
     instance_buffer: wgpu::Buffer,
+    instance_capacity: u64,
 
     pub(crate) textures: TextureRegistry,
     pub(crate) text: TextSystem,
 }
 
 impl Renderer {
-    pub(crate) fn new(device: &wgpu::Device) -> Self {
+    pub(crate) fn with_capacity(
+        device: &wgpu::Device,
+        max_instances: u64,
+        allocator: crate::render::AllocatorKind,
+    ) -> Self {
+        let max_instances = max_instances.max(1);
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Pipeline Vertex Buffer"),
             contents: bytemuck::cast_slice(QUAD_VERTICES),
@@ -45,7 +50,7 @@ impl Renderer {
 
         let instance_buffer = device.create_buffer(&wgpu::wgt::BufferDescriptor {
             label: Some("Pipeline Instance Buffer"),
-            size: std::mem::size_of::<Primitive>() as u64 * DEFAULT_MAX_INSTANCES,
+            size: std::mem::size_of::<Primitive>() as u64 * max_instances,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -54,14 +59,35 @@ impl Renderer {
             vertex_buffer,
             index_buffer,
             number_of_indices,
+            instance_capacity: max_instances,
             instance_buffer,
             textures: TextureRegistry::new(device),
-            text: TextSystem::default(),
+            text: TextSystem::with_allocator(allocator),
         }
     }
 
+    fn ensure_instance_capacity(&mut self, device: &wgpu::Device, needed: u64) -> bool {
+        if needed <= self.instance_capacity {
+            return false;
+        }
+
+        let new_cap = needed.max(1).next_power_of_two();
+        self.instance_buffer = device.create_buffer(&wgpu::wgt::BufferDescriptor {
+            label: Some("Pipeline Instance Buffer"),
+            size: std::mem::size_of::<Primitive>() as u64 * new_cap,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.instance_capacity = new_cap;
+
+        #[cfg(feature = "tracing")]
+        tracing::debug!(new_cap, needed, "instance buffer grown");
+
+        true
+    }
+
     pub fn render<'a, M>(
-        &self,
+        &mut self,
         gpu: &Gpu,
         target: &Target<'a, M>,
         pipeline_registry: &mut PipelineRegistry,
@@ -136,6 +162,8 @@ impl Renderer {
                 clip: current_clip,
             });
         }
+
+        self.ensure_instance_capacity(&gpu.device, primitives.len() as u64);
 
         gpu.queue
             .write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(primitives));
