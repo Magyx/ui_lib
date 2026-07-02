@@ -9,7 +9,8 @@ use crate::{
     layout::LayoutEngine,
     model::{Color, Position, Size},
     primitive::Instance,
-    render::{text::TextSystem, texture::TextureRegistry},
+    render::texture::TextureRegistry,
+    text::TextBackend,
     theme::Theme,
 };
 
@@ -232,7 +233,7 @@ impl<M> Context<M> {
 pub struct LayoutCtx<'a, M> {
     pub globals: &'a Globals,
     pub ui: &'a mut Context<M>,
-    pub text: &'a mut TextSystem,
+    pub text: &'a mut dyn TextBackend,
     pub theme: &'a Theme,
 }
 
@@ -248,7 +249,7 @@ impl<'a, M> LayoutCtx<'a, M> {
 
 pub struct PrepareCtx<'a> {
     pub globals: &'a Globals,
-    pub text: &'a mut TextSystem,
+    pub text: &'a mut dyn TextBackend,
     pub gpu: &'a Gpu,
     pub texture: &'a mut TextureRegistry,
     pub(crate) layout: &'a LayoutEngine,
@@ -285,7 +286,7 @@ impl<'a> PrepareCtx<'a> {
 
 pub struct PaintCtx<'a> {
     pub globals: &'a Globals,
-    pub text: &'a TextSystem,
+    pub text: &'a dyn TextBackend,
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
     pub view_state: &'a mut ViewState,
@@ -295,7 +296,7 @@ pub struct PaintCtx<'a> {
 impl<'a> PaintCtx<'a> {
     pub fn new(
         globals: &'a Globals,
-        text: &'a TextSystem,
+        text: &'a dyn TextBackend,
         layout: &'a LayoutEngine,
         view_state: &'a mut ViewState,
         theme: &'a Theme,
@@ -367,7 +368,7 @@ impl<'a> PaintCtx<'a> {
 
 pub struct EventCtx<'a, M> {
     pub globals: &'a Globals,
-    pub text: &'a mut TextSystem,
+    pub text: &'a mut dyn TextBackend,
     pub ui: &'a mut Context<M>,
     pub event: Option<UiEventRef<'a>>,
     #[doc(hidden)]
@@ -378,7 +379,7 @@ pub struct EventCtx<'a, M> {
 impl<'a, M> EventCtx<'a, M> {
     pub fn new(
         globals: &'a Globals,
-        text: &'a mut TextSystem,
+        text: &'a mut dyn TextBackend,
         ui: &'a mut Context<M>,
         event: Option<UiEventRef<'a>>,
         layout: &'a LayoutEngine,

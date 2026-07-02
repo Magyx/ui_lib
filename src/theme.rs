@@ -1,6 +1,7 @@
-use cosmic_text::{Style, Weight};
-
-use crate::model::Color;
+use crate::{
+    model::Color,
+    text::{Style, Weight},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextStyle {

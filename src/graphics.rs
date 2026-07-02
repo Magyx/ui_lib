@@ -124,6 +124,7 @@ impl<'a, M> Engine<'a, M> {
             target_defaults,
             gpu_source,
             pending_pipelines,
+            text_backend,
             _marker,
         } = builder;
 
@@ -212,7 +213,21 @@ impl<'a, M> Engine<'a, M> {
             range: 0..std::mem::size_of::<Globals>() as u32,
         }];
 
-        let renderer = Renderer::with_capacity(&gpu.device, max_instances, allocator);
+        let text = if let Some(tb) = text_backend {
+            tb
+        } else {
+            #[cfg(feature = "text_cosmic")]
+            {
+                Box::new(crate::render::text_cosmic::TextCosmic::new(allocator))
+            }
+            #[cfg(not(feature = "text_cosmic"))]
+            {
+                _ = allocator;
+                tracing::error!("No text backend enabled or selected!");
+                unimplemented!()
+            }
+        };
+        let renderer = Renderer::with_capacity(&gpu.device, max_instances, text);
         let pipeline_registry = PipelineRegistry::new();
 
         Ok(Self {
@@ -613,7 +628,7 @@ impl<'a, M> Engine<'a, M> {
 
         if let Some(root) = target.root.as_mut() {
             let mut event_cx = EventCtx {
-                text: &mut self.renderer.text,
+                text: &mut *self.renderer.text,
                 event: None,
                 globals: &target.globals,
                 ui: &mut target.ctx,
@@ -673,7 +688,7 @@ impl<'a, M> Engine<'a, M> {
             let mut layout_ctx = LayoutCtx {
                 globals: &target.globals,
                 ui: &mut target.ctx,
-                text: &mut self.renderer.text,
+                text: &mut *self.renderer.text,
                 theme: &self.theme,
             };
             layout::run_layout(
@@ -691,7 +706,7 @@ impl<'a, M> Engine<'a, M> {
             crate::scope!("prepare");
             let mut prepare_ctx = PrepareCtx {
                 globals: &target.globals,
-                text: &mut self.renderer.text,
+                text: &mut *self.renderer.text,
                 gpu: &self.gpu.clone(),
                 texture: &mut self.renderer.textures,
                 view_state: &mut target.ctx.view_state,
@@ -707,7 +722,7 @@ impl<'a, M> Engine<'a, M> {
             crate::scope!("paint");
             let mut paint_ctx = PaintCtx {
                 globals: &target.globals,
-                text: &self.renderer.text,
+                text: &*self.renderer.text,
                 view_state: &mut target.ctx.view_state,
                 layout: &self.layout_engine,
                 current_node: root_id,
@@ -889,7 +904,7 @@ impl<'a, M> Engine<'a, M> {
 
             if ev_view.is_some() {
                 let mut ctx = EventCtx {
-                    text: &mut self.renderer.text,
+                    text: &mut *self.renderer.text,
                     globals: &target.globals,
                     ui: &mut target.ctx,
                     event: ev_view,

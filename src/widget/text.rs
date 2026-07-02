@@ -1,13 +1,14 @@
 use std::borrow::Cow;
 
-use cosmic_text::{Attrs, Buffer, FontSystem, Metrics, Shaping};
-
-use crate::theme::{TextStyle, Theme, Typography};
+use crate::{
+    text::{RunStyle, Style, TextBackend, TextBuffer, TextMetrics, Weight, Wrap},
+    theme::{TextStyle, Theme, Typography},
+};
 
 use super::*;
 
 pub(super) struct TextViewState {
-    pub(super) buffer: Buffer,
+    pub(super) buffer: Box<dyn TextBuffer>,
 
     pub(super) shaped_text: Option<String>,
     shaped_width: f32,
@@ -25,9 +26,9 @@ pub(super) struct TextViewState {
 }
 
 impl TextViewState {
-    pub(super) fn new(fs: &mut FontSystem, desired: Metrics) -> Self {
+    pub(super) fn new(buffer: Box<dyn TextBuffer>) -> Self {
         Self {
-            buffer: Buffer::new(fs, desired),
+            buffer,
             shaped_text: None,
             shaped_width: 0.0,
             shaped_wrap: Wrap::None,
@@ -53,79 +54,58 @@ impl TextViewState {
             && self.layout_weight == widget.weight
     }
 
-    fn ensure_layout(
-        &mut self,
-        widget: &Text,
-        fs: &mut FontSystem,
-        rs: &TextStyle,
-    ) -> (i32, usize) {
+    fn ensure_layout(&mut self, widget: &Text, rs: &TextStyle) -> (i32, usize) {
         if self.layout_hit(widget, rs) {
-            (self.layout_intrinsic_w, self.layout_line_count)
-        } else {
-            let wrap = widget.wrap;
-
-            let (intrinsic_w, line_count) = {
-                let b = &mut self.buffer;
-
-                // (a) Unwrapped measurement
-                b.set_wrap(fs, Wrap::None);
-                b.set_text(fs, &widget.text, &widget.attrs(rs), Shaping::Basic);
-                b.set_size(fs, None, None);
-                b.shape_until_scroll(fs, false);
-
-                let mut unwrapped_w = 0.0f32;
-                let mut lines = 0usize;
-                let mut prev_y: Option<f32> = None;
-                for run in b.layout_runs() {
-                    unwrapped_w = unwrapped_w.max(run.line_w);
-                    if prev_y != Some(run.line_y) {
-                        lines += 1;
-                        prev_y = Some(run.line_y);
-                    }
-                }
-
-                let unwrapped_w_i = unwrapped_w.ceil() as i32;
-
-                // (b) Minimal useful width with wrapping
-                let min_break_w_i = if wrap != Wrap::None {
-                    let mut longest = 0.0f32;
-                    for piece in widget.text.split_whitespace().filter(|s| !s.is_empty()) {
-                        b.set_wrap(fs, Wrap::None);
-                        b.set_text(fs, piece, &widget.attrs(rs), Shaping::Basic);
-                        b.set_size(fs, None, None);
-                        b.shape_until_scroll(fs, false);
-                        for run in b.layout_runs() {
-                            longest = longest.max(run.line_w);
-                        }
-                    }
-                    longest.ceil() as i32
-                } else {
-                    unwrapped_w_i
-                };
-
-                let intrinsic_w = if widget.wrap == Wrap::None {
-                    unwrapped_w_i
-                } else {
-                    min_break_w_i
-                };
-
-                (intrinsic_w, lines.max(1))
-            };
-
-            self.shaped_text = None;
-
-            self.layout_text = Some(widget.text.to_string());
-            self.layout_font_size = rs.font_size;
-            self.layout_line_height = rs.line_height;
-            self.layout_wrap = widget.wrap;
-            self.layout_family = widget.family.clone();
-            self.layout_style = widget.style;
-            self.layout_weight = widget.weight;
-            self.layout_intrinsic_w = intrinsic_w;
-            self.layout_line_count = line_count;
-
-            (intrinsic_w, line_count)
+            return (self.layout_intrinsic_w, self.layout_line_count);
         }
+
+        let wrap = widget.wrap;
+
+        // (a) Unwrapped measurement.
+        let style_unwrapped = widget.run_style(rs, Wrap::None);
+        self.buffer.set_style(&style_unwrapped);
+        self.buffer.set_text(&widget.text);
+        self.buffer.set_width(None);
+        self.buffer.shape();
+        let unwrapped_w = self.buffer.measured().size.width;
+        let line_count = self.buffer.line_count();
+        let unwrapped_w_i = unwrapped_w.ceil() as i32;
+
+        // (b) Minimal useful width with wrapping.
+        let min_break_w_i = if wrap != Wrap::None {
+            let mut longest = 0.0f32;
+            for piece in widget.text.split_whitespace().filter(|s| !s.is_empty()) {
+                self.buffer.set_text(piece);
+                self.buffer.set_width(None);
+                self.buffer.shape();
+                longest = longest.max(self.buffer.measured().size.width);
+            }
+            longest.ceil() as i32
+        } else {
+            unwrapped_w_i
+        };
+
+        let intrinsic_w = if wrap == Wrap::None {
+            unwrapped_w_i
+        } else {
+            min_break_w_i
+        };
+
+        // The per-word probing above left the buffer holding a stray word; the
+        // final wrapped shape happens in `ensure_shaped`, so invalidate.
+        self.shaped_text = None;
+
+        self.layout_text = Some(widget.text.to_string());
+        self.layout_font_size = rs.font_size;
+        self.layout_line_height = rs.line_height;
+        self.layout_wrap = widget.wrap;
+        self.layout_family = widget.family.clone();
+        self.layout_style = widget.style;
+        self.layout_weight = widget.weight;
+        self.layout_intrinsic_w = intrinsic_w;
+        self.layout_line_count = line_count;
+
+        (intrinsic_w, line_count)
     }
 
     fn is_shaped(&self, widget: &Text, target_w: f32) -> bool {
@@ -134,13 +114,13 @@ impl TextViewState {
             && self.shaped_wrap == widget.wrap
     }
 
-    fn ensure_shaped(&mut self, widget: &Text, target_w: f32, fs: &mut FontSystem, rs: &TextStyle) {
+    fn ensure_shaped(&mut self, widget: &Text, target_w: f32, rs: &TextStyle) {
         if !self.is_shaped(widget, target_w) {
-            let b = &mut self.buffer;
-            b.set_wrap(fs, widget.wrap);
-            b.set_text(fs, &widget.text, &widget.attrs(rs), Shaping::Basic);
-            b.set_size(fs, Some(target_w), None);
-            b.shape_until_scroll(fs, false);
+            let style = widget.run_style(rs, widget.wrap);
+            self.buffer.set_style(&style);
+            self.buffer.set_text(&widget.text);
+            self.buffer.set_width(Some(target_w));
+            self.buffer.shape();
 
             self.shaped_text = Some(widget.text.to_string());
             self.shaped_width = target_w;
@@ -296,37 +276,19 @@ impl Text {
             style: self.style.unwrap_or(base.style),
         }
     }
-    fn attrs(&self, rs: &TextStyle) -> Attrs<'_> {
-        let mut attrs = Attrs::new()
-            .style(self.style.unwrap_or(rs.style))
-            .weight(self.weight.unwrap_or(rs.weight));
-
-        if let Some(family) = &self.family {
-            attrs = attrs.family(family.as_cosmic());
-        }
-
-        if let Some(color) = self.color_opt {
-            attrs = attrs.color(color.as_cosmic());
-        }
-
-        attrs
+    fn run_style(&self, rs: &TextStyle, wrap: Wrap) -> RunStyle {
+        RunStyle::from_theme(rs, self.family.clone(), wrap, self.color_opt)
     }
-    fn get_state<'b>(&self, view_state: &'b ViewState) -> Option<&'b TextViewState> {
-        view_state.get::<TextViewState>(&self.id)
-    }
+
     fn ensure_state<'b>(
         &self,
         view_state: &'b mut ViewState,
-        fs: &mut cosmic_text::FontSystem,
-        rs: &TextStyle,
+        text: &mut dyn TextBackend,
+        metrics: TextMetrics,
     ) -> &'b mut TextViewState {
-        let desired = Metrics::relative(rs.font_size, rs.line_height);
-        let state = view_state.ensure(self.id, || TextViewState::new(fs, desired));
+        let state = view_state.ensure(self.id, || TextViewState::new(text.create_buffer(metrics)));
 
-        if state.buffer.metrics().font_size != desired.font_size
-            || state.buffer.metrics().line_height != desired.line_height
-        {
-            state.buffer.set_metrics(fs, desired);
+        if state.buffer.metrics() != metrics {
             state.shaped_text = None;
             state.layout_text = None;
         }
@@ -351,9 +313,9 @@ impl<M> Widget<M> for Text {
 
     fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
         let rs = self.resolved_style(ctx.theme);
-        let fs = ctx.text.font_system_mut();
-        let state = self.ensure_state(&mut ctx.ui.view_state, fs, &rs);
-        let (intrinsic_w, line_count) = state.ensure_layout(self, fs, &rs);
+        let metrics = TextMetrics::new(rs.font_size, rs.line_height);
+        let state = self.ensure_state(&mut ctx.ui.view_state, ctx.text, metrics);
+        let (intrinsic_w, line_count) = state.ensure_layout(self, &rs);
 
         let line_px = (rs.font_size * rs.line_height).ceil() as i32;
         let intrinsic_h = (line_count as i32).saturating_mul(line_px);
@@ -372,19 +334,11 @@ impl<M> Widget<M> for Text {
     fn min_height_for_width<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>, width: i32) -> Option<i32> {
         let rs = self.resolved_style(ctx.theme);
         let target_w = width.max(1) as f32;
-        let fs = ctx.text.font_system_mut();
-        let state = self.ensure_state(&mut ctx.ui.view_state, fs, &rs);
-        state.ensure_shaped(self, target_w, fs, &rs);
+        let metrics = TextMetrics::new(rs.font_size, rs.line_height);
+        let state = self.ensure_state(&mut ctx.ui.view_state, ctx.text, metrics);
+        state.ensure_shaped(self, target_w, &rs);
 
-        let mut lines = 0usize;
-        let mut last = f32::NAN;
-        for run in state.buffer.layout_runs() {
-            if run.line_y != last {
-                lines += 1;
-                last = run.line_y;
-            }
-        }
-        let lines = lines.max(1) as i32;
+        let lines = state.buffer.line_count() as i32;
         let line_px = (rs.font_size * rs.line_height).ceil() as i32;
         let h = lines.saturating_mul(line_px);
 
@@ -399,50 +353,26 @@ impl<M> Widget<M> for Text {
     }
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
-        let Some(state) = self.get_state(ctx.view_state) else {
-            return;
-        };
-        for key in state.buffer.layout_runs().flat_map(|r| r.glyphs) {
-            if let Some((size, key)) = ctx.text.prepare_glyph_data(key) {
-                let _ = ctx
-                    .text
-                    .upload_glyph(ctx.gpu, ctx.texture, key, size.width, size.height);
-            }
+        if let Some(state) = ctx.view_state.get_mut::<TextViewState>(&self.id) {
+            state.buffer.prepare(ctx.gpu, ctx.texture);
         }
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         let base_color = ctx.theme.on_surface;
 
-        let Some(buf) = self.get_state(ctx.view_state).map(|vs| &vs.buffer) else {
+        let Some(state) = ctx.view_state.get::<TextViewState>(&self.id) else {
             return;
         };
 
-        for run in buf.layout_runs() {
-            for glyph in run.glyphs {
-                let Some((Position { x: left, y: top }, Size { width, height }, cache_key)) = ctx
-                    .text
-                    .get_glyph_data(glyph, (self.x as f32, self.y as f32), run.line_y)
-                else {
-                    continue;
-                };
-
-                let tint = glyph
-                    .color_opt
-                    .map(|c| Color::rgba(c.r(), c.g(), c.b(), c.a()))
-                    .unwrap_or(base_color);
-
-                let Some(handle) = ctx.text.lookup_glyph_handle(cache_key) else {
-                    continue;
-                };
-
-                instances.push(Instance::ui_tex(
-                    Position::new(left, top),
-                    Size::new(width, height),
-                    tint,
-                    handle,
-                ));
-            }
+        for glyph in state.buffer.glyphs() {
+            let tint = glyph.color.unwrap_or(base_color);
+            instances.push(Instance::ui_tex(
+                Position::new(glyph.pos.x + self.x as f32, glyph.pos.y + self.y as f32),
+                glyph.size,
+                tint,
+                glyph.handle,
+            ));
         }
     }
 }

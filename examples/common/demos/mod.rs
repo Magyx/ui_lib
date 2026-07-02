@@ -4,6 +4,7 @@ use ui::{
     el,
     graphics::TargetId,
     model::*,
+    text::Wrap,
     theme::Theme,
     widget::{
         Button, Column, Element, Length, Overlay, Rectangle, Row, Scrollable, Slider, Spacer, Text,

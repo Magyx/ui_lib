@@ -2,17 +2,16 @@ use std::any::TypeId;
 use std::borrow::Cow;
 use std::marker::PhantomData;
 
-use cosmic_text::{Buffer, Cursor, Motion};
-
 use super::*;
 use crate::{
     event::{KeyState, LogicalKey, MouseButton, UiEventRef},
     layout::mix64,
+    text::{Motion, Style, TextCursor, Weight, Wrap},
 };
 
 #[derive(Clone, Copy, PartialEq)]
 struct CaretKey {
-    cursor: Cursor,
+    cursor: TextCursor,
     l: i32,
     t: i32,
     w: i32,
@@ -29,8 +28,8 @@ pub struct TextInputViewState {
     hovered: bool,
     focused: bool,
 
-    cursor: Cursor,
-    selection_anchor: Option<Cursor>,
+    cursor: TextCursor,
+    selection_anchor: Option<TextCursor>,
     dragging: bool,
     caret_cache: CaretCache,
 }
@@ -41,7 +40,7 @@ impl TextInputViewState {
             hovered: false,
             focused: false,
 
-            cursor: Cursor::new(0, 0),
+            cursor: TextCursor::new(0, 0),
             selection_anchor: None,
             dragging: false,
             caret_cache: CaretCache::default(),
@@ -95,13 +94,13 @@ impl TextInputViewState {
         if value.is_empty() {
             return false;
         }
-        self.selection_anchor = Some(Cursor::new(0, 0));
+        self.selection_anchor = Some(TextCursor::new(0, 0));
         self.cursor = Self::byte_offset_to_cursor(value, value.len());
         true
     }
 
     /// Convert a flat byte offset into `value` to a `Cursor` (line, index-within-line).
-    fn byte_offset_to_cursor(value: &str, offset: usize) -> Cursor {
+    fn byte_offset_to_cursor(value: &str, offset: usize) -> TextCursor {
         let offset = offset.min(value.len());
         let mut line = 0usize;
         let mut line_start = 0usize;
@@ -114,13 +113,13 @@ impl TextInputViewState {
                 line_start = i + 1;
             }
         }
-        Cursor::new(line, offset - line_start)
+        TextCursor::new(line, offset - line_start)
     }
 }
 
 pub type Handler<M> = dyn Fn(&str) -> M + Send + Sync + 'static;
 
-fn cursor_byte_offset(value: &str, cursor: Cursor) -> usize {
+fn cursor_byte_offset(value: &str, cursor: TextCursor) -> usize {
     let mut offset = 0usize;
     let mut line = 0usize;
     // Walk through `value` counting newlines to find where cursor.line starts.
@@ -143,7 +142,7 @@ fn cursor_byte_offset(value: &str, cursor: Cursor) -> usize {
 }
 
 /// Order two cursors so the returned pair is `(start, end)` in document order.
-fn order_cursors(a: Cursor, b: Cursor) -> (Cursor, Cursor) {
+fn order_cursors(a: TextCursor, b: TextCursor) -> (TextCursor, TextCursor) {
     if (a.line, a.index) <= (b.line, b.index) {
         (a, b)
     } else {
@@ -318,99 +317,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         view_state.get_mut::<TextInputViewState>(&self.id)
     }
 
-    // TODO: this should be cached.
-    /// Compute the pixel (x, y, height) of the cursor by finding the glyph at cursor.index
-    /// in the layout runs, using cosmic_text's own layout data.
-    fn compute_cursor_rect(
-        buffer: &Buffer,
-        cursor: Cursor,
-        l: i32,
-        t: i32,
-    ) -> Option<(f32, f32, f32)> {
-        let cosmic_text::Metrics {
-            font_size,
-            line_height,
-        } = buffer.metrics();
-        let line_advance = font_size * line_height;
-        let caret_h = font_size * 1.1;
-
-        // Walk layout runs to find the one matching our cursor line,
-        // then find the glyph span containing cursor.index.
-        let mut last_matching_line_y: Option<f32> = None;
-        let mut last_matching_end_x: f32 = 0.0;
-
-        for run in buffer.layout_runs() {
-            if run.line_i != cursor.line {
-                // Track the last run before our cursor line for positioning
-                // a cursor on an empty trailing line.
-                if run.line_i < cursor.line {
-                    last_matching_line_y = Some(run.line_y);
-                }
-                continue;
-            }
-            last_matching_line_y = Some(run.line_y);
-
-            // Check if cursor is at or before the first glyph
-            if let Some(first) = run.glyphs.first()
-                && cursor.index <= first.start
-            {
-                let cx = l as f32 + first.x;
-                let cy = t as f32 + run.line_y - font_size * 0.9;
-                return Some((cx, cy, caret_h));
-            }
-
-            for glyph in run.glyphs.iter() {
-                if cursor.index >= glyph.start && cursor.index <= glyph.end {
-                    let x = if cursor.index == glyph.start {
-                        glyph.x
-                    } else if cursor.index == glyph.end {
-                        glyph.x + glyph.w
-                    } else {
-                        let cluster_len = glyph.end - glyph.start;
-                        let prefix_len = cursor.index - glyph.start;
-                        let frac = prefix_len as f32 / cluster_len.max(1) as f32;
-                        glyph.x + glyph.w * frac
-                    };
-                    let cx = l as f32 + x;
-                    let cy = t as f32 + run.line_y - font_size * 0.9;
-                    return Some((cx, cy, caret_h));
-                }
-                last_matching_end_x = glyph.x + glyph.w;
-            }
-        }
-
-        if let Some(line_y) = last_matching_line_y {
-            let has_run_on_cursor_line = buffer.layout_runs().any(|r| r.line_i == cursor.line);
-
-            if !has_run_on_cursor_line {
-                let cx = l as f32;
-                let cy = t as f32 + line_y + line_advance - font_size * 0.9;
-                return Some((cx, cy, caret_h));
-            }
-
-            let cx = l as f32 + last_matching_end_x;
-            let cy = t as f32 + line_y - font_size * 0.9;
-            return Some((cx, cy, caret_h));
-        }
-
-        // Completely empty buffer — place cursor at origin.
-        let baseline = buffer
-            .layout_runs()
-            .next()
-            .map(|r| r.line_y)
-            .unwrap_or(line_advance);
-        let cx = l as f32;
-        let cy = t as f32 + baseline - font_size * 0.9;
-        Some((cx, cy, caret_h))
-    }
-
-    fn apply_motion(
-        &self,
-        view_state: &mut ViewState,
-        fs: &mut cosmic_text::FontSystem,
-        motion: Motion,
-        extend: bool,
-    ) -> bool {
+    fn apply_motion(&self, view_state: &mut ViewState, motion: Motion, extend: bool) -> bool {
         if self.value.is_empty() {
             return false;
         }
@@ -452,8 +359,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
         let new = view_state
             .get_mut::<text::TextViewState>(&self.child_id)
-            .and_then(|tv| tv.buffer.cursor_motion(fs, cursor, None, motion))
-            .map(|(c, _)| c);
+            .and_then(|tv| tv.buffer.cursor_motion(cursor, motion));
 
         if let Some(nc) = new
             && let Some(st) = self.state_mut(view_state)
@@ -531,9 +437,9 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
     }
 
     /// Hit-test the current mouse position to a text cursor.
-    fn hit_cursor(&self, ctx: &EventCtx<M>) -> Option<Cursor> {
+    fn hit_cursor(&self, ctx: &EventCtx<M>) -> Option<TextCursor> {
         if self.value.is_empty() {
-            return Some(Cursor::new(0, 0));
+            return Some(TextCursor::new(0, 0));
         }
         let (l, t) = self.text_origin();
         let cx = ctx.ui.mouse_pos.x - l as f32;
@@ -632,7 +538,8 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         let rect = if focused {
             ctx.view_state
                 .get::<text::TextViewState>(&self.child_id)
-                .and_then(|tv| Self::compute_cursor_rect(&tv.buffer, cursor, l, t))
+                .and_then(|tv| tv.buffer.cursor_rect(cursor))
+                .map(|r| (l as f32 + r.x, t as f32 + r.y, r.height))
         } else {
             None
         };
@@ -689,22 +596,18 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                 .get::<text::TextViewState>(&self.child_id)
                 .map(|tv| &tv.buffer)
             {
-                for run in buf.layout_runs() {
-                    if let Some((rx, rw)) = run.highlight(start, end)
-                        && rw > 0.0
-                    {
-                        let x0 = (l as f32 + rx - SELECTION_PAD_X).max(clip_l);
-                        let x1 = (l as f32 + rx + rw + SELECTION_PAD_X).min(clip_r);
-                        let w = x1 - x0;
-                        if w <= 0.0 {
-                            continue;
-                        }
-                        instances.push(Instance::ui(
-                            Position::new(x0, t as f32 + run.line_top - SELECTION_PAD_Y),
-                            Size::new(w, run.line_height + 2.0 * SELECTION_PAD_Y),
-                            sel_color,
-                        ));
+                for r in buf.selection_rects(start, end) {
+                    let x0 = (l as f32 + r.x - SELECTION_PAD_X).max(clip_l);
+                    let x1 = (l as f32 + r.x + r.width + SELECTION_PAD_X).min(clip_r);
+                    let w = x1 - x0;
+                    if w <= 0.0 {
+                        continue;
                     }
+                    instances.push(Instance::ui(
+                        Position::new(x0, t as f32 + r.top - SELECTION_PAD_Y),
+                        Size::new(w, r.height + 2.0 * SELECTION_PAD_Y),
+                        sel_color,
+                    ));
                 }
             }
         }
@@ -745,7 +648,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             ctx.ui.kbd_focus_item = Some(self.id);
             if let Some(st) = self.state_mut(&mut ctx.ui.view_state) {
                 st.focused = true;
-                let c = hit.unwrap_or_else(|| Cursor::new(0, self.value.len()));
+                let c = hit.unwrap_or_else(|| TextCursor::new(0, self.value.len()));
                 if shift {
                     if st.selection_anchor.is_none() {
                         st.selection_anchor = Some(st.cursor);
@@ -787,7 +690,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                 let was_dragging = st.dragging;
                 st.dragging = false;
                 if !was_dragging {
-                    let c = hit.unwrap_or_else(|| Cursor::new(0, self.value.len()));
+                    let c = hit.unwrap_or_else(|| TextCursor::new(0, self.value.len()));
                     if shift {
                         if st.selection_anchor.is_none() {
                             st.selection_anchor = Some(st.cursor);
@@ -905,50 +808,32 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                             needs_redraw = true;
                         }
                         ArrowLeft => {
-                            let fs = ctx.text.font_system_mut();
                             needs_redraw |=
-                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Left, extend);
+                                self.apply_motion(&mut ctx.ui.view_state, Motion::Left, extend);
                         }
                         ArrowRight => {
-                            let fs = ctx.text.font_system_mut();
-                            needs_redraw |= self.apply_motion(
-                                &mut ctx.ui.view_state,
-                                fs,
-                                Motion::Right,
-                                extend,
-                            );
+                            needs_redraw |=
+                                self.apply_motion(&mut ctx.ui.view_state, Motion::Right, extend);
                         }
                         ArrowUp => {
                             if TypeId::of::<Mode>() == TypeId::of::<MultiLine>() {
-                                let fs = ctx.text.font_system_mut();
-                                needs_redraw |= self.apply_motion(
-                                    &mut ctx.ui.view_state,
-                                    fs,
-                                    Motion::Up,
-                                    extend,
-                                );
+                                needs_redraw |=
+                                    self.apply_motion(&mut ctx.ui.view_state, Motion::Up, extend);
                             }
                         }
                         ArrowDown => {
                             if TypeId::of::<Mode>() == TypeId::of::<MultiLine>() {
-                                let fs = ctx.text.font_system_mut();
-                                needs_redraw |= self.apply_motion(
-                                    &mut ctx.ui.view_state,
-                                    fs,
-                                    Motion::Down,
-                                    extend,
-                                );
+                                needs_redraw |=
+                                    self.apply_motion(&mut ctx.ui.view_state, Motion::Down, extend);
                             }
                         }
                         Home => {
-                            let fs = ctx.text.font_system_mut();
                             needs_redraw |=
-                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::Home, extend);
+                                self.apply_motion(&mut ctx.ui.view_state, Motion::Home, extend);
                         }
                         End => {
-                            let fs = ctx.text.font_system_mut();
                             needs_redraw |=
-                                self.apply_motion(&mut ctx.ui.view_state, fs, Motion::End, extend);
+                                self.apply_motion(&mut ctx.ui.view_state, Motion::End, extend);
                         }
                         Enter => {
                             if TypeId::of::<Mode>() == TypeId::of::<SingleLine>() {

@@ -295,15 +295,9 @@ impl Color {
     pub fn a(&self) -> u8 {
         ((self.0 & 0xFF_00_00_00) >> 24) as u8
     }
-
-    pub fn as_cosmic(self) -> cosmic_text::Color {
-        cosmic_text::Color::rgba(self.r(), self.g(), self.b(), self.a())
-    }
 }
 
 use std::borrow::Cow;
-
-pub use cosmic_text::{Style, Weight, Wrap};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Family {
@@ -311,17 +305,6 @@ pub enum Family {
     SansSerif,
     Serif,
     Name(Cow<'static, str>),
-}
-
-impl Family {
-    pub(crate) fn as_cosmic(&self) -> cosmic_text::Family<'_> {
-        match self {
-            Self::Monospace => cosmic_text::Family::Monospace,
-            Self::SansSerif => cosmic_text::Family::SansSerif,
-            Self::Serif => cosmic_text::Family::Serif,
-            Self::Name(name) => cosmic_text::Family::Name(name.as_ref()),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -454,13 +437,5 @@ mod tests {
         assert_eq!(c.g(), 255);
         assert_eq!(c.b(), 0);
         assert_eq!(c.a(), 255);
-    }
-
-    #[test]
-    fn family_as_cosmic_maps_builtin_variants() {
-        let _ = Family::Monospace.as_cosmic();
-        let _ = Family::SansSerif.as_cosmic();
-        let _ = Family::Serif.as_cosmic();
-        let _ = Family::Name(std::borrow::Cow::Borrowed("Comic Sans")).as_cosmic();
     }
 }

@@ -14,7 +14,7 @@ mod harness {
         layout::{LayoutEngine, handle_tree, paint_tree, run_layout},
         model::{Color, Size},
         primitive::Instance,
-        render::text::TextSystem,
+        render::text_cosmic::TextCosmic,
         theme::Theme,
         widget::{Element, IntoElement, Length, Rectangle, Widget},
     };
@@ -70,7 +70,7 @@ mod harness {
     pub struct Harness {
         pub globals: Globals,
         pub ctx: Context<TopMsg>,
-        pub text: TextSystem,
+        pub text: TextCosmic,
         pub engine: LayoutEngine,
         pub theme: Theme,
     }
@@ -152,7 +152,7 @@ mod harness {
                     scale: 1.0,
                 },
                 ctx: Context::new(),
-                text: TextSystem::default(),
+                text: TextCosmic::default(),
                 engine: LayoutEngine::new(),
                 theme: Theme::dark(),
             }

@@ -5,9 +5,9 @@ use crate::{
     primitive::{Instance, Primitive, QUAD_INDICES, QUAD_VERTICES},
     render::{
         pipeline::{PipelineKey, PipelineRegistry},
-        text::TextSystem,
         texture::TextureRegistry,
     },
+    text::TextBackend,
 };
 
 struct DrawCommand<'a> {
@@ -25,14 +25,14 @@ pub(crate) struct Renderer {
     instance_capacity: u64,
 
     pub(crate) textures: TextureRegistry,
-    pub(crate) text: TextSystem,
+    pub(crate) text: Box<dyn TextBackend>,
 }
 
 impl Renderer {
     pub(crate) fn with_capacity(
         device: &wgpu::Device,
         max_instances: u64,
-        allocator: crate::render::AllocatorKind,
+        text: Box<dyn TextBackend>,
     ) -> Self {
         let max_instances = max_instances.max(1);
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -62,7 +62,7 @@ impl Renderer {
             instance_capacity: max_instances,
             instance_buffer,
             textures: TextureRegistry::new(device),
-            text: TextSystem::with_allocator(allocator),
+            text,
         }
     }
 

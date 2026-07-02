@@ -4,6 +4,7 @@ use crate::{
     consts::DEFAULT_MAX_INSTANCES,
     graphics::Engine,
     render::{AllocatorKind, PipelineFactoryFn, pipeline::PipelineKey},
+    text::TextBackend,
     theme::Theme,
 };
 
@@ -95,6 +96,7 @@ pub struct EngineBuilder<M> {
     pub(crate) target_defaults: TargetConfig,
     pub(crate) gpu_source: GpuSource,
     pub(crate) pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
+    pub(crate) text_backend: Option<Box<dyn TextBackend>>,
     pub(crate) _marker: PhantomData<fn() -> M>,
 }
 
@@ -118,6 +120,7 @@ impl<M> EngineBuilder<M> {
             target_defaults: TargetConfig::default(),
             gpu_source: GpuSource::Create,
             pending_pipelines: Vec::new(),
+            text_backend: None,
             _marker: PhantomData,
         }
     }
@@ -169,6 +172,14 @@ impl<M> EngineBuilder<M> {
     /// Glyph-atlas page allocator strategy.
     pub fn allocator(mut self, kind: AllocatorKind) -> Self {
         self.allocator = kind;
+        self
+    }
+
+    /// Inject a custom text backend. When unset, the engine creates a
+    /// [`TextCosmic`](crate::render::TextCosmic) using the configured
+    /// [`allocator`](Self::allocator) for its glyph atlas.
+    pub fn text_backend(mut self, backend: Box<dyn TextBackend>) -> Self {
+        self.text_backend = Some(backend);
         self
     }
 
