@@ -15,13 +15,12 @@ use winit::{
 };
 
 use crate::{
-    Size,
     event::{
         Event, KeyEvent, KeyLocation, KeyState, LogicalKey, Modifiers, MouseButton, PhysicalKey,
         ScrollDelta, ScrollUnits, TextInput, ToEvent,
     },
     graphics::{Engine, TargetId},
-    model::Position,
+    model::{Position, Size},
     render::PipelineFactoryFn,
     widget::Element,
 };

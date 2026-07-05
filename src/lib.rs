@@ -1,5 +1,3 @@
-#[allow(unused)]
-use crate::model::*;
 pub use bytemuck;
 pub use error::{Error, Result};
 pub use wgpu;
@@ -23,6 +21,31 @@ pub mod theme;
 pub mod widget;
 #[cfg(feature = "winit")]
 pub mod winit;
+
+/// Everything an application author needs to build a UI.
+///
+/// Bring it into scope with `use ui::prelude::*;`. This is the app-facing
+/// surface: widget constructors, [`Element`](crate::widget::Element), the
+/// [`el!`](crate::el) macro, the layout primitives (`Length`, `Axis`,
+/// `Padding`), and the core model/theming types (`Color`, `Size`, `Theme`).
+pub mod prelude {
+    pub use crate::el;
+
+    pub use crate::widget::{
+        Axis, Button, Column, ContentFit, Element, Image, Keyed, Length, Overlay, Padding,
+        Rectangle, Row, Scrollable, SimpleCanvas, Slider, Spacer, Text, TextArea, TextField,
+        TextRole, WrappingRows,
+    };
+
+    pub use crate::graphics::{Engine, TargetId};
+
+    #[cfg(feature = "svg")]
+    pub use crate::widget::Svg;
+
+    pub use crate::model::*;
+    pub use crate::text::{Style, Weight, Wrap};
+    pub use crate::theme::Theme;
+}
 
 #[macro_export]
 macro_rules! pipeline_factory {

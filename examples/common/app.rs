@@ -1,11 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use ui::{
-    event::{KeyEvent, KeyState, LogicalKey},
-    graphics::{Engine, TargetId},
-    theme::Theme,
-    widget::{Element, Rectangle},
-};
+use ui::event::{KeyEvent, KeyState, LogicalKey};
+use ui::prelude::*;
 
 use super::demos;
 
