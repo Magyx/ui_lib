@@ -14,8 +14,6 @@ use crate::{
     theme::Theme,
 };
 
-// TODO: would be nice if widgets didn't have to remember their ids, and just got their view_state
-// automatically
 pub type Id = u64;
 
 pub struct SweepCtx<'a> {
@@ -235,9 +233,30 @@ pub struct LayoutCtx<'a, M> {
     pub ui: &'a mut Context<M>,
     pub text: &'a mut dyn TextBackend,
     pub theme: &'a Theme,
+    pub(crate) current_id: Id,
 }
 
 impl<'a, M> LayoutCtx<'a, M> {
+    pub fn new(
+        globals: &'a Globals,
+        ui: &'a mut Context<M>,
+        text: &'a mut dyn TextBackend,
+        theme: &'a Theme,
+    ) -> Self {
+        Self {
+            globals,
+            ui,
+            text,
+            theme,
+            current_id: 0,
+        }
+    }
+    pub(crate) fn __set_id(&mut self, id: Id) {
+        self.current_id = id;
+    }
+    pub fn id(&self) -> Id {
+        self.current_id
+    }
     pub fn physical_size(&self, logical: Size<u32>) -> Size<u32> {
         let sf = self.globals.scale;
         Size::new(
@@ -296,6 +315,9 @@ impl<'a> PrepareCtx<'a> {
             n.current_size.width,
             n.current_size.height,
         )
+    }
+    pub fn id(&self) -> Id {
+        self.layout.nodes[self.current_node].id
     }
     pub fn first_child_node(&self) -> Option<usize> {
         self.layout.nodes[self.current_node].first_child
@@ -359,6 +381,12 @@ impl<'a> PaintCtx<'a> {
             n.current_size.width,
             n.current_size.height,
         )
+    }
+    pub fn id(&self) -> Id {
+        self.layout.nodes[self.current_node].id
+    }
+    pub fn state_or<T: 'static>(&mut self, default: impl FnOnce() -> T) -> &mut T {
+        self.view_state.ensure(self.id(), default)
     }
     pub fn first_child_node(&self) -> Option<usize> {
         self.layout.nodes[self.current_node].first_child
@@ -450,6 +478,12 @@ impl<'a, M> EventCtx<'a, M> {
             n.current_size.width,
             n.current_size.height,
         )
+    }
+    pub fn id(&self) -> Id {
+        self.layout.nodes[self.current_node].id
+    }
+    pub fn state_or<T: 'static>(&mut self, default: impl FnOnce() -> T) -> &mut T {
+        self.ui.view_state.ensure(self.id(), default)
     }
     pub fn first_child_node(&self) -> Option<usize> {
         self.layout.nodes[self.current_node].first_child

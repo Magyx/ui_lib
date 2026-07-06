@@ -28,23 +28,20 @@ pub trait IntoElement {}
 pub trait Widget<M>: IntoElement {
     /* ----- layout ----- */
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node;
-    fn identity_key(&self) -> Option<u64> {
+    fn key(&self) -> Option<u64> {
         None
-    }
-    fn set_id(&mut self, id: Id) {
-        let _ = id;
     }
     fn child_count(&self) -> usize;
     fn child_mut(&mut self, idx: usize) -> &mut dyn Widget<M>;
 
     fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
-        let (_, _) = (ctx, width);
+        let _ = (ctx, width);
         None
     }
 
     /* ----- paint ----- */
-    fn children_offset(&self, view_state: &mut ViewState) -> (i32, i32) {
-        let _ = view_state;
+    fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
+        let _ = (view_state, id);
         (0, 0)
     }
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
@@ -55,7 +52,7 @@ pub trait Widget<M>: IntoElement {
     }
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        let (_, _) = (ctx, instances);
+        let _ = (ctx, instances);
     }
 
     /* ----- interaction ----- */

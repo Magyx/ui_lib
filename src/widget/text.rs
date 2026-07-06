@@ -154,7 +154,6 @@ impl TextRole {
 }
 
 pub struct Text {
-    id: Id,
     text: Cow<'static, str>,
     role: TextRole,
     font_size: Option<f32>,
@@ -173,7 +172,6 @@ pub struct Text {
 impl Text {
     pub fn new<S: Into<Cow<'static, str>>>(content: S) -> Self {
         Self {
-            id: 0,
             text: content.into(),
             role: TextRole::default(),
             font_size: None,
@@ -276,8 +274,9 @@ impl Text {
         view_state: &'b mut ViewState,
         text: &mut dyn TextBackend,
         metrics: TextMetrics,
+        id: Id,
     ) -> &'b mut TextViewState {
-        let state = view_state.ensure(self.id, || TextViewState::new(text.create_buffer(metrics)));
+        let state = view_state.ensure(id, || TextViewState::new(text.create_buffer(metrics)));
 
         if state.buffer.metrics() != metrics {
             state.shaped_text = None;
@@ -291,9 +290,6 @@ impl Text {
 impl IntoElement for Text {}
 
 impl<M> Widget<M> for Text {
-    fn set_id(&mut self, id: Id) {
-        self.id = id;
-    }
 
     fn child_count(&self) -> usize {
         0
@@ -305,7 +301,8 @@ impl<M> Widget<M> for Text {
     fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
         let rs = self.resolved_style(ctx.theme);
         let metrics = TextMetrics::new(rs.font_size, rs.line_height);
-        let state = self.ensure_state(&mut ctx.ui.view_state, ctx.text, metrics);
+        let id = ctx.id();
+        let state = self.ensure_state(&mut ctx.ui.view_state, ctx.text, metrics, id);
         let (intrinsic_w, line_count) = state.ensure_layout(self, &rs);
 
         let line_px = (rs.font_size * rs.line_height).ceil() as i32;
@@ -326,7 +323,8 @@ impl<M> Widget<M> for Text {
         let rs = self.resolved_style(ctx.theme);
         let target_w = width.max(1) as f32;
         let metrics = TextMetrics::new(rs.font_size, rs.line_height);
-        let state = self.ensure_state(&mut ctx.ui.view_state, ctx.text, metrics);
+        let id = ctx.id();
+        let state = self.ensure_state(&mut ctx.ui.view_state, ctx.text, metrics, id);
         state.ensure_shaped(self, target_w, &rs);
 
         let lines = state.buffer.line_count() as i32;
@@ -337,16 +335,18 @@ impl<M> Widget<M> for Text {
     }
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
-        if let Some(state) = ctx.view_state.get_mut::<TextViewState>(&self.id) {
+        let id = ctx.id();
+        if let Some(state) = ctx.view_state.get_mut::<TextViewState>(&id) {
             state.buffer.prepare(ctx.gpu, ctx.texture);
         }
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         let r = ctx.rect();
+        let id = ctx.id();
         let base_color = ctx.theme.on_surface;
 
-        let Some(state) = ctx.view_state.get::<TextViewState>(&self.id) else {
+        let Some(state) = ctx.view_state.get::<TextViewState>(&id) else {
             return;
         };
 

@@ -17,7 +17,6 @@ pub struct Svg {
     fit: ContentFit,
 
     path: PathBuf,
-    id: Id,
 }
 
 impl Svg {
@@ -29,7 +28,6 @@ impl Svg {
             tint: Color::WHITE,
             fit: ContentFit::Fill,
             path: path.into(),
-            id: 0,
         }
     }
 
@@ -168,9 +166,6 @@ impl<M> Widget<M> for Svg {
         }
     }
 
-    fn set_id(&mut self, id: Id) {
-        self.id = id;
-    }
 
     fn child_count(&self) -> usize {
         0
@@ -182,8 +177,9 @@ impl<M> Widget<M> for Svg {
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         let r = ctx.rect();
+        let id = ctx.id();
         {
-            let state = ctx.view_state.ensure_swept(self.id, SvgState::default);
+            let state = ctx.view_state.ensure_swept(id, SvgState::default);
             state.ensure_tree(&self.path, ctx.texture, ctx.gpu);
         }
 
@@ -191,7 +187,7 @@ impl<M> Widget<M> for Svg {
             return;
         }
 
-        let Some(state) = ctx.view_state.get::<SvgState>(&self.id) else {
+        let Some(state) = ctx.view_state.get::<SvgState>(&id) else {
             return;
         };
         let Some(tree) = state.tree.as_ref() else {
@@ -207,7 +203,7 @@ impl<M> Widget<M> for Svg {
 
         let raster = ctx.physical_size(Size::new(dw as u32, dh as u32));
 
-        let state = ctx.view_state.get_mut::<SvgState>(&self.id).unwrap();
+        let state = ctx.view_state.get_mut::<SvgState>(&id).unwrap();
         if state.handle.is_some() && state.raster_px == raster {
             return;
         }
@@ -246,7 +242,8 @@ impl<M> Widget<M> for Svg {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        let Some(state) = ctx.view_state.get::<SvgState>(&self.id) else {
+        let id = ctx.id();
+        let Some(state) = ctx.view_state.get::<SvgState>(&id) else {
             return;
         };
         let Some(handle) = state.handle else {

@@ -79,12 +79,12 @@ mod harness {
         pub fn layout<W: Widget<TopMsg>>(&mut self, root: &mut W, max_w: i32, max_h: i32) -> usize {
             self.globals.window_size = [max_w as f32, max_h as f32];
             let rood_id = {
-                let mut lctx = LayoutCtx {
-                    globals: &self.globals,
-                    ui: &mut self.ctx,
-                    text: &mut self.text,
-                    theme: &self.theme,
-                };
+                let mut lctx = LayoutCtx::new(
+                    &self.globals,
+                    &mut self.ctx,
+                    &mut self.text,
+                    &self.theme,
+                );
                 run_layout(&mut self.engine, &mut lctx, root, max_w, max_h)
             };
             let _ = self.paint(&mut *root);

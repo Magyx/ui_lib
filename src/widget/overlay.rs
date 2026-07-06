@@ -26,11 +26,8 @@ impl<M> Widget<M> for Absolute<M> {
         n.offset_pos.y += self.offy;
         n
     }
-    fn identity_key(&self) -> Option<u64> {
-        self.inner.as_ref().identity_key()
-    }
-    fn set_id(&mut self, id: Id) {
-        self.inner.as_mut().set_id(id);
+    fn key(&self) -> Option<u64> {
+        self.inner.as_ref().key()
     }
     fn child_count(&self) -> usize {
         self.inner.as_ref().child_count()
@@ -41,8 +38,8 @@ impl<M> Widget<M> for Absolute<M> {
     fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
         self.inner.as_mut().min_height_for_width(ctx, width)
     }
-    fn children_offset(&self, view_state: &mut ViewState) -> (i32, i32) {
-        self.inner.as_ref().children_offset(view_state)
+    fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
+        self.inner.as_ref().children_offset(view_state, id)
     }
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         self.inner.as_mut().prepare(ctx);

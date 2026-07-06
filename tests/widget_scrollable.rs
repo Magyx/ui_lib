@@ -46,7 +46,7 @@ mod view_state_sweep {
         });
         h.handle_event(&mut s1, wheel);
         assert!(
-            s1.__scroll_y_for_test(&h.ctx.view_state) > 0,
+            s1.__scroll_y_for_test(&h.ctx.view_state, ui::layout::ROOT_SEED) > 0,
             "scrollable should have advanced y after wheel event"
         );
 
@@ -70,7 +70,7 @@ mod view_state_sweep {
         ));
         frame(&mut h, &mut s2);
         assert_eq!(
-            s2.__scroll_y_for_test(&h.ctx.view_state),
+            s2.__scroll_y_for_test(&h.ctx.view_state, ui::layout::ROOT_SEED),
             0,
             "re-added scrollable must not inherit predecessor's scroll offset"
         );

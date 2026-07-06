@@ -16,7 +16,7 @@ mod widget_slider {
         Changed(f32),
     }
 
-    /// Build a Slider, run a layout pass so set_layout/set_id fire, return
+    /// Build a Slider, run a layout pass to assign engine geometry/identity, return
     /// the slider plus a fresh harness.
     fn laid_out_slider(
         width: i32,

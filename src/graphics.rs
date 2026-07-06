@@ -684,12 +684,12 @@ impl<'a, M> Engine<'a, M> {
 
         let root_id = {
             crate::scope!("layout");
-            let mut layout_ctx = LayoutCtx {
-                globals: &target.globals,
-                ui: &mut target.ctx,
-                text: &mut *self.renderer.text,
-                theme: &self.theme,
-            };
+            let mut layout_ctx = LayoutCtx::new(
+                &target.globals,
+                &mut target.ctx,
+                &mut *self.renderer.text,
+                &self.theme,
+            );
             layout::run_layout(
                 &mut self.layout_engine,
                 &mut layout_ctx,

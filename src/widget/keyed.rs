@@ -24,11 +24,8 @@ impl<M, W: Widget<M>> Widget<M> for Keyed<W> {
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node {
         self.inner.layout(ctx)
     }
-    fn identity_key(&self) -> Option<u64> {
+    fn key(&self) -> Option<u64> {
         Some(self.key)
-    }
-    fn set_id(&mut self, id: Id) {
-        self.inner.set_id(id);
     }
     fn child_count(&self) -> usize {
         self.inner.child_count()
@@ -41,8 +38,8 @@ impl<M, W: Widget<M>> Widget<M> for Keyed<W> {
         self.inner.min_height_for_width(ctx, width)
     }
 
-    fn children_offset(&self, view_state: &mut ViewState) -> (i32, i32) {
-        self.inner.children_offset(view_state)
+    fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
+        self.inner.children_offset(view_state, id)
     }
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         self.inner.prepare(ctx)

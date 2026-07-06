@@ -8,7 +8,7 @@ use crate::{
     widget::{Axis, Length, Padding, Widget},
 };
 
-const ROOT_SEED: u64 = 0xCBF2_9CE4_8422_2325;
+pub const ROOT_SEED: u64 = 0xCBF2_9CE4_8422_2325;
 
 #[inline]
 pub fn mix64(parent: Id, idx: usize) -> Id {
@@ -91,11 +91,12 @@ fn build_tree<'a, M>(
     w: &mut dyn Widget<M>,
     seed: u64,
 ) -> usize {
-    w.set_id(seed);
+    ctx.__set_id(seed);
     let desc = w.layout(ctx);
     let i = layout_engine.create_node(desc.size, desc.layout_dir, desc.is_absolute);
     {
         let n = &mut layout_engine.nodes[i];
+        n.id = seed;
         n.min = desc.min;
         n.max = desc.max;
         n.padding = desc.padding;
@@ -107,7 +108,7 @@ fn build_tree<'a, M>(
     let count = w.child_count();
     for y in 0..count {
         let child = w.child_mut(y);
-        let child_seed = match child.identity_key() {
+        let child_seed = match child.key() {
             Some(k) => mix64(seed, k as usize),
             None => mix64(seed, y + 1),
         };
@@ -124,16 +125,15 @@ fn post_width_query<'a, M>(
     ctx: &mut LayoutCtx<'a, M>,
     cursor: &mut usize,
 ) {
-    let id = *cursor;
+    let i = *cursor;
 
-    let first = eng.nodes[id].first_child;
-    if first.is_none()
-        && let Some(h) = w.min_height_for_width(ctx, eng.nodes[id].current_size.width)
-    {
-        let clamped = h
-            .max(eng.nodes[id].min.height)
-            .min(eng.nodes[id].max.height);
-        eng.nodes[id].min.height = clamped;
+    let first = eng.nodes[i].first_child;
+    if first.is_none() {
+        ctx.__set_id(eng.nodes[i].id);
+        if let Some(h) = w.min_height_for_width(ctx, eng.nodes[i].current_size.width) {
+            let clamped = h.max(eng.nodes[i].min.height).min(eng.nodes[i].max.height);
+            eng.nodes[i].min.height = clamped;
+        }
     }
 
     *cursor += 1;
@@ -165,7 +165,7 @@ fn __prepare_tree<M>(
     w.prepare(ctx);
     *cursor += 1;
 
-    let (dx, dy) = w.children_offset(ctx.view_state);
+    let (dx, dy) = w.children_offset(ctx.view_state, ctx.id());
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
@@ -198,7 +198,8 @@ fn __handle_tree<M>(
     w.handle(ctx);
     *cursor += 1;
 
-    let (dx, dy) = w.children_offset(&mut ctx.ui.view_state);
+    let node_id = ctx.id();
+    let (dx, dy) = w.children_offset(&mut ctx.ui.view_state, node_id);
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
@@ -267,7 +268,7 @@ fn __paint_tree<M>(
 
     *cursor += 1;
 
-    let (dx, dy) = w.children_offset(ctx.view_state);
+    let (dx, dy) = w.children_offset(ctx.view_state, ctx.id());
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
@@ -342,6 +343,8 @@ pub struct __Node {
     pub is_absolute: bool,
     pub offset_pos: Position<i32>,
 
+    pub(crate) id: Id,
+
     pub(crate) pos: Position<i32>,
     pub(crate) current_size: Size<i32>,
     pub(crate) content_size: Size<i32>,
@@ -363,6 +366,8 @@ impl Default for __Node {
             clip_children: Default::default(),
             is_absolute: Default::default(),
             offset_pos: Default::default(),
+
+            id: 0,
 
             pos: Default::default(),
             current_size: Default::default(),

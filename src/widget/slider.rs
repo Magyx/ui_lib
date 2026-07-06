@@ -7,7 +7,6 @@ struct SliderViewState {
 }
 
 pub struct Slider<M> {
-    id: Id,
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
@@ -30,7 +29,6 @@ impl<M> Slider<M> {
         let (lo, hi) = range;
         let value = value.clamp(lo, hi);
         Self {
-            id: 0,
             size,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
@@ -142,8 +140,8 @@ impl<M> Slider<M> {
         changed
     }
 
-    fn ensure_state<'b>(&self, view_state: &'b mut ViewState) -> &'b mut SliderViewState {
-        view_state.ensure(self.id, || SliderViewState { grab: None })
+    fn ensure_state<'b>(&self, view_state: &'b mut ViewState, id: Id) -> &'b mut SliderViewState {
+        view_state.ensure(id, || SliderViewState { grab: None })
     }
 }
 
@@ -157,10 +155,6 @@ impl<M: 'static> Widget<M> for Slider<M> {
             max: self.max,
             ..Default::default()
         }
-    }
-
-    fn set_id(&mut self, id: Id) {
-        self.id = id;
     }
 
     fn child_count(&self) -> usize {
@@ -223,9 +217,10 @@ impl<M: 'static> Widget<M> for Slider<M> {
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
         let r = ctx.rect();
+        let id = ctx.id();
         let inside = r.contains(ctx.ui.mouse_pos);
         if inside {
-            ctx.ui.hot_item = Some(self.id);
+            ctx.ui.hot_item = Some(id);
         }
 
         let kcx = self.knob_center_x(r);
@@ -236,32 +231,32 @@ impl<M: 'static> Widget<M> for Slider<M> {
         let mut changed = false;
 
         if inside && ctx.is_mouse_pressed(MouseButton::Left) {
-            ctx.ui.active_item = Some(self.id);
+            ctx.ui.active_item = Some(id);
 
             if over_knob {
                 let offset = ctx.ui.mouse_pos.x - kcx;
-                self.ensure_state(&mut ctx.ui.view_state).grab = Some(offset);
+                self.ensure_state(&mut ctx.ui.view_state, id).grab = Some(offset);
             } else {
-                self.ensure_state(&mut ctx.ui.view_state).grab = Some(0.0);
+                self.ensure_state(&mut ctx.ui.view_state, id).grab = Some(0.0);
                 changed |= self.set_from_cursor(r, ctx.ui.mouse_pos.x);
             }
         }
 
-        if ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_down(MouseButton::Left) {
+        if ctx.ui.active_item == Some(id) && ctx.ui.is_button_down(MouseButton::Left) {
             let offset = self
-                .ensure_state(&mut ctx.ui.view_state)
+                .ensure_state(&mut ctx.ui.view_state, id)
                 .grab
                 .unwrap_or(0.0);
             changed |= self.set_from_cursor(r, ctx.ui.mouse_pos.x - offset);
         }
 
-        if ctx.is_mouse_released(MouseButton::Left) && ctx.ui.active_item == Some(self.id) {
+        if ctx.is_mouse_released(MouseButton::Left) && ctx.ui.active_item == Some(id) {
             let offset = self
-                .ensure_state(&mut ctx.ui.view_state)
+                .ensure_state(&mut ctx.ui.view_state, id)
                 .grab
                 .unwrap_or(0.0);
             changed |= self.set_from_cursor(r, ctx.ui.mouse_pos.x - offset);
-            self.ensure_state(&mut ctx.ui.view_state).grab = None;
+            self.ensure_state(&mut ctx.ui.view_state, id).grab = None;
             ctx.ui.active_item = None;
         }
 

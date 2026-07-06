@@ -8,7 +8,6 @@ struct ButtonState {
 }
 
 pub struct Button<M> {
-    id: Id,
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
@@ -26,7 +25,6 @@ pub struct Button<M> {
 impl<M: Clone + 'static> Button<M> {
     pub fn new(size: Size<Length>, color: Color) -> Self {
         Self {
-            id: 0,
             size,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
@@ -44,7 +42,6 @@ impl<M: Clone + 'static> Button<M> {
         E: Into<Element<M>>,
     {
         Self {
-            id: 0,
             size: Size::splat(Length::Fit),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
@@ -104,10 +101,6 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         }
     }
 
-    fn set_id(&mut self, id: Id) {
-        self.id = id;
-    }
-
     fn child_count(&self) -> usize {
         if self.content.is_some() { 1 } else { 0 }
     }
@@ -117,7 +110,8 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         let ctx_rect = ctx.rect();
-        let st = ctx.view_state.get::<ButtonState>(&self.id);
+        let id = ctx.id();
+        let st = ctx.view_state.get::<ButtonState>(&id);
         let hovered = st.is_some_and(|s| s.hovered);
         let pressed = st.is_some_and(|s| s.pressed);
         let theme = ctx.theme;
@@ -137,8 +131,9 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
     }
 
     fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
+        let id = ctx.id();
         let (was_hovered, was_pressed) = {
-            let st = ctx.ui.view_state.ensure(self.id, || ButtonState {
+            let st = ctx.state_or(|| ButtonState {
                 hovered: false,
                 pressed: false,
             });
@@ -150,23 +145,23 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         let mouse_released = ctx.is_mouse_released(MouseButton::Left);
 
         if hovered {
-            ctx.ui.hot_item = Some(self.id);
+            ctx.ui.hot_item = Some(id);
         }
         if hovered && mouse_pressed {
-            ctx.ui.active_item = Some(self.id);
+            ctx.ui.active_item = Some(id);
         }
 
         let new_pressed =
-            ctx.ui.active_item == Some(self.id) && ctx.ui.is_button_down(MouseButton::Left);
+            ctx.ui.active_item == Some(id) && ctx.ui.is_button_down(MouseButton::Left);
 
-        let st = ctx.ui.view_state.ensure(self.id, || ButtonState {
+        let st = ctx.state_or(|| ButtonState {
             hovered: false,
             pressed: false,
         });
         st.hovered = hovered;
         st.pressed = new_pressed;
 
-        if mouse_released && ctx.ui.active_item == Some(self.id) {
+        if mouse_released && ctx.ui.active_item == Some(id) {
             if hovered && let Some(m) = self.on_press.clone() {
                 ctx.ui.emit(m);
             }

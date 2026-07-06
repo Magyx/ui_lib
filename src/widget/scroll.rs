@@ -27,7 +27,6 @@ pub struct Scrollable<M> {
     max: Size<i32>,
     child: Element<M>,
 
-    id: Id,
 
     scrollbar_behavior: ScrollBarBehavior,
 
@@ -42,7 +41,6 @@ impl<M: 'static> Scrollable<M> {
             size: Size::new(Length::Grow, Length::Grow),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
-            id: 0,
             child: child.into(),
             scrollbar_behavior: ScrollBarBehavior::Auto,
             bar_color: None,
@@ -78,8 +76,8 @@ impl<M: 'static> Scrollable<M> {
     }
 
     #[doc(hidden)]
-    pub fn __scroll_y_for_test(&self, vs: &ViewState) -> i32 {
-        vs.get::<ScrollViewState>(&self.id).map_or(0, |s| s.y)
+    pub fn __scroll_y_for_test(&self, vs: &ViewState, id: Id) -> i32 {
+        vs.get::<ScrollViewState>(&id).map_or(0, |s| s.y)
     }
 
     #[inline]
@@ -124,8 +122,8 @@ impl<M: 'static> Scrollable<M> {
         Some((tx, thumb_y, tw, thumb_h))
     }
 
-    fn ensure_state<'b>(&self, view_state: &'b mut ViewState) -> &'b mut ScrollViewState {
-        view_state.ensure(self.id, || ScrollViewState {
+    fn ensure_state<'b>(&self, view_state: &'b mut ViewState, id: Id) -> &'b mut ScrollViewState {
+        view_state.ensure(id, || ScrollViewState {
             y: 0,
             grab: None,
             content_h: 0,
@@ -147,9 +145,6 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         }
     }
 
-    fn set_id(&mut self, id: Id) {
-        self.id = id;
-    }
 
     fn child_count(&self) -> usize {
         1
@@ -157,8 +152,8 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
         self.child.as_mut()
     }
-    fn children_offset<'a>(&self, view_state: &mut ViewState) -> (i32, i32) {
-        let st = self.ensure_state(view_state);
+    fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
+        let st = self.ensure_state(view_state, id);
         // Heights are stashed during paint/handle (same frame values that
         // `write_back` used to bake in), so no `self.h` is needed here.
         let max = (st.content_h - st.viewport_h).max(0);
@@ -168,7 +163,8 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         let r = ctx.rect();
-        self.ensure_state(ctx.view_state).viewport_h = r.h;
+        let id = ctx.id();
+        self.ensure_state(ctx.view_state, id).viewport_h = r.h;
         if let Some(bg) = self.bg {
             ctx.fill(out, r.xywh(), bg);
         }
@@ -176,13 +172,14 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
 
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         let r = ctx.rect();
+        let id = ctx.id();
         let content_h = ctx.child_content_height();
         let bar = self.bar_color.unwrap_or_else(|| {
             let s = ctx.theme.surface_variant;
             Color::rgba(s.r(), s.g(), s.b(), 128)
         });
         let thumb = self.thumb_color.unwrap_or(ctx.theme.on_surface_variant);
-        let state = self.ensure_state(ctx.view_state);
+        let state = self.ensure_state(ctx.view_state, id);
         state.content_h = content_h;
         state.viewport_h = r.h;
         if let Some((tx, ty, tw, th)) = self.thumb_rect(r, state, content_h) {
@@ -204,6 +201,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         const HIT_SLOP: f32 = 4.0;
 
         let r = ctx.rect();
+        let id = ctx.id();
         let mx = ctx.ui.mouse_pos.x;
         let my = ctx.ui.mouse_pos.y;
         let inside = mx >= r.x as f32
@@ -214,7 +212,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         let content_h = ctx.child_content_height();
         let max = (content_h - r.h).max(0);
         {
-            let st = self.ensure_state(&mut ctx.ui.view_state);
+            let st = self.ensure_state(&mut ctx.ui.view_state, id);
             st.content_h = content_h;
             st.viewport_h = r.h;
             st.y = st.y.clamp(0, max);
@@ -233,7 +231,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
                 ScrollUnits::Pixels => 1.0,
             };
             if delta.dy != 0.0 {
-                let st = self.ensure_state(&mut ctx.ui.view_state);
+                let st = self.ensure_state(&mut ctx.ui.view_state, id);
                 let old_y = st.y;
                 let ny = (st.y as f32 + delta.dy * step).round() as i32;
                 st.y = ny.clamp(0, max);
@@ -243,7 +241,7 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             }
         }
 
-        let st = self.ensure_state(&mut ctx.ui.view_state);
+        let st = self.ensure_state(&mut ctx.ui.view_state, id);
         let thumb = self.thumb_rect(r, st, content_h);
         let track = self.track_rect(r);
 
@@ -266,17 +264,17 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             };
 
             if over_thumb || over_track {
-                ctx.ui.hot_item = Some(self.id);
+                ctx.ui.hot_item = Some(id);
             }
 
             if (over_thumb || over_track) && pressed {
-                ctx.ui.active_item = Some(self.id);
+                ctx.ui.active_item = Some(id);
                 let grab = if over_thumb {
                     (my - ty).clamp(0.0, th)
                 } else {
                     th / 2.0
                 };
-                let st = self.ensure_state(&mut ctx.ui.view_state);
+                let st = self.ensure_state(&mut ctx.ui.view_state, id);
                 st.grab = Some(grab);
 
                 if over_track && !over_thumb {
@@ -291,8 +289,8 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
                 }
             }
 
-            if ctx.ui.active_item == Some(self.id) && down {
-                let st = self.ensure_state(&mut ctx.ui.view_state);
+            if ctx.ui.active_item == Some(id) && down {
+                let st = self.ensure_state(&mut ctx.ui.view_state, id);
                 let old_y = st.y;
                 let mut pos = my - st.grab.unwrap_or(th / 2.0);
                 pos = pos.clamp(track_y, track_y + track_h - th);
@@ -305,14 +303,14 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
                 }
             }
 
-            if released && ctx.ui.active_item == Some(self.id) {
+            if released && ctx.ui.active_item == Some(id) {
                 ctx.ui.active_item = None;
-                let st = self.ensure_state(&mut ctx.ui.view_state);
+                let st = self.ensure_state(&mut ctx.ui.view_state, id);
                 st.grab = None;
             }
-        } else if released && ctx.ui.active_item == Some(self.id) {
+        } else if released && ctx.ui.active_item == Some(id) {
             ctx.ui.active_item = None;
-            let st = self.ensure_state(&mut ctx.ui.view_state);
+            let st = self.ensure_state(&mut ctx.ui.view_state, id);
             st.grab = None;
         }
     }
