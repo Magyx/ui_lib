@@ -4,7 +4,6 @@ use ui::{
     graphics::{Engine, TargetId},
     model::Size,
     pipeline_factories,
-    render::pipeline::Pipeline,
     sctk::{DefaultHandler, LayerOptions, SctkEvent, SctkLoop},
 };
 

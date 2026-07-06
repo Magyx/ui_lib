@@ -2,7 +2,6 @@ use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
     pipeline_factories,
-    render::pipeline::Pipeline,
     sctk::{DefaultHandler, LockOptions, OutputSet, SctkEvent, SctkLoop},
 };
 

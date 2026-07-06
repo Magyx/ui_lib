@@ -1,6 +1,8 @@
 #[allow(unused)]
 use crate::model::*;
+pub use bytemuck;
 pub use error::{Error, Result};
+pub use wgpu;
 
 pub(crate) mod consts;
 pub mod context;
@@ -24,12 +26,12 @@ macro_rules! pipeline_factory {
     ( $ty:path ) => {{
         fn __factory(
             gpu: &$crate::graphics::Gpu,
-            surface_format: &wgpu::TextureFormat,
-            buffers: &[wgpu::VertexBufferLayout],
-            texture_bgl: &wgpu::BindGroupLayout,
-            ranges: &[wgpu::PushConstantRange],
+            surface_format: &$crate::wgpu::TextureFormat,
+            buffers: &[$crate::wgpu::VertexBufferLayout],
+            texture_bgl: &$crate::wgpu::BindGroupLayout,
+            ranges: &[$crate::wgpu::PushConstantRange],
         ) -> ::std::boxed::Box<dyn $crate::render::pipeline::Pipeline> {
-            ::std::boxed::Box::new(<$ty>::new(
+            ::std::boxed::Box::new(<$ty as $crate::render::pipeline::Pipeline>::new(
                 gpu,
                 surface_format,
                 buffers,

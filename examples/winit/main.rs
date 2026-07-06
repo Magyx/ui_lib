@@ -2,7 +2,6 @@ use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
     pipeline_factories,
-    render::pipeline::Pipeline,
 };
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::WindowAttributes};
 
