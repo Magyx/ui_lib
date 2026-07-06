@@ -3,11 +3,6 @@ use std::num::NonZero;
 use super::*;
 
 pub struct WrappingRows<M> {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-
     rows: Vec<Row<M>>,
     size: Size<Length>,
     color: Color,
@@ -39,10 +34,6 @@ impl<M> WrappingRows<M> {
         }
 
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             rows,
             size: Size::splat(Length::Fit),
             color: Color::TRANSPARENT,
@@ -105,13 +96,6 @@ impl<M: 'static> Widget<M> for WrappingRows<M> {
         }
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn child_count(&self) -> usize {
         self.rows.len()
     }
@@ -120,11 +104,7 @@ impl<M: 'static> Widget<M> for WrappingRows<M> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        ctx.surface(
-            out,
-            (self.x, self.y, self.w, self.h),
-            self.color,
-            Color::TRANSPARENT,
-        );
+        let r = ctx.rect();
+        ctx.surface(out, r.xywh(), self.color, Color::TRANSPARENT);
     }
 }

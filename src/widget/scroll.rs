@@ -15,13 +15,13 @@ struct ScrollViewState {
     y: i32,
     grab: Option<f32>,
     content_h: i32,
+    /// Viewport height captured during paint/handle, so `children_offset`
+    /// (which only sees `ViewState`) can compute max-scroll without the
+    /// removed `self.h` field.
+    viewport_h: i32,
 }
 
 pub struct Scrollable<M> {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
@@ -39,10 +39,6 @@ pub struct Scrollable<M> {
 impl<M: 'static> Scrollable<M> {
     pub fn new<E: Into<Element<M>>>(child: E) -> Self {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             size: Size::new(Length::Grow, Length::Grow),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
@@ -87,29 +83,34 @@ impl<M: 'static> Scrollable<M> {
     }
 
     #[inline]
-    fn track_rect(&self) -> (f32, f32, f32, f32) {
+    fn track_rect(&self, r: Rect) -> (f32, f32, f32, f32) {
         let margin = 2.0;
         let track_w = 6.0;
-        let tx = self.x as f32 + self.w as f32 - margin - track_w;
-        let ty = self.y as f32 + margin;
-        let th = self.h as f32 - 2.0 * margin;
+        let tx = r.x as f32 + r.w as f32 - margin - track_w;
+        let ty = r.y as f32 + margin;
+        let th = r.h as f32 - 2.0 * margin;
         (tx, ty, track_w, th)
     }
 
     #[inline]
-    fn thumb_rect(&self, state: &ScrollViewState, content_h: i32) -> Option<(f32, f32, f32, f32)> {
+    fn thumb_rect(
+        &self,
+        r: Rect,
+        state: &ScrollViewState,
+        content_h: i32,
+    ) -> Option<(f32, f32, f32, f32)> {
         if let ScrollBarBehavior::Hide = self.scrollbar_behavior {
             return None;
         }
-        let max = (content_h - self.h).max(0);
+        let max = (content_h - r.h).max(0);
         if max <= 0 && matches!(self.scrollbar_behavior, ScrollBarBehavior::Auto) {
             return None;
         }
 
-        let (tx, ty, tw, th) = self.track_rect();
+        let (tx, ty, tw, th) = self.track_rect(r);
 
-        let ch = content_h.max(self.h);
-        let ratio = (self.h as f32 / ch as f32).clamp(0.0, 1.0);
+        let ch = content_h.max(r.h);
+        let ratio = (r.h as f32 / ch as f32).clamp(0.0, 1.0);
         let thumb_h = ratio * th;
         let thumb_h = thumb_h.clamp(20.0, th); // min thumb size
 
@@ -128,6 +129,7 @@ impl<M: 'static> Scrollable<M> {
             y: 0,
             grab: None,
             content_h: 0,
+            viewport_h: 0,
         })
     }
 }
@@ -145,13 +147,6 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         }
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn set_id(&mut self, id: Id) {
         self.id = id;
     }
@@ -164,18 +159,23 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
     }
     fn children_offset<'a>(&self, view_state: &mut ViewState) -> (i32, i32) {
         let st = self.ensure_state(view_state);
-        let max = (st.content_h - self.h).max(0);
+        // Heights are stashed during paint/handle (same frame values that
+        // `write_back` used to bake in), so no `self.h` is needed here.
+        let max = (st.content_h - st.viewport_h).max(0);
         st.y = st.y.clamp(0, max);
         (0, -st.y)
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+        let r = ctx.rect();
+        self.ensure_state(ctx.view_state).viewport_h = r.h;
         if let Some(bg) = self.bg {
-            ctx.fill(out, (self.x, self.y, self.w, self.h), bg);
+            ctx.fill(out, r.xywh(), bg);
         }
     }
 
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+        let r = ctx.rect();
         let content_h = ctx.child_content_height();
         let bar = self.bar_color.unwrap_or_else(|| {
             let s = ctx.theme.surface_variant;
@@ -184,8 +184,9 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         let thumb = self.thumb_color.unwrap_or(ctx.theme.on_surface_variant);
         let state = self.ensure_state(ctx.view_state);
         state.content_h = content_h;
-        if let Some((tx, ty, tw, th)) = self.thumb_rect(state, content_h) {
-            let (track_x, track_y, track_w, track_h) = self.track_rect();
+        state.viewport_h = r.h;
+        if let Some((tx, ty, tw, th)) = self.thumb_rect(r, state, content_h) {
+            let (track_x, track_y, track_w, track_h) = self.track_rect(r);
             out.push(Instance::ui(
                 Position::new(track_x, track_y),
                 Size::new(track_w, track_h),
@@ -202,18 +203,20 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
         const HIT_SLOP: f32 = 4.0;
 
+        let r = ctx.rect();
         let mx = ctx.ui.mouse_pos.x;
         let my = ctx.ui.mouse_pos.y;
-        let inside = mx >= self.x as f32
-            && mx < self.x as f32 + self.w as f32
-            && my >= self.y as f32
-            && my < self.y as f32 + self.h as f32;
+        let inside = mx >= r.x as f32
+            && mx < r.x as f32 + r.w as f32
+            && my >= r.y as f32
+            && my < r.y as f32 + r.h as f32;
 
         let content_h = ctx.child_content_height();
-        let max = (content_h - self.h).max(0);
+        let max = (content_h - r.h).max(0);
         {
             let st = self.ensure_state(&mut ctx.ui.view_state);
             st.content_h = content_h;
+            st.viewport_h = r.h;
             st.y = st.y.clamp(0, max);
         }
 
@@ -241,8 +244,8 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
         }
 
         let st = self.ensure_state(&mut ctx.ui.view_state);
-        let thumb = self.thumb_rect(st, content_h);
-        let track = self.track_rect();
+        let thumb = self.thumb_rect(r, st, content_h);
+        let track = self.track_rect(r);
 
         if let Some((tx, ty, tw, th)) = thumb {
             let (track_x, track_y, track_w, track_h) = track;

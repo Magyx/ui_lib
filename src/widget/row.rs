@@ -1,10 +1,6 @@
 use super::*;
 
 pub struct Row<M> {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
     children: Vec<Element<M>>,
     spacing: i32,
     padding: Vec4<i32>,
@@ -24,10 +20,6 @@ impl<M> Row<M> {
         E: Into<Element<M>>,
     {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             children: children.into_iter().map(Into::into).collect(),
             spacing: 0,
             padding: Vec4::splat(0),
@@ -94,13 +86,6 @@ impl<M: 'static> Widget<M> for Row<M> {
         }
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn child_count(&self) -> usize {
         self.children.len()
     }
@@ -109,11 +94,7 @@ impl<M: 'static> Widget<M> for Row<M> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        ctx.surface(
-            out,
-            (self.x, self.y, self.w, self.h),
-            self.color,
-            Color::TRANSPARENT,
-        );
+        let r = ctx.rect();
+        ctx.surface(out, r.xywh(), self.color, Color::TRANSPARENT);
     }
 }

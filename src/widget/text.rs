@@ -154,11 +154,6 @@ impl TextRole {
 }
 
 pub struct Text {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-
     id: Id,
     text: Cow<'static, str>,
     role: TextRole,
@@ -178,10 +173,6 @@ pub struct Text {
 impl Text {
     pub fn new<S: Into<Cow<'static, str>>>(content: S) -> Self {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             id: 0,
             text: content.into(),
             role: TextRole::default(),
@@ -345,13 +336,6 @@ impl<M> Widget<M> for Text {
         Some(h.clamp(self.min.height, self.max.height))
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         if let Some(state) = ctx.view_state.get_mut::<TextViewState>(&self.id) {
             state.buffer.prepare(ctx.gpu, ctx.texture);
@@ -359,6 +343,7 @@ impl<M> Widget<M> for Text {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        let r = ctx.rect();
         let base_color = ctx.theme.on_surface;
 
         let Some(state) = ctx.view_state.get::<TextViewState>(&self.id) else {
@@ -368,7 +353,7 @@ impl<M> Widget<M> for Text {
         for glyph in state.buffer.glyphs() {
             let tint = glyph.color.unwrap_or(base_color);
             instances.push(Instance::ui_tex(
-                Position::new(glyph.pos.x + self.x as f32, glyph.pos.y + self.y as f32),
+                Position::new(glyph.pos.x + r.x as f32, glyph.pos.y + r.y as f32),
                 glyph.size,
                 tint,
                 glyph.handle,

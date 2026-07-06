@@ -78,13 +78,17 @@ mod harness {
     impl Harness {
         pub fn layout<W: Widget<TopMsg>>(&mut self, root: &mut W, max_w: i32, max_h: i32) -> usize {
             self.globals.window_size = [max_w as f32, max_h as f32];
-            let mut lctx = LayoutCtx {
-                globals: &self.globals,
-                ui: &mut self.ctx,
-                text: &mut self.text,
-                theme: &self.theme,
+            let rood_id = {
+                let mut lctx = LayoutCtx {
+                    globals: &self.globals,
+                    ui: &mut self.ctx,
+                    text: &mut self.text,
+                    theme: &self.theme,
+                };
+                run_layout(&mut self.engine, &mut lctx, root, max_w, max_h)
             };
-            run_layout(&mut self.engine, &mut lctx, root, max_w, max_h)
+            let _ = self.paint(&mut *root);
+            rood_id
         }
         pub fn handle<W: Widget<TopMsg>>(&mut self, root: &mut W) {
             let mut ectx: EventCtx<TopMsg> = EventCtx::new(
@@ -93,7 +97,6 @@ mod harness {
                 &mut self.ctx,
                 None,
                 &self.engine,
-                0usize,
             );
             let mut cursor = 0usize;
             handle_tree(root, &mut ectx, &mut cursor);
@@ -105,7 +108,6 @@ mod harness {
                 &mut self.ctx,
                 Some(event),
                 &self.engine,
-                0usize,
             );
             let mut cursor = 0usize;
             handle_tree(root, &mut ectx, &mut cursor);
@@ -191,10 +193,6 @@ mod harness {
         fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> ui::layout::Node {
             self.inner.layout(ctx)
         }
-        fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-            self.inner.set_layout(x, y, w, h);
-            self.slot.set(Some((x, y, w, h)));
-        }
         fn child_count(&self) -> usize {
             self.inner.child_count()
         }
@@ -212,6 +210,8 @@ mod harness {
             ctx: &mut ui::context::PaintCtx,
             out: &mut Vec<ui::primitive::Instance>,
         ) {
+            let r = ctx.rect();
+            self.slot.set(Some(r.xywh()));
             self.inner.paint(ctx, out);
         }
         fn paint_overlay(&mut self, ctx: &mut PaintCtx, instancess: &mut Vec<Instance>) {
@@ -233,6 +233,7 @@ mod harness {
 
     /// Convenience: unwrap the rect captured by a slot.
     pub fn read(slot: &RectSlot) -> Rect {
-        slot.get().expect("layout did not call set_layout on Probe")
+        slot.get()
+            .expect("layout+paint did not capture a rect for this Probe")
     }
 }

@@ -7,7 +7,7 @@ use crate::{
     event::{KeyState, Modifiers, MouseButton, UiEventRef},
     graphics::{Globals, Gpu},
     layout::LayoutEngine,
-    model::{Color, Position, Size},
+    model::{Color, Position, Rect, Size},
     primitive::Instance,
     render::texture::TextureRegistry,
     text::TextBackend,
@@ -254,16 +254,48 @@ pub struct PrepareCtx<'a> {
     pub texture: &'a mut TextureRegistry,
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
+    pub(crate) offset: Position<i32>,
     pub view_state: &'a mut ViewState,
     pub theme: &'a Theme,
 }
 
 impl<'a> PrepareCtx<'a> {
-    pub(crate) fn __set_current_node(&mut self, i: usize) {
-        self.current_node = i;
+    pub fn new(
+        globals: &'a Globals,
+        text: &'a mut dyn TextBackend,
+        gpu: &'a Gpu,
+        texture: &'a mut TextureRegistry,
+        layout: &'a LayoutEngine,
+        view_state: &'a mut ViewState,
+        theme: &'a Theme,
+    ) -> Self {
+        Self {
+            globals,
+            text,
+            gpu,
+            texture,
+            layout,
+            current_node: 0,
+            offset: Position::splat(0),
+            view_state,
+            theme,
+        }
+    }
+    pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32) {
+        self.current_node = current_node;
+        self.offset = Position::new(acc_tx, acc_ty);
     }
     pub fn current_node_id(&self) -> usize {
         self.current_node
+    }
+    pub fn rect(&self) -> Rect {
+        let n = &self.layout.nodes[self.current_node];
+        Rect::new(
+            n.pos.x + self.offset.x,
+            n.pos.y + self.offset.y,
+            n.current_size.width,
+            n.current_size.height,
+        )
     }
     pub fn first_child_node(&self) -> Option<usize> {
         self.layout.nodes[self.current_node].first_child
@@ -289,6 +321,7 @@ pub struct PaintCtx<'a> {
     pub text: &'a dyn TextBackend,
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
+    pub(crate) offset: Position<i32>,
     pub view_state: &'a mut ViewState,
     pub theme: &'a Theme,
 }
@@ -306,23 +339,30 @@ impl<'a> PaintCtx<'a> {
             text,
             layout,
             current_node: 0,
+            offset: Position::splat(0),
             view_state,
             theme,
         }
     }
-
-    pub(crate) fn __set_current_node(&mut self, i: usize) {
-        self.current_node = i;
+    pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32) {
+        self.current_node = current_node;
+        self.offset = Position::new(acc_tx, acc_ty);
     }
-
     pub fn current_node_id(&self) -> usize {
         self.current_node
     }
-
+    pub fn rect(&self) -> Rect {
+        let n = &self.layout.nodes[self.current_node];
+        Rect::new(
+            n.pos.x + self.offset.x,
+            n.pos.y + self.offset.y,
+            n.current_size.width,
+            n.current_size.height,
+        )
+    }
     pub fn first_child_node(&self) -> Option<usize> {
         self.layout.nodes[self.current_node].first_child
     }
-
     pub fn child_content_height(&self) -> i32 {
         if let Some(cid) = self.first_child_node() {
             self.layout.nodes[cid].content_size.height.max(0)
@@ -374,6 +414,7 @@ pub struct EventCtx<'a, M> {
     #[doc(hidden)]
     pub layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
+    pub(crate) offset: Position<i32>,
 }
 
 impl<'a, M> EventCtx<'a, M> {
@@ -383,7 +424,6 @@ impl<'a, M> EventCtx<'a, M> {
         ui: &'a mut Context<M>,
         event: Option<UiEventRef<'a>>,
         layout: &'a LayoutEngine,
-        current_node: usize,
     ) -> Self {
         Self {
             globals,
@@ -391,18 +431,26 @@ impl<'a, M> EventCtx<'a, M> {
             ui,
             event,
             layout,
-            current_node,
+            current_node: 0usize,
+            offset: Position::splat(0),
         }
     }
-
-    pub(crate) fn __set_current_node(&mut self, i: usize) {
-        self.current_node = i;
+    pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32) {
+        self.current_node = current_node;
+        self.offset = Position::new(acc_tx, acc_ty);
     }
-
     pub fn current_node_id(&self) -> usize {
         self.current_node
     }
-
+    pub fn rect(&self) -> Rect {
+        let n = &self.layout.nodes[self.current_node];
+        Rect::new(
+            n.pos.x + self.offset.x,
+            n.pos.y + self.offset.y,
+            n.current_size.width,
+            n.current_size.height,
+        )
+    }
     pub fn first_child_node(&self) -> Option<usize> {
         self.layout.nodes[self.current_node].first_child
     }
@@ -425,7 +473,6 @@ impl<'a, M> EventCtx<'a, M> {
             }) if button == b
         ) && self.ui.is_button_pressed(b)
     }
-
     #[inline]
     pub fn is_mouse_released(&self, b: MouseButton) -> bool {
         matches!(

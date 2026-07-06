@@ -8,11 +8,6 @@ struct ButtonState {
 }
 
 pub struct Button<M> {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-
     id: Id,
     size: Size<Length>,
     min: Size<i32>,
@@ -31,10 +26,6 @@ pub struct Button<M> {
 impl<M: Clone + 'static> Button<M> {
     pub fn new(size: Size<Length>, color: Color) -> Self {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             id: 0,
             size,
             min: Size::splat(0),
@@ -53,10 +44,6 @@ impl<M: Clone + 'static> Button<M> {
         E: Into<Element<M>>,
     {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             id: 0,
             size: Size::splat(Length::Fit),
             min: Size::splat(0),
@@ -102,15 +89,6 @@ impl<M: Clone + 'static> Button<M> {
         self.on_press = Some(msg);
         self
     }
-
-    #[inline]
-    fn contains(&self, p: Position<f32>) -> bool {
-        let l = self.x as f32;
-        let t = self.y as f32;
-        let r = l + self.w as f32;
-        let b = t + self.h as f32;
-        p.x >= l && p.x < r && p.y >= t && p.y < b
-    }
 }
 
 impl<M> IntoElement for Button<M> {}
@@ -126,13 +104,6 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         }
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn set_id(&mut self, id: Id) {
         self.id = id;
     }
@@ -145,6 +116,7 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        let ctx_rect = ctx.rect();
         let st = ctx.view_state.get::<ButtonState>(&self.id);
         let hovered = st.is_some_and(|s| s.hovered);
         let pressed = st.is_some_and(|s| s.pressed);
@@ -161,7 +133,7 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         } else {
             Color::TRANSPARENT
         };
-        ctx.surface(instances, (self.x, self.y, self.w, self.h), fill, border);
+        ctx.surface(instances, ctx_rect.xywh(), fill, border);
     }
 
     fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
@@ -173,7 +145,7 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
             (st.hovered, st.pressed)
         };
 
-        let hovered = self.contains(ctx.ui.mouse_pos);
+        let hovered = ctx.rect().contains(ctx.ui.mouse_pos);
         let mouse_pressed = ctx.is_mouse_pressed(MouseButton::Left);
         let mouse_released = ctx.is_mouse_released(MouseButton::Left);
 

@@ -228,6 +228,35 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Rect {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+}
+
+impl Rect {
+    #[inline]
+    pub fn new(x: i32, y: i32, w: i32, h: i32) -> Self {
+        Self { x, y, w, h }
+    }
+
+    #[inline]
+    pub fn contains(&self, p: Position<f32>) -> bool {
+        let l = self.x as f32;
+        let t = self.y as f32;
+        let r = l + self.w as f32;
+        let b = t + self.h as f32;
+        p.x >= l && p.x <= r && p.y >= t && p.y <= b
+    }
+
+    #[inline]
+    pub fn xywh(&self) -> (i32, i32, i32, i32) {
+        (self.x, self.y, self.w, self.h)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Default)]
 #[repr(C)]
 pub struct Color(pub u32);

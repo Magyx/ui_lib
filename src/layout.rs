@@ -2,7 +2,7 @@
 use std::cmp::{max, min};
 
 use crate::{
-    context::{Id, LayoutCtx, PaintCtx, PrepareCtx, ViewState},
+    context::{Id, LayoutCtx, PaintCtx, PrepareCtx},
     model::{Color, Position, Size},
     primitive::Instance,
     widget::{Axis, Length, Padding, Widget},
@@ -82,19 +82,6 @@ pub fn run_layout<'a, M>(
         layout_engine.place(root_id, 0, 0);
     }
 
-    // 5) Write results back to widgets in pre-order
-    let mut cursor = 0usize;
-    {
-        crate::scope!("layout::write_back");
-        write_back(
-            root,
-            layout_engine,
-            &mut cursor,
-            &mut ctx.ui.view_state,
-            0,
-            0,
-        );
-    }
     root_id
 }
 
@@ -162,27 +149,30 @@ pub fn prepare_tree<M>(
     cursor: &mut usize,
 ) {
     crate::scope!("layout::prepare_tree");
-    __prepare_tree(w, ctx, cursor);
+    __prepare_tree(w, ctx, cursor, 0, 0);
 }
 
 fn __prepare_tree<M>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut PrepareCtx,
     cursor: &mut usize,
+    acc_tx: i32,
+    acc_ty: i32,
 ) {
     let id = *cursor;
-    ctx.__set_current_node(id);
+    ctx.__set_data(id, acc_tx, acc_ty);
 
     w.prepare(ctx);
     *cursor += 1;
 
+    let (dx, dy) = w.children_offset(ctx.view_state);
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
-        __prepare_tree(child, ctx, cursor);
+        __prepare_tree(child, ctx, cursor, acc_tx + dx, acc_ty + dy);
     }
 
-    ctx.__set_current_node(id);
+    ctx.__set_data(id, acc_tx, acc_ty);
     w.prepare_overlay(ctx);
 }
 
@@ -192,27 +182,30 @@ pub fn handle_tree<M>(
     cursor: &mut usize,
 ) {
     crate::scope!("layout::handle_tree");
-    __handle_tree(w, ctx, cursor);
+    __handle_tree(w, ctx, cursor, 0, 0);
 }
 
 fn __handle_tree<M>(
     w: &mut dyn crate::widget::Widget<M>,
     ctx: &mut crate::context::EventCtx<M>,
     cursor: &mut usize,
+    acc_tx: i32,
+    acc_ty: i32,
 ) {
     let id = *cursor;
-    ctx.__set_current_node(id);
+    ctx.__set_data(id, acc_tx, acc_ty);
 
     w.handle(ctx);
     *cursor += 1;
 
+    let (dx, dy) = w.children_offset(&mut ctx.ui.view_state);
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
-        __handle_tree(child, ctx, cursor);
+        __handle_tree(child, ctx, cursor, acc_tx + dx, acc_ty + dy);
     }
 
-    ctx.__set_current_node(id);
+    ctx.__set_data(id, acc_tx, acc_ty);
     w.handle_after(ctx);
 }
 
@@ -240,7 +233,7 @@ fn __paint_tree<M>(
     depth: usize,
 ) {
     let id = *cursor;
-    ctx.__set_current_node(id);
+    ctx.__set_data(id, acc_tx, acc_ty);
     let n = eng.nodes[id];
 
     let mut clip = parent_clip;
@@ -292,7 +285,7 @@ fn __paint_tree<M>(
     }
 
     let overlay_begin = out.len();
-    ctx.__set_current_node(id);
+    ctx.__set_data(id, acc_tx, acc_ty);
     w.paint_overlay(ctx, out);
 
     if eng.debug {
@@ -334,43 +327,6 @@ fn __paint_tree<M>(
         for inst in &mut out[overlay_begin..] {
             inst.add_clip(cx, cy, cw, ch);
         }
-    }
-}
-
-fn write_back<M>(
-    w: &mut dyn Widget<M>,
-    layout_engine: &LayoutEngine,
-    cursor: &mut usize,
-    view_state: &mut ViewState,
-    off_x: i32,
-    off_y: i32,
-) {
-    let id = *cursor;
-    let n = layout_engine.nodes[id];
-    w.set_layout(
-        n.pos.x + off_x,
-        n.pos.y + off_y,
-        n.current_size.width,
-        n.current_size.height,
-    );
-
-    *cursor += 1;
-
-    let (dx, dy) = w.children_offset(view_state);
-    let child_off_x = off_x + dx;
-    let child_off_y = off_y + dy;
-
-    let count = w.child_count();
-    for i in 0..count {
-        let child = w.child_mut(i);
-        write_back(
-            child,
-            layout_engine,
-            cursor,
-            view_state,
-            child_off_x,
-            child_off_y,
-        );
     }
 }
 

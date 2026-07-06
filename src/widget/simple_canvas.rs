@@ -2,10 +2,6 @@ use super::*;
 use crate::render::pipeline::PipelineKey;
 
 pub struct SimpleCanvas<M> {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
     size: Size<Length>,
     key: &'static str,
     with_handle: Option<fn(&mut EventCtx<M>)>,
@@ -20,10 +16,6 @@ impl<M> SimpleCanvas<M> {
         with_handle: Option<fn(&mut EventCtx<M>)>,
     ) -> Self {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             size,
             key: pipeline_key,
             with_handle,
@@ -53,13 +45,6 @@ impl<M> Widget<M> for SimpleCanvas<M> {
         }
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn child_count(&self) -> usize {
         0
     }
@@ -67,11 +52,12 @@ impl<M> Widget<M> for SimpleCanvas<M> {
         unreachable!()
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+        let r = ctx.rect();
         out.push(Instance::new(
             PipelineKey::Other(self.key),
-            Position::new(self.x as f32, self.y as f32),
-            Size::new(self.w as f32, self.h as f32),
+            Position::new(r.x as f32, r.y as f32),
+            Size::new(r.w as f32, r.h as f32),
             [0, 0, 0, 0],
             [0, 0, 0, 0],
         ));

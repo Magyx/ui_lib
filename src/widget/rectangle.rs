@@ -1,10 +1,6 @@
 use super::*;
 
 pub struct Rectangle {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
     size: Size<Length>,
     color: Color,
     min: Size<i32>,
@@ -17,10 +13,6 @@ impl Rectangle {
     }
     pub fn new(size: Size<Length>, color: Color) -> Self {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             size,
             color,
             min: Size::splat(0),
@@ -57,13 +49,6 @@ impl<M> Widget<M> for Rectangle {
         }
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn child_count(&self) -> usize {
         0
     }
@@ -71,11 +56,12 @@ impl<M> Widget<M> for Rectangle {
         unreachable!()
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         if self.color.a() != 0 {
+            let r = ctx.rect();
             out.push(Instance::ui(
-                Position::new(self.x as f32, self.y as f32),
-                Size::new(self.w as f32, self.h as f32),
+                Position::new(r.x as f32, r.y as f32),
+                Size::new(r.w as f32, r.h as f32),
                 self.color,
             ));
         }

@@ -26,9 +26,6 @@ impl<M> Widget<M> for Absolute<M> {
         n.offset_pos.y += self.offy;
         n
     }
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.inner.as_mut().set_layout(x, y, w, h);
-    }
     fn identity_key(&self) -> Option<u64> {
         self.inner.as_ref().identity_key()
     }
@@ -68,11 +65,6 @@ impl<M> Widget<M> for Absolute<M> {
 }
 
 pub struct Overlay<M> {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-
     children: Vec<Absolute<M>>,
     size: Size<Length>,
     color: Color,
@@ -95,10 +87,6 @@ impl<M> Overlay<M> {
             .map(|c| Absolute::new(c.into(), 0, 0))
             .collect();
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             children: wrapped,
             size: Size::splat(Length::Fit),
             color: Color::TRANSPARENT,
@@ -155,13 +143,6 @@ impl<M: 'static> Widget<M> for Overlay<M> {
         }
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn child_count(&self) -> usize {
         self.children.len()
     }
@@ -169,11 +150,12 @@ impl<M: 'static> Widget<M> for Overlay<M> {
         &mut self.children[i]
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         if self.color.a() > 0 {
+            let r = ctx.rect();
             out.push(Instance::ui(
-                Position::new(self.x as f32, self.y as f32),
-                Size::new(self.w as f32, self.h as f32),
+                Position::new(r.x as f32, r.y as f32),
+                Size::new(r.w as f32, r.h as f32),
                 self.color,
             ));
         }

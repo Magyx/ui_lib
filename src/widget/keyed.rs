@@ -24,9 +24,6 @@ impl<M, W: Widget<M>> Widget<M> for Keyed<W> {
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node {
         self.inner.layout(ctx)
     }
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.inner.set_layout(x, y, w, h)
-    }
     fn identity_key(&self) -> Option<u64> {
         Some(self.key)
     }

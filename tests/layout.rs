@@ -714,9 +714,6 @@ mod layout {
                 ..Default::default()
             }
         }
-        fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-            self.slot.set(Some((x, y, w, h)));
-        }
         fn child_count(&self) -> usize {
             0
         }
@@ -732,9 +729,11 @@ mod layout {
         }
         fn paint(
             &mut self,
-            _ctx: &mut ui::context::PaintCtx,
+            ctx: &mut ui::context::PaintCtx,
             _out: &mut Vec<ui::primitive::Instance>,
         ) {
+            let r = ctx.rect();
+            self.slot.set(Some(r.xywh()));
         }
         fn handle(&mut self, _ctx: &mut ui::context::EventCtx<M>) {}
     }
@@ -810,9 +809,6 @@ mod layout {
                     ..Default::default()
                 }
             }
-            fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-                self.slot.set(Some((x, y, w, h)));
-            }
             fn child_count(&self) -> usize {
                 0
             }
@@ -828,9 +824,11 @@ mod layout {
             }
             fn paint(
                 &mut self,
-                _ctx: &mut ui::context::PaintCtx,
+                ctx: &mut ui::context::PaintCtx,
                 _out: &mut Vec<ui::primitive::Instance>,
             ) {
+                let r = ctx.rect();
+                self.slot.set(Some(r.xywh()));
             }
             fn handle(&mut self, _ctx: &mut ui::context::EventCtx<M>) {}
         }
@@ -866,9 +864,6 @@ mod layout {
                     ..Default::default()
                 }
             }
-            fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-                self.slot.set(Some((x, y, w, h)));
-            }
             fn child_count(&self) -> usize {
                 0
             }
@@ -884,9 +879,11 @@ mod layout {
             }
             fn paint(
                 &mut self,
-                _ctx: &mut ui::context::PaintCtx,
+                ctx: &mut ui::context::PaintCtx,
                 _out: &mut Vec<ui::primitive::Instance>,
             ) {
+                let r = ctx.rect();
+                self.slot.set(Some(r.xywh()));
             }
             fn handle(&mut self, _ctx: &mut ui::context::EventCtx<M>) {}
         }
@@ -924,7 +921,6 @@ mod layout {
                     ..Default::default()
                 }
             }
-            fn set_layout(&mut self, _x: i32, _y: i32, _w: i32, _h: i32) {}
             fn child_count(&self) -> usize {
                 1
             }

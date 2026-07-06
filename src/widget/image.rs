@@ -8,10 +8,6 @@ pub enum ContentFit {
 }
 
 pub struct Image {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
@@ -23,10 +19,6 @@ pub struct Image {
 impl Image {
     pub fn new(size: Size<Length>, handle: TextureHandle) -> Self {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             size,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
@@ -69,13 +61,6 @@ impl<M> Widget<M> for Image {
         node
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn child_count(&self) -> usize {
         0
     }
@@ -83,19 +68,20 @@ impl<M> Widget<M> for Image {
         unreachable!()
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         if self.tint.a() == 0 {
             return;
         }
 
+        let r = ctx.rect();
         let sw = self.handle.size_px.width as i32;
         let sh = self.handle.size_px.height as i32;
-        if sw <= 0 || sh <= 0 || self.w <= 0 || self.h <= 0 {
+        if sw <= 0 || sh <= 0 || r.w <= 0 || r.h <= 0 {
             return;
         }
 
-        let dst_w = self.w as f32;
-        let dst_h = self.h as f32;
+        let dst_w = r.w as f32;
+        let dst_h = r.h as f32;
         let src_w = sw as f32;
         let src_h = sh as f32;
 
@@ -111,8 +97,8 @@ impl<M> Widget<M> for Image {
             }
         };
 
-        let px = self.x as f32 + (dst_w - draw_w) * 0.5;
-        let py = self.y as f32 + (dst_h - draw_h) * 0.5;
+        let px = r.x as f32 + (dst_w - draw_w) * 0.5;
+        let py = r.y as f32 + (dst_h - draw_h) * 0.5;
         let dw = draw_w.max(1.0);
         let dh = draw_h.max(1.0);
 

@@ -627,14 +627,13 @@ impl<'a, M> Engine<'a, M> {
         let mut require_redraw = false;
 
         if let Some(root) = target.root.as_mut() {
-            let mut event_cx = EventCtx {
-                text: &mut *self.renderer.text,
-                event: None,
-                globals: &target.globals,
-                ui: &mut target.ctx,
-                layout: &self.layout_engine,
-                current_node: 0usize,
-            };
+            let mut event_cx = EventCtx::new(
+                &target.globals,
+                &mut *self.renderer.text,
+                &mut target.ctx,
+                None,
+                &self.layout_engine,
+            );
             let mut cursor = 0usize;
             layout::handle_tree(root.as_mut(), &mut event_cx, &mut cursor);
             target.ctx.mouse_buttons_pressed = 0;
@@ -704,30 +703,28 @@ impl<'a, M> Engine<'a, M> {
 
         {
             crate::scope!("prepare");
-            let mut prepare_ctx = PrepareCtx {
-                globals: &target.globals,
-                text: &mut *self.renderer.text,
-                gpu: &self.gpu.clone(),
-                texture: &mut self.renderer.textures,
-                view_state: &mut target.ctx.view_state,
-                layout: &self.layout_engine,
-                current_node: root_id,
-                theme: &self.theme,
-            };
+            let mut prepare_ctx = PrepareCtx::new(
+                &target.globals,
+                &mut *self.renderer.text,
+                &self.gpu,
+                &mut self.renderer.textures,
+                &self.layout_engine,
+                &mut target.ctx.view_state,
+                &self.theme,
+            );
             let mut cursor = root_id;
             layout::prepare_tree(root.as_mut(), &mut prepare_ctx, &mut cursor);
         }
 
         {
             crate::scope!("paint");
-            let mut paint_ctx = PaintCtx {
-                globals: &target.globals,
-                text: &*self.renderer.text,
-                view_state: &mut target.ctx.view_state,
-                layout: &self.layout_engine,
-                current_node: root_id,
-                theme: &self.theme,
-            };
+            let mut paint_ctx = PaintCtx::new(
+                &target.globals,
+                &*self.renderer.text,
+                &self.layout_engine,
+                &mut target.ctx.view_state,
+                &self.theme,
+            );
 
             let mut cursor = root_id;
             let screen_clip = Some([
@@ -903,14 +900,13 @@ impl<'a, M> Engine<'a, M> {
             };
 
             if ev_view.is_some() {
-                let mut ctx = EventCtx {
-                    text: &mut *self.renderer.text,
-                    globals: &target.globals,
-                    ui: &mut target.ctx,
-                    event: ev_view,
-                    layout: &self.layout_engine,
-                    current_node: 0usize,
-                };
+                let mut ctx = EventCtx::new(
+                    &target.globals,
+                    &mut *self.renderer.text,
+                    &mut target.ctx,
+                    ev_view,
+                    &self.layout_engine,
+                );
                 let mut cursor = 0usize;
                 layout::handle_tree(root.as_mut(), &mut ctx, &mut cursor);
             }

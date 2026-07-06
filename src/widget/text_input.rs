@@ -183,11 +183,6 @@ impl TextMode for MultiLine {
 }
 
 pub struct TextInput<M, Mode: TextMode = SingleLine> {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-
     id: Id,
     size: Size<Length>,
     min: Size<i32>,
@@ -213,10 +208,6 @@ pub struct TextInput<M, Mode: TextMode = SingleLine> {
 impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
     fn new_impl<S: Into<Cow<'static, str>>>(value: S, size: Size<Length>) -> Self {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             id: 0,
             size,
             min: Size::splat(28),
@@ -300,10 +291,10 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
     }
 
     #[inline]
-    fn text_origin(&self) -> (i32, i32) {
+    fn text_origin(&self, r: Rect) -> (i32, i32) {
         (
-            self.x + self.padding.x + self.border,
-            self.y + self.padding.y + self.border,
+            r.x + self.padding.x + self.border,
+            r.y + self.padding.y + self.border,
         )
     }
 
@@ -441,7 +432,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         if self.value.is_empty() {
             return Some(TextCursor::new(0, 0));
         }
-        let (l, t) = self.text_origin();
+        let (l, t) = self.text_origin(ctx.rect());
         let cx = ctx.ui.mouse_pos.x - l as f32;
         let cy = ctx.ui.mouse_pos.y - t as f32;
         ctx.ui
@@ -499,12 +490,6 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             ..Default::default()
         }
     }
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
     fn set_id(&mut self, id: Id) {
         self.id = id;
         self.child_id = mix64(id, 1);
@@ -521,12 +506,13 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         else {
             return;
         };
-        let (l, t) = self.text_origin();
+        let r = ctx.rect();
+        let (l, t) = self.text_origin(r);
         let key = CaretKey {
             cursor,
             l,
             t,
-            w: self.w,
+            w: r.w,
             focused,
         };
         if self
@@ -550,6 +536,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        let r = ctx.rect();
         let theme = ctx.theme;
         let focused = self.state(ctx.view_state).is_some_and(|s| s.focused);
         let fill = self.bg.unwrap_or(theme.surface_variant);
@@ -559,8 +546,8 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             theme.outline
         };
         instances.push(Instance::ui_rounded(
-            Position::new(self.x as f32, self.y as f32),
-            Size::new(self.w as f32, self.h as f32),
+            Position::new(r.x as f32, r.y as f32),
+            Size::new(r.w as f32, r.h as f32),
             fill,
             theme.corner_radius,
             theme.border_width,
@@ -573,6 +560,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         const SELECTION_PAD_X: f32 = 1.5;
         const SELECTION_PAD_Y: f32 = 1.0;
 
+        let rect = ctx.rect();
         let Some(st) = self.state(ctx.view_state) else {
             return;
         };
@@ -580,15 +568,15 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
             return;
         }
 
-        let clip_l = self.x as f32;
-        let clip_r = (self.x + self.w) as f32;
+        let clip_l = rect.x as f32;
+        let clip_r = (rect.x + rect.w) as f32;
 
         if !self.value.is_empty()
             && let Some(anchor) = st.selection_anchor
             && anchor != st.cursor
         {
             let (start, end) = order_cursors(anchor, st.cursor);
-            let (l, t) = self.text_origin();
+            let (l, t) = self.text_origin(rect);
             let p = ctx.theme.primary_container;
             let sel_color = Color::rgba(p.r(), p.g(), p.b(), SELECTION_ALPHA);
             if let Some(buf) = ctx
@@ -614,7 +602,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
 
         if let Some((cx, cy, ch)) = st.caret_cache.rect {
             // no h-scroll yet: hide caret once it leaves the field
-            if cx < self.x as f32 || cx > (self.x + self.w) as f32 {
+            if cx < rect.x as f32 || cx > (rect.x + rect.w) as f32 {
                 return;
             }
             let caret = self.caret.unwrap_or(ctx.theme.on_surface);
@@ -627,12 +615,13 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
+        let r = ctx.rect();
         let (was_hovered, hovered, focused) = {
             let st = self.ensure_state(&mut ctx.ui.view_state);
-            let inside = ctx.ui.mouse_pos.x >= self.x as f32
-                && ctx.ui.mouse_pos.x < (self.x + self.w) as f32
-                && ctx.ui.mouse_pos.y >= self.y as f32
-                && ctx.ui.mouse_pos.y < (self.y + self.h) as f32;
+            let inside = ctx.ui.mouse_pos.x >= r.x as f32
+                && ctx.ui.mouse_pos.x < (r.x + r.w) as f32
+                && ctx.ui.mouse_pos.y >= r.y as f32
+                && ctx.ui.mouse_pos.y < (r.y + r.h) as f32;
             let was_hovered = st.hovered;
             st.hovered = inside;
             st.focused = ctx.ui.kbd_focus_item == Some(self.id);

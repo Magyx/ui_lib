@@ -9,11 +9,6 @@ use std::{
 };
 
 pub struct Svg {
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
@@ -28,10 +23,6 @@ pub struct Svg {
 impl Svg {
     pub fn new(size: Size<Length>, path: impl Into<PathBuf>) -> Self {
         Self {
-            x: 0,
-            y: 0,
-            w: 0,
-            h: 0,
             size,
             min: Size::new(0, 0),
             max: Size::splat(i32::MAX),
@@ -177,13 +168,6 @@ impl<M> Widget<M> for Svg {
         }
     }
 
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.x = x;
-        self.y = y;
-        self.w = w;
-        self.h = h;
-    }
-
     fn set_id(&mut self, id: Id) {
         self.id = id;
     }
@@ -197,12 +181,13 @@ impl<M> Widget<M> for Svg {
     }
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
+        let r = ctx.rect();
         {
             let state = ctx.view_state.ensure_swept(self.id, SvgState::default);
             state.ensure_tree(&self.path, ctx.texture, ctx.gpu);
         }
 
-        if self.w <= 0 || self.h <= 0 || self.tint.a() == 0 {
+        if r.w <= 0 || r.h <= 0 || self.tint.a() == 0 {
             return;
         }
 
@@ -215,7 +200,7 @@ impl<M> Widget<M> for Svg {
 
         let svg_size = tree.size();
         let (svg_w, svg_h) = (svg_size.width(), svg_size.height());
-        let (dx, dy, dw, dh) = fit_rect(self.x, self.y, self.w, self.h, svg_w, svg_h, &self.fit);
+        let (dx, dy, dw, dh) = fit_rect(r.x, r.y, r.w, r.h, svg_w, svg_h, &self.fit);
         if dw <= 0.0 || dh <= 0.0 {
             return;
         }

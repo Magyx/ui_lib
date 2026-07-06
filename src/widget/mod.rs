@@ -28,7 +28,6 @@ pub trait IntoElement {}
 pub trait Widget<M>: IntoElement {
     /* ----- layout ----- */
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node;
-    fn set_layout(&mut self, x: i32, y: i32, w: i32, h: i32);
     fn identity_key(&self) -> Option<u64> {
         None
     }
