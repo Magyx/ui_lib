@@ -104,7 +104,9 @@ impl<M: 'static> Widget<M> for WrappingRows<M> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
-        let r = ctx.rect();
-        ctx.surface(out, r.xywh(), self.color, Color::TRANSPARENT);
+        if self.color.a() > 0 {
+            let r = ctx.rect();
+            ctx.surface(out, r.xywh(), self.color, Color::TRANSPARENT);
+        }
     }
 }
