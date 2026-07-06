@@ -32,30 +32,40 @@ pub trait Widget<M>: IntoElement {
     fn identity_key(&self) -> Option<u64> {
         None
     }
-    fn set_id(&mut self, _id: Id) {}
+    fn set_id(&mut self, id: Id) {
+        let _ = id;
+    }
     fn child_count(&self) -> usize;
     fn child_mut(&mut self, idx: usize) -> &mut dyn Widget<M>;
 
-    fn min_height_for_width<'a>(
-        &mut self,
-        _ctx: &mut LayoutCtx<'a, M>,
-        _width: i32,
-    ) -> Option<i32> {
+    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
+        let (_, _) = (ctx, width);
         None
     }
 
     /* ----- paint ----- */
-    fn children_offset(&self, _view_state: &mut ViewState) -> (i32, i32) {
+    fn children_offset(&self, view_state: &mut ViewState) -> (i32, i32) {
+        let _ = view_state;
         (0, 0)
     }
-    fn prepare(&mut self, _ctx: &mut PrepareCtx) {}
-    fn prepare_overlay(&mut self, _ctx: &mut PrepareCtx) {}
+    fn prepare(&mut self, ctx: &mut PrepareCtx) {
+        let _ = ctx;
+    }
+    fn prepare_overlay(&mut self, ctx: &mut PrepareCtx) {
+        let _ = ctx;
+    }
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
-    fn paint_overlay(&mut self, _ctx: &mut PaintCtx, _instances: &mut Vec<Instance>) {}
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        let (_, _) = (ctx, instances);
+    }
 
     /* ----- interaction ----- */
-    fn handle(&mut self, _ctx: &mut EventCtx<M>) {}
-    fn handle_after(&mut self, _ctx: &mut EventCtx<M>) {}
+    fn handle(&mut self, ctx: &mut EventCtx<M>) {
+        let _ = ctx;
+    }
+    fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
+        let _ = ctx;
+    }
 }
 
 pub struct Element<M> {
