@@ -166,7 +166,6 @@ impl<M> Widget<M> for Svg {
         }
     }
 
-
     fn child_count(&self) -> usize {
         0
     }

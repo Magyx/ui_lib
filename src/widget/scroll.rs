@@ -11,8 +11,9 @@ pub enum ScrollBarBehavior {
     Hide,
 }
 
-struct ScrollViewState {
-    y: i32,
+#[doc(hidden)]
+pub struct ScrollViewState {
+    pub y: i32,
     grab: Option<f32>,
     content_h: i32,
     /// Viewport height captured during paint/handle, so `children_offset`
@@ -26,7 +27,6 @@ pub struct Scrollable<M> {
     min: Size<i32>,
     max: Size<i32>,
     child: Element<M>,
-
 
     scrollbar_behavior: ScrollBarBehavior,
 
@@ -73,11 +73,6 @@ impl<M: 'static> Scrollable<M> {
         self.bar_color = Some(bar);
         self.thumb_color = Some(thumb);
         self
-    }
-
-    #[doc(hidden)]
-    pub fn __scroll_y_for_test(&self, vs: &ViewState, id: Id) -> i32 {
-        vs.get::<ScrollViewState>(&id).map_or(0, |s| s.y)
     }
 
     #[inline]
@@ -144,7 +139,6 @@ impl<M: 'static> Widget<M> for Scrollable<M> {
             ..Default::default()
         }
     }
-
 
     fn child_count(&self) -> usize {
         1

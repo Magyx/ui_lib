@@ -7,9 +7,10 @@ mod common;
 mod view_state_sweep {
     use super::common::*;
 
+    use ui::context::Context;
     use ui::event::{ScrollDelta, ScrollUnits, UiEventRef};
     use ui::model::{Color, Position, Size};
-    use ui::widget::{Length, Rectangle, Scrollable};
+    use ui::widget::{Length, Rectangle, ScrollViewState, Scrollable};
 
     /// Run a frame on `root`: layout, handle, paint, sweep.
     /// SweepCx needs a Gpu + TextureRegistry which the harness doesn't
@@ -28,6 +29,12 @@ mod view_state_sweep {
 
     #[test]
     fn removed_scrollable_is_swept_and_re_added_one_starts_fresh() {
+        fn get_scroll_y(ctx: &Context<TopMsg>) -> i32 {
+            ctx.view_state
+                .get::<ScrollViewState>(&ui::layout::ROOT_SEED)
+                .map_or(0, |s| s.y)
+        }
+
         let mut h = Harness::default();
 
         // Frame 1: scrollable present.
@@ -41,14 +48,15 @@ mod view_state_sweep {
         h.ctx.mouse_pos = Position::new(10.0, 10.0);
         let wheel = UiEventRef::MouseWheel(ScrollDelta {
             dx: 0.0,
-            dy: -200.0,
+            dy: 200.0,
             units: ScrollUnits::Pixels,
         });
         h.handle_event(&mut s1, wheel);
         assert!(
-            s1.__scroll_y_for_test(&h.ctx.view_state, ui::layout::ROOT_SEED) > 0,
+            get_scroll_y(&h.ctx) > 0,
             "scrollable should have advanced y after wheel event"
         );
+        frame(&mut h, &mut s1);
 
         // Frame 2: render a different root. Scrollable's state must
         // be swept.
@@ -70,7 +78,7 @@ mod view_state_sweep {
         ));
         frame(&mut h, &mut s2);
         assert_eq!(
-            s2.__scroll_y_for_test(&h.ctx.view_state, ui::layout::ROOT_SEED),
+            get_scroll_y(&h.ctx),
             0,
             "re-added scrollable must not inherit predecessor's scroll offset"
         );
