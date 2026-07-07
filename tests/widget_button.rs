@@ -7,7 +7,7 @@ mod common;
 mod widget_interaction {
     use super::common::*;
 
-    use ui::event::MouseButton;
+    use ui::event::{KeyState, MouseButton, UiEventRef};
     use ui::model::{Color, Position, Size};
     use ui::widget::{Button, Length};
 
@@ -105,7 +105,13 @@ mod widget_interaction {
         harness.ctx.mouse_pos = Position::new(20.0, 20.0);
         harness.ctx.mouse_buttons_pressed = 1 << MouseButton::Left.bit();
         harness.ctx.mouse_buttons_down = 1 << MouseButton::Left.bit();
-        harness.handle(&mut btn);
+        harness.handle_event(
+            &mut btn,
+            UiEventRef::MouseButton {
+                button: MouseButton::Left,
+                state: KeyState::Pressed,
+            },
+        );
 
         assert!(
             harness.ctx.active_item.is_some(),
@@ -120,7 +126,13 @@ mod widget_interaction {
         harness.ctx.mouse_buttons_pressed = 0;
         harness.ctx.mouse_buttons_down = 0;
         harness.ctx.mouse_buttons_released = 1 << MouseButton::Left.bit();
-        harness.handle(&mut btn);
+        harness.handle_event(
+            &mut btn,
+            UiEventRef::MouseButton {
+                button: MouseButton::Left,
+                state: KeyState::Released,
+            },
+        );
 
         let msgs = harness.ctx.take();
         assert_eq!(msgs, vec![TopMsg::from(Msg::Clicked(1))]);
@@ -140,7 +152,13 @@ mod widget_interaction {
         harness.ctx.mouse_pos = Position::new(20.0, 20.0);
         harness.ctx.mouse_buttons_pressed = 1 << MouseButton::Left.bit();
         harness.ctx.mouse_buttons_down = 1 << MouseButton::Left.bit();
-        harness.handle(&mut btn);
+        harness.handle_event(
+            &mut btn,
+            UiEventRef::MouseButton {
+                button: MouseButton::Left,
+                state: KeyState::Pressed,
+            },
+        );
         assert!(harness.ctx.active_item.is_some());
 
         // Drag outside still holding the button.
@@ -151,7 +169,13 @@ mod widget_interaction {
         // Release outside.
         harness.ctx.mouse_buttons_down = 0;
         harness.ctx.mouse_buttons_released = 1 << MouseButton::Left.bit();
-        harness.handle(&mut btn);
+        harness.handle_event(
+            &mut btn,
+            UiEventRef::MouseButton {
+                button: MouseButton::Left,
+                state: KeyState::Released,
+            },
+        );
 
         let msgs = harness.ctx.take();
         assert!(

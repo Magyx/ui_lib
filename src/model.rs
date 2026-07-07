@@ -248,7 +248,7 @@ impl Rect {
         let t = self.y as f32;
         let r = l + self.w as f32;
         let b = t + self.h as f32;
-        p.x >= l && p.x <= r && p.y >= t && p.y <= b
+        p.x >= l && p.x < r && p.y >= t && p.y < b
     }
 
     #[inline]
