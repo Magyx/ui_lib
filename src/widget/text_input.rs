@@ -634,10 +634,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         let id = ctx.id();
         let (was_hovered, hovered, focused) = {
             let st = self.ensure_state(&mut ctx.ui.view_state, id);
-            let inside = ctx.ui.mouse_pos.x >= r.x as f32
-                && ctx.ui.mouse_pos.x < (r.x + r.w) as f32
-                && ctx.ui.mouse_pos.y >= r.y as f32
-                && ctx.ui.mouse_pos.y < (r.y + r.h) as f32;
+            let inside = r.contains(ctx.ui.mouse_pos);
             let was_hovered = st.hovered;
             st.hovered = inside;
             st.focused = ctx.ui.kbd_focus_item == Some(id);

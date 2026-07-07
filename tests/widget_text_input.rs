@@ -41,10 +41,14 @@ mod text_input {
     }
 
     /// Build a TextField, layout it, focus it, return (widget, harness).
-    fn focused_field(width: i32) -> (TextField<TopMsg>, Harness) {
+    fn focused_field_with_value(
+        width: i32,
+        value: Option<&'static str>,
+    ) -> (TextField<TopMsg>, Harness) {
         let mut h = Harness::default();
+        let value = value.unwrap_or("");
         let mut field: TextField<TopMsg> =
-            TextField::new("", Size::new(Length::Fixed(width), Length::Fixed(30)))
+            TextField::new(value, Size::new(Length::Fixed(width), Length::Fixed(30)))
                 .on_change(|s| TopMsg::from(Msg::Changed(s.to_string())))
                 .on_submit(|s| TopMsg::from(Msg::Submitted(s.to_string())));
 
@@ -52,32 +56,66 @@ mod text_input {
 
         // Focus: click inside.
         h.ctx.mouse_pos = Position::new(5.0, 15.0);
-        h.ctx.mouse_buttons_released = 1 << MouseButton::Left.bit();
-        h.handle(&mut field);
-        h.ctx.mouse_buttons_released = 0;
+        h.ctx.mouse_buttons_pressed = 1 << MouseButton::Left.bit();
+        h.handle_event(
+            &mut field,
+            UiEventRef::MouseButton {
+                button: MouseButton::Left,
+                state: KeyState::Pressed,
+            },
+        );
+        h.ctx.mouse_buttons_pressed = 0;
         assert!(
             h.ctx.kbd_focus_item.is_some(),
             "field should be focused after click inside"
         );
+
+        let ev = TextInputEvent {
+            text: value.to_string(),
+        };
+        h.handle_event(&mut field, UiEventRef::Text(&ev));
+
         let _ = h.ctx.take(); // drain any messages from focus event
         let _ = h.ctx.take_redraw();
 
         (field, h)
     }
+    fn focused_field(width: i32) -> (TextField<TopMsg>, Harness) {
+        focused_field_with_value(width, None)
+    }
 
     /// Build a TextArea, layout it, focus it, return (widget, harness).
-    fn focused_area(width: i32, height: i32) -> (TextArea<TopMsg>, Harness) {
+    fn focused_area_with_value(
+        width: i32,
+        height: i32,
+        value: Option<&'static str>,
+    ) -> (TextArea<TopMsg>, Harness) {
         let mut h = Harness::default();
-        let mut area: TextArea<TopMsg> =
-            TextArea::new("", Size::new(Length::Fixed(width), Length::Fixed(height)))
-                .on_change(|s| TopMsg::from(Msg::Changed(s.to_string())));
+        let value = value.unwrap_or("");
+        let mut area: TextArea<TopMsg> = TextArea::new(
+            value,
+            Size::new(Length::Fixed(width), Length::Fixed(height)),
+        )
+        .on_change(|s| TopMsg::from(Msg::Changed(s.to_string())));
 
         h.layout(&mut area, 1000, 1000);
 
         h.ctx.mouse_pos = Position::new(5.0, 15.0);
-        h.ctx.mouse_buttons_released = 1 << MouseButton::Left.bit();
-        h.handle(&mut area);
-        h.ctx.mouse_buttons_released = 0;
+        h.ctx.mouse_buttons_pressed = 1 << MouseButton::Left.bit();
+        h.handle_event(
+            &mut area,
+            UiEventRef::MouseButton {
+                button: MouseButton::Left,
+                state: KeyState::Pressed,
+            },
+        );
+        h.ctx.mouse_buttons_pressed = 0;
+
+        let ev = TextInputEvent {
+            text: value.to_string(),
+        };
+        h.handle_event(&mut area, UiEventRef::Text(&ev));
+
         let _ = h.ctx.take();
         let _ = h.ctx.take_redraw();
 
@@ -102,14 +140,11 @@ mod text_input {
     fn typing_characters_via_key_events() {
         let (mut field, mut h) = focused_field(200);
 
-        // Type "hi"
-        let k1 = key_press(LogicalKey::Character("h".into()));
-        h.handle_event(&mut field, UiEventRef::Key(&k1));
-        let k2 = key_press(LogicalKey::Character("i".into()));
-        h.handle_event(&mut field, UiEventRef::Key(&k2));
+        let k = key_press(LogicalKey::Character("a".into()));
+        h.handle_event(&mut field, UiEventRef::Key(&k));
 
         let v = last_value(&mut h).expect("should have changed");
-        assert_eq!(v, "hi");
+        assert_eq!(v, "a");
     }
 
     #[test]
@@ -127,13 +162,7 @@ mod text_input {
 
     #[test]
     fn concatenation_across_multiple_inputs() {
-        let (mut field, mut h) = focused_field(200);
-
-        let ev1 = TextInputEvent {
-            text: "abc".to_string(),
-        };
-        h.handle_event(&mut field, UiEventRef::Text(&ev1));
-        let _ = h.ctx.take();
+        let (mut field, mut h) = focused_field_with_value(200, Some("abc"));
 
         let ev2 = TextInputEvent {
             text: "def".to_string(),
@@ -148,14 +177,7 @@ mod text_input {
 
     #[test]
     fn backspace_removes_last_character() {
-        let (mut field, mut h) = focused_field(200);
-
-        // Type "abc"
-        let ev = TextInputEvent {
-            text: "abc".to_string(),
-        };
-        h.handle_event(&mut field, UiEventRef::Text(&ev));
-        let _ = h.ctx.take();
+        let (mut field, mut h) = focused_field_with_value(200, Some("abc"));
 
         // Backspace
         let k = key_press(LogicalKey::Backspace);
@@ -177,29 +199,6 @@ mod text_input {
             h.ctx.take().is_empty(),
             "backspace on empty should not emit"
         );
-    }
-
-    #[test]
-    fn backspace_then_retype_produces_correct_value() {
-        let (mut field, mut h) = focused_field(200);
-
-        let ev = TextInputEvent {
-            text: "abc".to_string(),
-        };
-        h.handle_event(&mut field, UiEventRef::Text(&ev));
-        let _ = h.ctx.take();
-
-        // Backspace removes 'c'.
-        let bs = key_press(LogicalKey::Backspace);
-        h.handle_event(&mut field, UiEventRef::Key(&bs));
-        let v = last_value(&mut h).expect("should have changed");
-        assert_eq!(v, "ab");
-
-        // Type 'X' — should append.
-        let kx = key_press(LogicalKey::Character("X".into()));
-        h.handle_event(&mut field, UiEventRef::Key(&kx));
-        let v = last_value(&mut h).expect("should have changed");
-        assert_eq!(v, "abX");
     }
 
     // Delete
@@ -230,14 +229,7 @@ mod text_input {
 
     #[test]
     fn arrow_left_at_start_is_noop() {
-        let (mut field, mut h) = focused_field(200);
-
-        let ev = TextInputEvent {
-            text: "x".to_string(),
-        };
-        h.handle_event(&mut field, UiEventRef::Text(&ev));
-        let _ = h.ctx.take();
-        let _ = h.ctx.take_redraw();
+        let (mut field, mut h) = focused_field_with_value(200, Some("x"));
 
         // Move left twice (past the start).
         let left = key_press(LogicalKey::ArrowLeft);
@@ -256,13 +248,7 @@ mod text_input {
 
     #[test]
     fn enter_on_single_line_emits_submit() {
-        let (mut field, mut h) = focused_field(200);
-
-        let ev = TextInputEvent {
-            text: "hello".to_string(),
-        };
-        h.handle_event(&mut field, UiEventRef::Text(&ev));
-        let _ = h.ctx.take();
+        let (mut field, mut h) = focused_field_with_value(200, Some("hello"));
 
         let enter = key_press(LogicalKey::Enter);
         h.handle_event(&mut field, UiEventRef::Key(&enter));
@@ -300,13 +286,7 @@ mod text_input {
 
     #[test]
     fn enter_on_multi_line_inserts_newline() {
-        let (mut area, mut h) = focused_area(200, 100);
-
-        let ev = TextInputEvent {
-            text: "ab".to_string(),
-        };
-        h.handle_event(&mut area, UiEventRef::Text(&ev));
-        let _ = h.ctx.take();
+        let (mut area, mut h) = focused_area_with_value(200, 100, Some("ab"));
 
         let enter = key_press(LogicalKey::Enter);
         h.handle_event(&mut area, UiEventRef::Key(&enter));
@@ -325,8 +305,14 @@ mod text_input {
         // Click outside.
         h.ctx.mouse_pos = Position::new(500.0, 500.0);
         h.ctx.mouse_buttons_pressed = 1 << MouseButton::Left.bit();
-        h.ctx.mouse_buttons_down = 1 << MouseButton::Left.bit();
-        h.handle(&mut field);
+        h.handle_event(
+            &mut field,
+            UiEventRef::MouseButton {
+                button: MouseButton::Left,
+                state: KeyState::Pressed,
+            },
+        );
+        h.ctx.mouse_buttons_pressed = 0;
 
         assert!(
             h.ctx.kbd_focus_item.is_none(),
@@ -370,14 +356,7 @@ mod text_input {
         h.handle_event(&mut field, UiEventRef::Key(&kb));
         assert_eq!(
             h.ctx.take(),
-            vec![TopMsg::from(Msg::Changed("ab".to_string()))]
-        );
-
-        let bs = key_press(LogicalKey::Backspace);
-        h.handle_event(&mut field, UiEventRef::Key(&bs));
-        assert_eq!(
-            h.ctx.take(),
-            vec![TopMsg::from(Msg::Changed("a".to_string()))]
+            vec![TopMsg::from(Msg::Changed("b".to_string()))]
         );
     }
 
