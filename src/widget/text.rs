@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    text::{RunStyle, Style, TextBackend, TextBuffer, TextMetrics, Weight, Wrap},
+    text::{FontStyle, RunStyle, TextBackend, TextBuffer, TextMetrics, Weight, Wrap},
     theme::{TextStyle, Theme, Typography},
 };
 
@@ -19,7 +19,7 @@ pub(super) struct TextViewState {
     layout_line_height: f32,
     layout_wrap: Wrap,
     layout_family: Option<Family>,
-    layout_style: Option<Style>,
+    layout_style: Option<FontStyle>,
     layout_weight: Option<Weight>,
     layout_intrinsic_w: i32,
     layout_line_count: usize,
@@ -159,7 +159,7 @@ pub struct Text {
     font_size: Option<f32>,
     line_height: Option<f32>,
     family: Option<Family>,
-    style: Option<Style>,
+    style: Option<FontStyle>,
     weight: Option<Weight>,
     color_opt: Option<Color>,
     wrap: Wrap,
@@ -214,7 +214,7 @@ impl Text {
         self.family = Some(family);
         self
     }
-    pub fn style(mut self, style: Style) -> Self {
+    pub fn style(mut self, style: FontStyle) -> Self {
         self.style = Some(style);
         self
     }
@@ -290,7 +290,6 @@ impl Text {
 impl IntoElement for Text {}
 
 impl<M> Widget<M> for Text {
-
     fn child_count(&self) -> usize {
         0
     }
@@ -344,7 +343,7 @@ impl<M> Widget<M> for Text {
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         let r = ctx.rect();
         let id = ctx.id();
-        let base_color = ctx.theme.on_surface;
+        let base_color = ctx.env.foreground;
 
         let Some(state) = ctx.view_state.get::<TextViewState>(&id) else {
             return;

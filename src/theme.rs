@@ -1,6 +1,6 @@
 use crate::{
     model::Color,
-    text::{Style, Weight},
+    text::{FontStyle, Weight},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -8,7 +8,18 @@ pub struct TextStyle {
     pub font_size: f32,
     pub line_height: f32,
     pub weight: Weight,
-    pub style: Style,
+    pub style: FontStyle,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Env {
+    /// Tonal elevation for surface-color resolution.
+    pub elevation: u8,
+    /// Inherited foreground (text/icon) color; widgets resolve their default
+    /// content color from this instead of hardcoding `theme.on_surface`.
+    pub foreground: Color,
+    /// Inherited default text style.
+    pub text: TextStyle,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -30,13 +41,38 @@ impl Default for Typography {
             style,
         };
         Self {
-            h1: t(32.0, 1.20, Weight::BOLD, Style::Normal),
-            h2: t(24.0, 1.25, Weight::BOLD, Style::Normal),
-            h3: t(18.0, 1.30, Weight::SEMIBOLD, Style::Normal),
-            body: t(14.0, 1.20, Weight::NORMAL, Style::Normal),
-            label: t(13.0, 1.20, Weight::MEDIUM, Style::Normal),
-            caption: t(12.0, 1.30, Weight::NORMAL, Style::Normal),
+            h1: t(32.0, 1.20, Weight::BOLD, FontStyle::Normal),
+            h2: t(24.0, 1.25, Weight::BOLD, FontStyle::Normal),
+            h3: t(18.0, 1.30, Weight::SEMIBOLD, FontStyle::Normal),
+            body: t(14.0, 1.20, Weight::NORMAL, FontStyle::Normal),
+            label: t(13.0, 1.20, Weight::MEDIUM, FontStyle::Normal),
+            caption: t(12.0, 1.30, Weight::NORMAL, FontStyle::Normal),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Style {
+    pub fill: Option<Color>,
+    pub border: Option<Color>,
+    pub foreground: Option<Color>,
+}
+
+impl Style {
+    /// Resolve the fill, falling back to `base` when not overridden.
+    #[inline]
+    pub fn fill_or(&self, base: Color) -> Color {
+        self.fill.unwrap_or(base)
+    }
+    /// Resolve the border, falling back to `base` when not overridden.
+    #[inline]
+    pub fn border_or(&self, base: Color) -> Color {
+        self.border.unwrap_or(base)
+    }
+    /// Resolve the foreground, falling back to `base` when not overridden.
+    #[inline]
+    pub fn foreground_or(&self, base: Color) -> Color {
+        self.foreground.unwrap_or(base)
     }
 }
 
@@ -87,11 +123,73 @@ pub struct Theme {
     /// Default border width when a widget opts into having a border.
     pub border_width: i32,
 
+    /// Color shift multiplier (0..1) applied to interactive fills on hover
+    /// based on luminance.
+    pub hover_shift: f32,
+    /// Color shift multiplier (0..1) applied to interactive fills on press
+    /// based on luminance.
+    pub pressed_shift: f32,
+
     /// Global typography styles for headers, body text, and labels.
     pub typography: Typography,
 }
 
 impl Theme {
+    /// Surface color at a tonal `elevation`. Level 0 is the base `surface`;
+    /// each level nudges the surface toward its foreground — lighter on dark
+    /// themes, darker on light ones — so nested containers keep separating
+    /// instead of capping at the old `surface`/`surface_variant` pair.
+    pub fn surface_at(&self, elevation: u8) -> Color {
+        if elevation == 0 {
+            return self.surface;
+        }
+        // ~6% per level, capped so deep nesting doesn't wash out.
+        let t = (elevation as f32 * 0.06).min(0.6);
+        if self.surface.luminance() < 0.5 {
+            self.surface.lighten(t)
+        } else {
+            self.surface.darken(t)
+        }
+    }
+    /// Readable foreground for [`surface_at(elevation)`](Self::surface_at):
+    /// whichever of the theme's on-colors (falling back to black/white)
+    /// contrasts most with the elevated surface.
+    pub fn on_surface_at(&self, elevation: u8) -> Color {
+        let s = self.surface_at(elevation).luminance();
+        [self.on_surface, self.on_bg, Color::BLACK, Color::WHITE]
+            .into_iter()
+            .max_by(|a, b| {
+                (a.luminance() - s)
+                    .abs()
+                    .total_cmp(&(b.luminance() - s).abs())
+            })
+            .unwrap_or(self.on_surface)
+    }
+    /// Fill shade for a hovered interactive surface. (intensity = `hover_shift`).
+    pub fn hovered(&self, base: Color) -> Color {
+        self.interact(base, self.hover_shift)
+    }
+    /// Fill shade for a pressed interactive surface (intensity = `pressed_shift`).
+    pub fn pressed(&self, base: Color) -> Color {
+        self.interact(base, self.pressed_shift)
+    }
+    fn interact(&self, base: Color, t: f32) -> Color {
+        if base.luminance() < 0.5 {
+            base.lighten(t)
+        } else {
+            base.darken(t)
+        }
+    }
+    /// The ambient [`Env`] at the root of the tree: elevation 0, foreground on
+    /// the page background, and the body text style.
+    pub fn root_env(&self) -> Env {
+        Env {
+            elevation: 0,
+            foreground: self.on_surface,
+            text: self.typography.body,
+        }
+    }
+
     /// Dark theme.
     pub fn dark() -> Self {
         Self {
@@ -120,6 +218,9 @@ impl Theme {
 
             corner_radius: 0.0,
             border_width: 1,
+
+            hover_shift: 0.08,
+            pressed_shift: 0.16,
 
             typography: Typography::default(),
         }
@@ -153,6 +254,9 @@ impl Theme {
 
             corner_radius: 0.0,
             border_width: 1,
+
+            hover_shift: 0.08,
+            pressed_shift: 0.16,
 
             typography: Typography::default(),
         }

@@ -11,7 +11,7 @@ use crate::{
     primitive::Instance,
     render::texture::TextureRegistry,
     text::TextBackend,
-    theme::Theme,
+    theme::{Env, Theme},
 };
 
 pub type Id = u64;
@@ -233,6 +233,7 @@ pub struct LayoutCtx<'a, M> {
     pub ui: &'a mut Context<M>,
     pub text: &'a mut dyn TextBackend,
     pub theme: &'a Theme,
+    pub env: Env,
     pub(crate) current_id: Id,
 }
 
@@ -248,11 +249,15 @@ impl<'a, M> LayoutCtx<'a, M> {
             ui,
             text,
             theme,
+            env: theme.root_env(),
             current_id: 0,
         }
     }
     pub(crate) fn __set_id(&mut self, id: Id) {
         self.current_id = id;
+    }
+    pub(crate) fn __set_env(&mut self, env: Env) {
+        self.env = env;
     }
     pub fn id(&self) -> Id {
         self.current_id
@@ -276,6 +281,7 @@ pub struct PrepareCtx<'a> {
     pub(crate) offset: Position<i32>,
     pub view_state: &'a mut ViewState,
     pub theme: &'a Theme,
+    pub env: Env,
 }
 
 impl<'a> PrepareCtx<'a> {
@@ -298,11 +304,13 @@ impl<'a> PrepareCtx<'a> {
             offset: Position::splat(0),
             view_state,
             theme,
+            env: theme.root_env(),
         }
     }
-    pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32) {
+    pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32, env: Env) {
         self.current_node = current_node;
         self.offset = Position::new(acc_tx, acc_ty);
+        self.env = env;
     }
     pub fn current_node_id(&self) -> usize {
         self.current_node
@@ -346,6 +354,7 @@ pub struct PaintCtx<'a> {
     pub(crate) offset: Position<i32>,
     pub view_state: &'a mut ViewState,
     pub theme: &'a Theme,
+    pub env: Env,
 }
 
 impl<'a> PaintCtx<'a> {
@@ -364,11 +373,16 @@ impl<'a> PaintCtx<'a> {
             offset: Position::splat(0),
             view_state,
             theme,
+            env: theme.root_env(),
         }
     }
-    pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32) {
+    pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32, env: Env) {
         self.current_node = current_node;
         self.offset = Position::new(acc_tx, acc_ty);
+        self.env = env;
+    }
+    pub(crate) fn __set_env(&mut self, env: Env) {
+        self.env = env;
     }
     pub fn current_node_id(&self) -> usize {
         self.current_node

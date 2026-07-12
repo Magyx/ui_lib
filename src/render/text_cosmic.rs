@@ -11,7 +11,7 @@ use crate::{
     model::{Color, Family, Position, Size},
     render::{AllocatorKind, glyph_atlas::GlyphAtlas, texture::TextureRegistry},
     text::{
-        CursorRect, LineMetrics, Measured, Motion, PaintGlyph, RunStyle, SelectionRect, Style,
+        CursorRect, FontStyle, LineMetrics, Measured, Motion, PaintGlyph, RunStyle, SelectionRect,
         TextBackend, TextBuffer, TextCursor, TextMetrics, Weight, Wrap,
     },
 };
@@ -107,11 +107,11 @@ fn cosmic_weight(w: Weight) -> CWeight {
     CWeight(w.0)
 }
 
-fn cosmic_style(s: Style) -> CStyle {
+fn cosmic_style(s: FontStyle) -> CStyle {
     match s {
-        Style::Normal => CStyle::Normal,
-        Style::Italic => CStyle::Italic,
-        Style::Oblique => CStyle::Oblique,
+        FontStyle::Normal => CStyle::Normal,
+        FontStyle::Italic => CStyle::Italic,
+        FontStyle::Oblique => CStyle::Oblique,
     }
 }
 

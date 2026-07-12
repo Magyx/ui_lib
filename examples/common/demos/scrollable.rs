@@ -126,8 +126,6 @@ fn labeled_button(t: &Theme, label: String) -> Button<Message> {
             .size(Size::new(Grow, Grow)),
     )
     .color(t.surface)
-    .hover_color(t.primary_container)
-    .pressed_color(t.primary)
     .border()
     .on_press(Message::ButtonPressed)
     .size(Size::new(Grow, Fixed(size::ROW_H)))

@@ -5,6 +5,7 @@ use crate::{
     context::{Id, LayoutCtx, PaintCtx, PrepareCtx},
     model::{Color, Position, Size},
     primitive::Instance,
+    theme::Env,
     widget::{Axis, Length, Padding, Widget},
 };
 
@@ -47,7 +48,8 @@ pub fn run_layout<'a, M>(
     // 1) Build engine graph from the widget tree
     let root_id = {
         crate::scope!("layout::build_tree");
-        build_tree(layout_engine, ctx, root, ROOT_SEED)
+        let env = ctx.theme.root_env();
+        build_tree(layout_engine, ctx, root, ROOT_SEED, env)
     };
 
     // 2) Width phases
@@ -90,8 +92,10 @@ fn build_tree<'a, M>(
     ctx: &mut LayoutCtx<'a, M>,
     w: &mut dyn Widget<M>,
     seed: u64,
+    env: Env,
 ) -> usize {
     ctx.__set_id(seed);
+    ctx.__set_env(env);
     let desc = w.layout(ctx);
     let i = layout_engine.create_node(desc.size, desc.layout_dir, desc.is_absolute);
     {
@@ -105,6 +109,7 @@ fn build_tree<'a, M>(
         n.clip_children = desc.clip_children;
     }
 
+    let child_env = w.child_env(env, ctx.theme);
     let count = w.child_count();
     for y in 0..count {
         let child = w.child_mut(y);
@@ -112,7 +117,7 @@ fn build_tree<'a, M>(
             Some(k) => mix64(seed, k as usize),
             None => mix64(seed, y + 1),
         };
-        let ci = build_tree(layout_engine, ctx, child, child_seed);
+        let ci = build_tree(layout_engine, ctx, child, child_seed, child_env);
         layout_engine.add_child(i, ci);
     }
 
@@ -149,7 +154,8 @@ pub fn prepare_tree<M>(
     cursor: &mut usize,
 ) {
     crate::scope!("layout::prepare_tree");
-    __prepare_tree(w, ctx, cursor, 0, 0);
+    let env = ctx.theme.root_env();
+    __prepare_tree(w, ctx, cursor, 0, 0, env);
 }
 
 fn __prepare_tree<M>(
@@ -158,21 +164,23 @@ fn __prepare_tree<M>(
     cursor: &mut usize,
     acc_tx: i32,
     acc_ty: i32,
+    env: Env,
 ) {
     let id = *cursor;
-    ctx.__set_data(id, acc_tx, acc_ty);
+    ctx.__set_data(id, acc_tx, acc_ty, env);
 
     w.prepare(ctx);
     *cursor += 1;
 
+    let child_env = w.child_env(env, ctx.theme);
     let (dx, dy) = w.children_offset(ctx.view_state, ctx.id());
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
-        __prepare_tree(child, ctx, cursor, acc_tx + dx, acc_ty + dy);
+        __prepare_tree(child, ctx, cursor, acc_tx + dx, acc_ty + dy, child_env);
     }
 
-    ctx.__set_data(id, acc_tx, acc_ty);
+    ctx.__set_data(id, acc_tx, acc_ty, env);
     w.prepare_overlay(ctx);
 }
 
@@ -219,7 +227,8 @@ pub fn paint_tree<M>(
     parent_clip: Option<[i32; 4]>,
 ) {
     crate::scope!("layout::paint_tree");
-    __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, 0, 0);
+    let env = ctx.theme.root_env();
+    __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, 0, 0, env);
 }
 #[allow(clippy::too_many_arguments)]
 fn __paint_tree<M>(
@@ -232,9 +241,10 @@ fn __paint_tree<M>(
     acc_tx: i32,
     acc_ty: i32,
     depth: usize,
+    env: Env,
 ) {
     let id = *cursor;
-    ctx.__set_data(id, acc_tx, acc_ty);
+    ctx.__set_data(id, acc_tx, acc_ty, env);
     let n = eng.nodes[id];
 
     let mut clip = parent_clip;
@@ -268,6 +278,7 @@ fn __paint_tree<M>(
 
     *cursor += 1;
 
+    let child_env = w.child_env(env, ctx.theme);
     let (dx, dy) = w.children_offset(ctx.view_state, ctx.id());
     let child_count = w.child_count();
     for i in 0..child_count {
@@ -282,11 +293,12 @@ fn __paint_tree<M>(
             acc_tx + dx,
             acc_ty + dy,
             depth + 1,
+            child_env,
         );
     }
 
     let overlay_begin = out.len();
-    ctx.__set_data(id, acc_tx, acc_ty);
+    ctx.__set_data(id, acc_tx, acc_ty, env);
     w.paint_overlay(ctx, out);
 
     if eng.debug {

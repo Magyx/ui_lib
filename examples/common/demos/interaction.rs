@@ -22,8 +22,6 @@ pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
     let buttons = Column::new(el![
         Row::new(el![
             Button::new(Size::new(Fixed(120), Fixed(size::CONTROL_H)), t.primary)
-                .hover_color(t.primary_container)
-                .pressed_color(t.primary_container)
                 .on_press(Message::ButtonPressed),
             blocks()
         ])

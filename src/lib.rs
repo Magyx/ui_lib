@@ -43,7 +43,7 @@ pub mod prelude {
     pub use crate::widget::Svg;
 
     pub use crate::model::*;
-    pub use crate::text::{Style, Weight, Wrap};
+    pub use crate::text::{FontStyle, Weight, Wrap};
     pub use crate::theme::Theme;
 }
 

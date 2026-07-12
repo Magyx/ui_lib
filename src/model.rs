@@ -324,6 +324,36 @@ impl Color {
     pub fn a(&self) -> u8 {
         ((self.0 & 0xFF_00_00_00) >> 24) as u8
     }
+
+    /// Linear blend from `self` toward `other` by `t` in `[0, 1]`. Alpha is
+    /// kept from `self` (tonal steps shouldn't change opacity).
+    #[inline]
+    pub fn mix(self, other: Color, t: f32) -> Color {
+        let t = t.clamp(0.0, 1.0);
+        let lerp = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
+        Color::rgba(
+            lerp(self.r(), other.r()),
+            lerp(self.g(), other.g()),
+            lerp(self.b(), other.b()),
+            self.a(),
+        )
+    }
+    /// Nudge toward white by `t` in `[0, 1]`.
+    #[inline]
+    pub fn lighten(self, t: f32) -> Color {
+        self.mix(Color::WHITE, t)
+    }
+    /// Nudge toward black by `t` in `[0, 1]`.
+    #[inline]
+    pub fn darken(self, t: f32) -> Color {
+        self.mix(Color::BLACK, t)
+    }
+    /// Perceptual luminance in `[0, 1]` (Rec. 601 weights), for contrast
+    /// decisions like "is this a dark or light surface?".
+    #[inline]
+    pub fn luminance(self) -> f32 {
+        (0.299 * self.r() as f32 + 0.587 * self.g() as f32 + 0.114 * self.b() as f32) / 255.0
+    }
 }
 
 use std::borrow::Cow;

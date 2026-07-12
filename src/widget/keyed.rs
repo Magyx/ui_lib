@@ -33,6 +33,9 @@ impl<M, W: Widget<M>> Widget<M> for Keyed<W> {
     fn child_mut(&mut self, idx: usize) -> &mut dyn Widget<M> {
         self.inner.child_mut(idx)
     }
+    fn child_env(&self, env: Env, theme: &Theme) -> Env {
+        self.inner.child_env(env, theme)
+    }
 
     fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
         self.inner.min_height_for_width(ctx, width)

@@ -1,4 +1,4 @@
-use crate::event::MouseButton;
+use crate::{event::MouseButton, theme::Style};
 
 use super::*;
 
@@ -14,9 +14,7 @@ pub struct Button<M> {
 
     content: Option<Element<M>>,
 
-    normal_color: Option<Color>,
-    hover_color: Option<Color>,
-    pressed_color: Option<Color>,
+    style: Style,
     border: bool,
 
     on_press: Option<M>,
@@ -29,9 +27,10 @@ impl<M: Clone + 'static> Button<M> {
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
             content: None,
-            normal_color: Some(color),
-            hover_color: Some(color),
-            pressed_color: Some(color),
+            style: Style {
+                fill: Some(color),
+                ..Default::default()
+            },
             border: false,
             on_press: None,
         }
@@ -46,24 +45,18 @@ impl<M: Clone + 'static> Button<M> {
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
             content: Some(content.into()),
-            normal_color: None,
-            hover_color: None,
-            pressed_color: None,
+            style: Style::default(),
             border: false,
             on_press: None,
         }
     }
 
-    pub fn color(mut self, c: Color) -> Self {
-        self.normal_color = Some(c);
+    pub fn color(mut self, color: Color) -> Self {
+        self.style.fill = Some(color);
         self
     }
-    pub fn hover_color(mut self, c: Color) -> Self {
-        self.hover_color = Some(c);
-        self
-    }
-    pub fn pressed_color(mut self, c: Color) -> Self {
-        self.pressed_color = Some(c);
+    pub fn style(mut self, style: Style) -> Self {
+        self.style = style;
         self
     }
     pub fn border(mut self) -> Self {
@@ -107,6 +100,12 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
         self.content.as_mut().unwrap().as_mut()
     }
+    fn child_env(&self, env: Env, theme: &Theme) -> Env {
+        Env {
+            foreground: theme.on_primary,
+            ..env
+        }
+    }
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         let ctx_rect = ctx.rect();
@@ -115,15 +114,16 @@ impl<M: Clone + 'static> Widget<M> for Button<M> {
         let hovered = st.is_some_and(|s| s.hovered);
         let pressed = st.is_some_and(|s| s.pressed);
         let theme = ctx.theme;
+        let base = self.style.fill_or(theme.primary);
         let fill = if pressed {
-            self.pressed_color.unwrap_or(theme.primary_container)
+            theme.pressed(base)
         } else if hovered {
-            self.hover_color.unwrap_or(theme.primary_container)
+            theme.hovered(base)
         } else {
-            self.normal_color.unwrap_or(theme.primary)
+            base
         };
         let border = if self.border {
-            theme.outline
+            self.style.border_or(theme.outline)
         } else {
             Color::TRANSPARENT
         };

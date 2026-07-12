@@ -42,7 +42,7 @@ impl Weight {
 
 /// Allows italic or oblique faces to be selected.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Default)]
-pub enum Style {
+pub enum FontStyle {
     /// A face that is neither italic not obliqued.
     #[default]
     Normal,
@@ -111,7 +111,7 @@ pub struct RunStyle {
     pub metrics: TextMetrics,
     pub family: Option<Family>,
     pub weight: Weight,
-    pub style: Style,
+    pub style: FontStyle,
     pub wrap: Wrap,
     /// Default glyph color; per-glyph runs may still override it.
     pub color: Option<Color>,

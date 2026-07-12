@@ -6,7 +6,7 @@ use super::*;
 use crate::{
     event::{KeyState, LogicalKey, MouseButton, UiEventRef},
     layout::mix64,
-    text::{Motion, Style, TextCursor, Weight, Wrap},
+    text::{FontStyle, Motion, TextCursor, Weight, Wrap},
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -229,7 +229,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         self.child = self.child.family(family);
         self
     }
-    pub fn style(mut self, style: Style) -> Self {
+    pub fn style(mut self, style: FontStyle) -> Self {
         self.child = self.child.style(style);
         self
     }

@@ -1,4 +1,10 @@
-use crate::{context::*, layout::Node, model::*, primitive::Instance};
+use crate::{
+    context::*,
+    layout::Node,
+    model::*,
+    primitive::Instance,
+    theme::{Env, Theme},
+};
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Length {
@@ -33,6 +39,10 @@ pub trait Widget<M>: IntoElement {
     }
     fn child_count(&self) -> usize;
     fn child_mut(&mut self, idx: usize) -> &mut dyn Widget<M>;
+    fn child_env(&self, env: Env, theme: &Theme) -> Env {
+        let _ = theme;
+        env
+    }
 
     fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
         let _ = (ctx, width);
@@ -155,3 +165,6 @@ pub use svg::Svg;
 
 mod keyed;
 pub use keyed::Keyed;
+
+mod card;
+pub use card::Card;

@@ -35,6 +35,9 @@ impl<M> Widget<M> for Absolute<M> {
     fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
         self.inner.as_mut().child_mut(i)
     }
+    fn child_env(&self, env: Env, theme: &Theme) -> Env {
+        self.inner.as_ref().child_env(env, theme)
+    }
     fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
         self.inner.as_mut().min_height_for_width(ctx, width)
     }
