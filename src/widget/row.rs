@@ -68,7 +68,7 @@ impl<M> Row<M> {
 
 impl<M> IntoElement for Row<M> {}
 
-impl<M: 'static> Widget<M> for Row<M> {
+impl<M> Widget<M> for Row<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
             size: self.size,

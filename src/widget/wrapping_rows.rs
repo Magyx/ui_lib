@@ -78,7 +78,7 @@ impl<M> WrappingRows<M> {
 
 impl<M> IntoElement for WrappingRows<M> {}
 
-impl<M: 'static> Widget<M> for WrappingRows<M> {
+impl<M> Widget<M> for WrappingRows<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
             size: self.size,

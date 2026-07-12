@@ -20,7 +20,7 @@ pub struct Button<M> {
     on_press: Option<M>,
 }
 
-impl<M: Clone + 'static> Button<M> {
+impl<M: Clone> Button<M> {
     pub fn new(size: Size<Length>, color: Color) -> Self {
         Self {
             size,
@@ -83,7 +83,7 @@ impl<M: Clone + 'static> Button<M> {
 
 impl<M> IntoElement for Button<M> {}
 
-impl<M: Clone + 'static> Widget<M> for Button<M> {
+impl<M: Clone> Widget<M> for Button<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
         Node {
             size: self.size,

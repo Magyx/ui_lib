@@ -75,7 +75,7 @@ pub trait Widget<M>: IntoElement {
 }
 
 pub struct Element<M> {
-    inner: Box<dyn Widget<M> + 'static>,
+    inner: Box<dyn Widget<M>>,
 }
 
 impl<M> Element<M> {
@@ -98,7 +98,7 @@ where
     }
 }
 
-impl<M> AsRef<dyn Widget<M> + 'static> for Element<M> {
+impl<M> AsRef<dyn Widget<M>> for Element<M> {
     fn as_ref(&self) -> &(dyn Widget<M> + 'static) {
         self.inner.as_ref()
     }
