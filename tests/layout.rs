@@ -15,7 +15,8 @@ mod layout {
     use ui::layout::Node;
     use ui::model::{Color, Size, Vec4};
     use ui::widget::{
-        Column, Element, IntoElement, Length, Overlay, Rectangle, Row, Spacer, Widget,
+        Align, Center, Column, Element, IntoElement, Length, Overlay, Rectangle, Row, Spacer,
+        Widget,
     };
 
     // Leaf sizing
@@ -979,5 +980,222 @@ mod layout {
         let r2 = read(&slot2);
 
         assert_eq!(r1, r2);
+    }
+
+    // ----------------------------------------------------------------------
+    // Alignment (Part A): main() / cross() / Center / Stretch
+    // ----------------------------------------------------------------------
+
+    // Main axis: leading offset and gaps out of leftover space.
+
+    #[test]
+    fn main_start_is_the_unchanged_default() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
+        let mut row: Row<TopMsg> = Row::new([a, b])
+            .spacing(10)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        assert_eq!(read(&sa).0, 0, "first child at content origin");
+        assert_eq!(read(&sb).0, 50, "second after 40 + spacing 10");
+    }
+
+    #[test]
+    fn main_center_offsets_by_half_the_free_space() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
+        // content 100 in a 300 container -> free 200, lead 100.
+        let mut row: Row<TopMsg> = Row::new([a, b])
+            .main(Align::Center)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        assert_eq!(read(&sa).0, 100);
+        assert_eq!(read(&sb).0, 140);
+    }
+
+    #[test]
+    fn main_end_pushes_content_to_the_far_edge() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
+        let mut row: Row<TopMsg> = Row::new([a, b])
+            .main(Align::End)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        assert_eq!(read(&sa).0, 200);
+        // last child's right edge meets the container's inner edge.
+        let rb = read(&sb);
+        assert_eq!(rb.0 + rb.2, 300);
+    }
+
+    #[test]
+    fn main_space_between_spreads_gaps_only_between_children() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
+        let (c, sc) = probed_rect(Length::Fixed(50), Length::Fixed(20), Color::BLUE);
+        // content 150, free 150, 2 gaps -> +75 each.
+        let mut row: Row<TopMsg> = Row::new([a, b, c])
+            .main(Align::SpaceBetween)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        assert_eq!(read(&sa).0, 0, "first flush to start");
+        assert_eq!(read(&sb).0, 115); // 40 + 75
+        let rc = read(&sc);
+        assert_eq!(rc.0, 250);
+        assert_eq!(rc.0 + rc.2, 300, "last flush to end");
+    }
+
+    #[test]
+    fn main_space_evenly_puts_equal_gaps_everywhere() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
+        // content 100, free 200, unit 200/3 = 66 (floored).
+        let mut row: Row<TopMsg> = Row::new([a, b])
+            .main(Align::SpaceEvenly)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        assert_eq!(read(&sa).0, 66);
+        assert_eq!(read(&sb).0, 172); // 66 + 40 + 66
+    }
+
+    #[test]
+    fn main_space_around_puts_half_gaps_at_the_ends() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
+        // content 100, free 200, unit 100, lead 50, gap 100.
+        let mut row: Row<TopMsg> = Row::new([a, b])
+            .main(Align::SpaceAround)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        assert_eq!(read(&sa).0, 50);
+        assert_eq!(read(&sb).0, 190); // 50 + 40 + 100
+    }
+
+    // Cross axis: perpendicular placement of each child.
+
+    #[test]
+    fn cross_center_centers_a_short_child_in_the_row_height() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        // inner height 100, child 20 -> y = 40.
+        let mut row: Row<TopMsg> = Row::new([a])
+            .cross(Align::Center)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        assert_eq!(read(&sa).1, 40);
+    }
+
+    #[test]
+    fn cross_end_aligns_child_to_the_bottom() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let mut row: Row<TopMsg> = Row::new([a])
+            .cross(Align::End)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        let ra = read(&sa);
+        assert_eq!(ra.1, 80); // 100 - 20
+        assert_eq!(ra.1 + ra.3, 100);
+    }
+
+    #[test]
+    fn cross_stretch_grows_a_fit_child_to_fill_the_cross_axis() {
+        // This is the case that cannot live in `place`: the child's cross
+        // size is decided in `assign`, so Stretch must resize it there.
+        let mut h = Harness::default();
+        // A Fit-height child (content 0) should end up filling the row height.
+        let (child, sc) = Probe::new(Rectangle::new(
+            Size::new(Length::Fixed(40), Length::Fit),
+            Color::RED,
+        ));
+        let mut row: Row<TopMsg> = Row::new([Element::new(child)])
+            .cross(Align::Stretch)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        let rc = read(&sc);
+        assert_eq!(rc.1, 0, "stretched child sits at the leading cross edge");
+        assert_eq!(rc.3, 100, "stretched child fills the inner cross height");
+    }
+
+    #[test]
+    fn cross_start_is_the_default_and_leaves_child_at_top() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let mut row: Row<TopMsg> =
+            Row::new([a]).size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        let ra = read(&sa);
+        assert_eq!(ra.1, 0);
+        assert_eq!(ra.3, 20, "default cross keeps the child's own size");
+    }
+
+    // Column axes map main->vertical, cross->horizontal.
+
+    #[test]
+    fn column_centers_on_both_axes() {
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(40), Color::RED);
+        let (b, sb) = probed_rect(Length::Fixed(80), Length::Fixed(40), Color::GREEN);
+        // main = height 300, content 80 -> free 220, lead 110.
+        // cross = width 200 -> a x = 80, b x = 60.
+        let mut col: Column<TopMsg> = Column::new([a, b])
+            .main(Align::Center)
+            .cross(Align::Center)
+            .size(Size::new(Length::Fixed(200), Length::Fixed(300)));
+        h.layout(&mut col, 1000, 1000);
+        assert_eq!(read(&sa), (80, 110, 40, 40));
+        assert_eq!(read(&sb), (60, 150, 80, 40));
+    }
+
+    // Interaction with the two documented caveats.
+
+    #[test]
+    fn a_grow_child_makes_main_alignment_a_noop() {
+        // MainAxisAlignment does nothing beside an Expanded/Grow: the grow
+        // child eats all the free space, so there is nothing to distribute.
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let (b, sb) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
+        let mut row: Row<TopMsg> = Row::new([a, b])
+            .main(Align::Center)
+            .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        h.layout(&mut row, 1000, 1000);
+        assert_eq!(read(&sa).0, 0, "no leading offset: free space is zero");
+        let rb = read(&sb);
+        assert_eq!(rb.0, 40);
+        assert_eq!(rb.2, 260, "grow child absorbed the slack");
+    }
+
+    #[test]
+    fn a_fit_container_has_no_main_free_space_to_center_within() {
+        // A Fit container shrinks to content, so main centering is a no-op.
+        let mut h = Harness::default();
+        let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
+        let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
+        let mut row: Row<TopMsg> = Row::new([a, b]).main(Align::Center).cross(Align::Start);
+        h.layout(&mut row, 1000, 1000);
+        assert_eq!(read(&sa).0, 0);
+        assert_eq!(read(&sb).0, 40, "packed tight; nothing to center");
+    }
+
+    #[test]
+    fn center_helper_centers_child_in_available_space() {
+        // Center::new is a Grow/Grow preset; inside a fixed 400x300 parent it
+        // should place a 40x40 child at the middle.
+        let mut h = Harness::default();
+        let (child, sc) = probed_rect(Length::Fixed(40), Length::Fixed(40), Color::RED);
+        let inner = Center::new(child); // Center::new returns a Grow/Grow Column
+        let mut root: Column<TopMsg> =
+            Column::new([Element::new(inner)]).size(Size::splat(Length::Fixed(400)));
+        // note: root is 400 wide, 400 tall here for a clean center.
+        h.layout(&mut root, 1000, 1000);
+        let rc = read(&sc);
+        assert_eq!(rc.0, 180, "(400 - 40)/2 horizontally");
+        assert_eq!(rc.1, 180, "(400 - 40)/2 vertically");
     }
 }

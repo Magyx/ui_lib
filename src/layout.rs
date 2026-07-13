@@ -8,7 +8,7 @@ use crate::{
     model::{Color, Position, Size},
     primitive::Instance,
     theme::Env,
-    widget::{Axis, Length, Padding, Widget},
+    widget::{Align, Axis, Length, Padding, Widget},
 };
 
 pub const ROOT_SEED: u64 = 0xCBF2_9CE4_8422_2325;
@@ -109,6 +109,8 @@ fn build_tree<'a, M>(
         n.spacing = desc.spacing;
         n.offset_pos = desc.offset_pos;
         n.clip_children = desc.clip_children;
+        n.main_align = desc.main_align;
+        n.cross_align = desc.cross_align;
     }
 
     let mut child_env = w.child_env(env, ctx.theme);
@@ -395,6 +397,8 @@ pub struct __Node {
     pub clip_children: bool,
     pub is_absolute: bool,
     pub offset_pos: Position<i32>,
+    pub main_align: Align,
+    pub cross_align: Align,
 
     pub(crate) id: Id,
 
@@ -419,6 +423,8 @@ impl Default for __Node {
             clip_children: Default::default(),
             is_absolute: Default::default(),
             offset_pos: Default::default(),
+            main_align: Align::Start,
+            cross_align: Align::Start,
 
             id: 0,
 
@@ -444,6 +450,8 @@ pub struct Node {
     pub clip_children: bool,
     pub is_absolute: bool,
     pub offset_pos: Position<i32>,
+    pub main_align: Align,
+    pub cross_align: Align,
 }
 
 impl Default for Node {
@@ -458,6 +466,8 @@ impl Default for Node {
             clip_children: Default::default(),
             is_absolute: Default::default(),
             offset_pos: Default::default(),
+            main_align: Align::Start,
+            cross_align: Align::Start,
         }
     }
 }
@@ -518,6 +528,36 @@ impl LayoutEngine {
 
     pub fn toggle_debug(&mut self) {
         self.debug = !self.debug;
+    }
+
+    /// True when this node is a flow child of a horizontal parent whose
+    /// `cross_align` is `Stretch` — i.e. its *height* should fill the parent.
+    fn stretched_by_horizontal_parent(&self, id: usize) -> bool {
+        if self.nodes[id].is_absolute {
+            return false;
+        }
+        match self.nodes[id].parent {
+            Some(p) => {
+                matches!(self.nodes[p].layout_dir, Axis::Horizontal)
+                    && self.nodes[p].cross_align == Align::Stretch
+            }
+            None => false,
+        }
+    }
+
+    /// True when this node is a flow child of a vertical parent whose
+    /// `cross_align` is `Stretch` — i.e. its *width* should fill the parent.
+    fn stretched_by_vertical_parent(&self, id: usize) -> bool {
+        if self.nodes[id].is_absolute {
+            return false;
+        }
+        match self.nodes[id].parent {
+            Some(p) => {
+                matches!(self.nodes[p].layout_dir, Axis::Vertical)
+                    && self.nodes[p].cross_align == Align::Stretch
+            }
+            None => false,
+        }
     }
 
     // Phase 1: measure minimal widths
@@ -597,6 +637,7 @@ impl LayoutEngine {
             let target_w = match self.nodes[id].size.width {
                 Length::Grow => parent_width,
                 Length::Fixed(w) => w,
+                Length::Fit if self.stretched_by_vertical_parent(id) => parent_width,
                 Length::Fit => self.nodes[id].current_size.width,
             };
             let target_w = max(target_w, self.nodes[id].min.width).min(self.nodes[id].max.width);
@@ -737,6 +778,7 @@ impl LayoutEngine {
             let target_w = match self.nodes[id].size.width {
                 Length::Grow => parent_width,
                 Length::Fixed(w) => w,
+                Length::Fit if self.stretched_by_vertical_parent(id) => parent_width,
                 Length::Fit => self.nodes[id].current_size.width,
             };
             let final_w = max(target_w, self.nodes[id].min.width).min(self.nodes[id].max.width);
@@ -818,6 +860,7 @@ impl LayoutEngine {
             let target_h = match self.nodes[id].size.height {
                 Length::Grow => parent_height,
                 Length::Fixed(h) => h,
+                Length::Fit if self.stretched_by_horizontal_parent(id) => parent_height,
                 Length::Fit => self.nodes[id].current_size.height,
             };
             let target_h = max(target_h, self.nodes[id].min.height).min(self.nodes[id].max.height);
@@ -953,6 +996,7 @@ impl LayoutEngine {
             let target_h = match self.nodes[id].size.height {
                 Length::Grow => parent_height,
                 Length::Fixed(h) => h,
+                Length::Fit if self.stretched_by_horizontal_parent(id) => parent_height,
                 Length::Fit => self.nodes[id].current_size.height,
             };
             let final_h = max(target_h, self.nodes[id].min.height).min(self.nodes[id].max.height);
@@ -962,41 +1006,100 @@ impl LayoutEngine {
 
     // Phase 5: place all nodes (compute positions)
     fn place(&mut self, id: usize, x: i32, y: i32) -> (i32, i32) {
+        fn cross_offset(align: Align, inner_cross: i32, child_cross: i32) -> i32 {
+            match align {
+                Align::Center => ((inner_cross - child_cross) / 2).max(0),
+                Align::End => (inner_cross - child_cross).max(0),
+                _ => 0,
+            }
+        }
+
         // Set this nodes position
         self.nodes[id].pos = Position::new(x, y);
         if let Some(child_idx) = self.nodes[id].first_child {
             let layout_dir = self.nodes[id].layout_dir;
             let pad = self.nodes[id].padding;
-            // Starting cursor at top-left content area
+            let spacing = self.nodes[id].spacing;
+            let main_align = self.nodes[id].main_align;
+            let cross_align = self.nodes[id].cross_align;
+
+            // Content-box origin (inside padding).
             let base_x = x + pad.left;
             let base_y = y + pad.top;
-            let mut cursor_x = base_x;
-            let mut cursor_y = base_y;
+            let inner_w = (self.nodes[id].current_size.width - pad.left - pad.right).max(0);
+            let inner_h = (self.nodes[id].current_size.height - pad.top - pad.bottom).max(0);
+            let (inner_main, inner_cross) = match layout_dir {
+                Axis::Horizontal => (inner_w, inner_h),
+                Axis::Vertical => (inner_h, inner_w),
+            };
+
+            // Flow (non-absolute) children participate in alignment.
+            let mut content_main = 0;
+            let mut n = 0;
             let mut idx = Some(child_idx);
             while let Some(child) = idx {
-                let is_abs = self.nodes[child].is_absolute;
-                let child_w = self.nodes[child].current_size.width;
-                let child_h = self.nodes[child].current_size.height;
-                let offx = self.nodes[child].offset_pos.x;
-                let offy = self.nodes[child].offset_pos.y;
-                let next = self.nodes[child].next_sibling;
-                if !is_abs {
+                if !self.nodes[child].is_absolute {
+                    content_main += match layout_dir {
+                        Axis::Horizontal => self.nodes[child].current_size.width,
+                        Axis::Vertical => self.nodes[child].current_size.height,
+                    };
+                    n += 1;
+                }
+                idx = self.nodes[child].next_sibling;
+            }
+
+            let base_spacing = if n > 1 { (n - 1) * spacing } else { 0 };
+            let free = (inner_main - content_main - base_spacing).max(0);
+            let (lead, gap) = match main_align {
+                // `Stretch` is cross-axis only; on the main axis it means Start.
+                Align::Start | Align::Stretch => (0, spacing),
+                Align::Center => (free / 2, spacing),
+                Align::End => (free, spacing),
+                Align::SpaceBetween => {
+                    if n > 1 {
+                        (0, spacing + free / (n - 1))
+                    } else {
+                        (0, spacing)
+                    }
+                }
+                Align::SpaceAround => {
+                    if n > 0 {
+                        let unit = free / n;
+                        (unit / 2, spacing + unit)
+                    } else {
+                        (0, spacing)
+                    }
+                }
+                Align::SpaceEvenly => {
+                    let unit = free / (n + 1);
+                    (unit, spacing + unit)
+                }
+            };
+
+            let mut cursor_main = lead;
+            let mut idx = Some(child_idx);
+            while let Some(child) = idx {
+                idx = self.nodes[child].next_sibling;
+                if self.nodes[child].is_absolute {
+                    let offx = self.nodes[child].offset_pos.x;
+                    let offy = self.nodes[child].offset_pos.y;
+                    self.place(child, base_x + offx, base_y + offy);
+                } else {
+                    let child_w = self.nodes[child].current_size.width;
+                    let child_h = self.nodes[child].current_size.height;
                     match layout_dir {
                         Axis::Horizontal => {
-                            self.place(child, cursor_x, base_y);
-                            cursor_x += child_w + self.nodes[id].spacing;
+                            let cross = cross_offset(cross_align, inner_cross, child_h);
+                            self.place(child, base_x + cursor_main, base_y + cross);
+                            cursor_main += child_w + gap;
                         }
                         Axis::Vertical => {
-                            self.place(child, base_x, cursor_y);
-                            cursor_y += child_h + self.nodes[id].spacing;
+                            let cross = cross_offset(cross_align, inner_cross, child_w);
+                            self.place(child, base_x + cross, base_y + cursor_main);
+                            cursor_main += child_h + gap;
                         }
                     }
-                } else {
-                    let abs_x = base_x + offx;
-                    let abs_y = base_y + offy;
-                    self.place(child, abs_x, abs_y);
                 }
-                idx = next;
             }
         }
         (

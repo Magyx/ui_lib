@@ -14,6 +14,20 @@ pub enum Length {
     Grow,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Align {
+    #[default]
+    Start,
+    Center,
+    End,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+    /// Cross-axis only: fill the container's cross size. Resolved in the
+    /// assign pass (not `place`) so the stretched child's subtree reflows.
+    Stretch,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Axis {
     #[default]
@@ -32,7 +46,6 @@ pub struct Padding {
 pub trait IntoElement {}
 
 pub trait Widget<M>: IntoElement {
-    /* ----- layout ----- */
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node;
     fn key(&self) -> Option<u64> {
         None
@@ -56,7 +69,6 @@ pub trait Widget<M>: IntoElement {
         None
     }
 
-    /* ----- paint ----- */
     fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
         let _ = (view_state, id);
         (0, 0)
@@ -72,7 +84,6 @@ pub trait Widget<M>: IntoElement {
         let _ = (ctx, instances);
     }
 
-    /* ----- interaction ----- */
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
         let _ = ctx;
     }
@@ -134,7 +145,7 @@ mod row;
 pub use row::Row;
 
 mod column;
-pub use column::Column;
+pub use column::{Center, Column};
 
 mod overlay;
 pub use overlay::Overlay;

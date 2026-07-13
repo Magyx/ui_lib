@@ -8,6 +8,8 @@ pub struct Row<M> {
     color: Color,
     min: Size<i32>,
     max: Size<i32>,
+    main_align: Align,
+    cross_align: Align,
 }
 
 impl<M> Row<M> {
@@ -27,7 +29,19 @@ impl<M> Row<M> {
             color: Color::TRANSPARENT,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
+            main_align: Align::Start,
+            cross_align: Align::Start,
         }
+    }
+    /// Alignment of children along the layout axis (horizontal for a `Row`).
+    pub fn main(mut self, align: Align) -> Self {
+        self.main_align = align;
+        self
+    }
+    /// Alignment of children across the layout axis (vertical for a `Row`).
+    pub fn cross(mut self, align: Align) -> Self {
+        self.cross_align = align;
+        self
     }
     pub fn spacing(mut self, amount: i32) -> Self {
         self.spacing = amount;
@@ -82,6 +96,8 @@ impl<M> Widget<M> for Row<M> {
                 bottom: self.padding.w,
             },
             spacing: self.spacing,
+            main_align: self.main_align,
+            cross_align: self.cross_align,
             ..Default::default()
         }
     }

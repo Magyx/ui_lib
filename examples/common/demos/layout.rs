@@ -17,6 +17,9 @@ pub fn view(state: &State) -> Element<Message> {
         view_clamping(t),
         view_transparent_container(),
         view_grid(t),
+        view_main_alignment(t),
+        view_cross_alignment(t),
+        view_center_helper(t),
     ])
     .padding(Vec4::splat(space::LG))
     .spacing(space::MD)
@@ -208,5 +211,101 @@ fn view_grid(t: &Theme) -> Element<Message> {
         .padding(Vec4::splat(space::SM))
         .color(t.surface_variant)
         .size(Size::new(Grow, Fit))
+        .into()
+}
+
+/// 12) Main-axis alignment: identical children under each distribution.
+///     Because the container grows wider than its content, each row has free
+///     space for `main()` to arrange. (A `Grow` child would eat that slack and
+///     make alignment a no-op — see `view_multiple_grow`.)
+fn view_main_alignment(t: &Theme) -> Element<Message> {
+    let modes = [
+        Align::Start,
+        Align::Center,
+        Align::End,
+        Align::SpaceBetween,
+        Align::SpaceAround,
+        Align::SpaceEvenly,
+    ];
+
+    let rows: Vec<Element<Message>> = modes
+        .into_iter()
+        .map(|mode| {
+            Row::new(el![
+                Rectangle::new(Size::new(Fixed(40), Fixed(24)), swatch(0)),
+                Rectangle::new(Size::new(Fixed(60), Fixed(24)), swatch(3)),
+                Rectangle::new(Size::new(Fixed(50), Fixed(24)), swatch(5)),
+            ])
+            .spacing(space::SM)
+            .padding(Vec4::splat(space::XS))
+            .main(mode)
+            .color(t.surface)
+            .size(Size::new(Grow, Fixed(40)))
+            .into()
+        })
+        .collect();
+
+    Column::new(rows)
+        .spacing(space::SM)
+        .padding(Vec4::splat(space::SM))
+        .color(t.surface_variant)
+        .size(Size::new(Grow, Fit))
+        .into()
+}
+
+/// 13) Cross-axis alignment. The first three rows use fixed-height children
+///     of different sizes so Start/Center/End are visible. The last row uses
+///     `Fit`-height children so `Stretch` visibly grows them to fill the row —
+///     the one alignment resolved in the assign pass rather than in `place`.
+fn view_cross_alignment(t: &Theme) -> Element<Message> {
+    let varied = |cross: Align| -> Element<Message> {
+        Row::new(el![
+            Rectangle::new(Size::new(Fixed(44), Fixed(20)), swatch(0)),
+            Rectangle::new(Size::new(Fixed(44), Fixed(48)), swatch(3)),
+            Rectangle::new(Size::new(Fixed(44), Fixed(32)), swatch(5)),
+        ])
+        .spacing(space::SM)
+        .padding(Vec4::splat(space::XS))
+        .cross(cross)
+        .color(t.surface)
+        .size(Size::new(Grow, Fixed(64)))
+        .into()
+    };
+
+    let stretch_row: Element<Message> = Row::new(el![
+        Rectangle::new(Size::new(Fixed(44), Fit), swatch(1)),
+        Rectangle::new(Size::new(Fixed(44), Fit), swatch(4)),
+        Rectangle::new(Size::new(Fixed(44), Fit), swatch(6)),
+    ])
+    .spacing(space::SM)
+    .padding(Vec4::splat(space::XS))
+    .cross(Align::Stretch)
+    .color(t.surface)
+    .size(Size::new(Grow, Fixed(64)))
+    .into();
+
+    Column::new(vec![
+        varied(Align::Start),
+        varied(Align::Center),
+        varied(Align::End),
+        stretch_row,
+    ])
+    .spacing(space::SM)
+    .padding(Vec4::splat(space::SM))
+    .color(t.surface_variant)
+    .size(Size::new(Grow, Fit))
+    .into()
+}
+
+/// 14) `Center::new` one-liner: a Grow/Grow container that centers its child
+///     on both axes within whatever space its parent gives it.
+fn view_center_helper(t: &Theme) -> Element<Message> {
+    let centered: Column<Message> =
+        Center::new(Rectangle::new(Size::new(Fixed(80), Fixed(40)), swatch(4)));
+
+    Row::new(el![centered])
+        .padding(Vec4::splat(space::SM))
+        .color(t.surface_variant)
+        .size(Size::new(Grow, Fixed(120)))
         .into()
 }
