@@ -99,7 +99,7 @@ mod widget_slider {
         let (mut s, mut harness) = laid_out_slider(100, (0.0, 100.0), 50.0, true);
         harness.ctx.mouse_pos = Position::new(50.0, 15.0);
         harness.handle(&mut s);
-        assert!(harness.ctx.hot_item.is_some());
+        assert!(harness.ctx.focus.hovered().is_some());
     }
 
     #[test]
@@ -107,7 +107,7 @@ mod widget_slider {
         let (mut s, mut harness) = laid_out_slider(100, (0.0, 100.0), 50.0, true);
         harness.ctx.mouse_pos = Position::new(500.0, 500.0);
         harness.handle(&mut s);
-        assert!(harness.ctx.hot_item.is_none());
+        assert!(harness.ctx.focus.hovered().is_none());
     }
 
     // Press captures active_item
@@ -117,7 +117,7 @@ mod widget_slider {
         let (mut s, mut harness) = laid_out_slider(100, (0.0, 100.0), 50.0, true);
         harness.ctx.mouse_pos = Position::new(25.0, 15.0);
         press(&mut harness, &mut s, MouseButton::Left);
-        assert!(harness.ctx.active_item.is_some());
+        assert!(harness.ctx.focus.pressed().is_some());
     }
 
     #[test]
@@ -125,7 +125,7 @@ mod widget_slider {
         let (mut s, mut harness) = laid_out_slider(100, (0.0, 100.0), 50.0, true);
         harness.ctx.mouse_pos = Position::new(500.0, 500.0);
         press(&mut harness, &mut s, MouseButton::Left);
-        assert!(harness.ctx.active_item.is_none());
+        assert!(harness.ctx.focus.pressed().is_none());
     }
 
     // Pressing on the track (not the knob) jumps value to cursor.
@@ -162,7 +162,7 @@ mod widget_slider {
         press(&mut harness, &mut s, MouseButton::Left);
 
         assert!(
-            harness.ctx.active_item.is_some(),
+            harness.ctx.focus.pressed().is_some(),
             "knob press must still capture active_item"
         );
         assert!(
@@ -258,14 +258,14 @@ mod widget_slider {
 
         harness.ctx.mouse_pos = Position::new(30.0, 15.0);
         press(&mut harness, &mut s, MouseButton::Left);
-        assert!(harness.ctx.active_item.is_some());
+        assert!(harness.ctx.focus.pressed().is_some());
         let _ = harness.ctx.take();
 
         harness.ctx.mouse_pos = Position::new(75.0, 15.0);
         release(&mut harness, &mut s, MouseButton::Left);
 
         assert!(
-            harness.ctx.active_item.is_none(),
+            harness.ctx.focus.pressed().is_none(),
             "active must clear on release"
         );
     }

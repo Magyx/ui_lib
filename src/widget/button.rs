@@ -1,4 +1,7 @@
-use crate::{event::MouseButton, theme::Style};
+use crate::{
+    event::{KeyState, LogicalKey, MouseButton, UiEventRef},
+    theme::Style,
+};
 
 use super::*;
 
@@ -107,6 +110,10 @@ impl<M: Clone> Widget<M> for Button<M> {
         }
     }
 
+    fn focusable(&self) -> bool {
+        true
+    }
+
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         let ctx_rect = ctx.rect();
         let id = ctx.id();
@@ -131,7 +138,6 @@ impl<M: Clone> Widget<M> for Button<M> {
     }
 
     fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
-        let id = ctx.id();
         let (was_hovered, was_pressed) = {
             let st = ctx.state_or(|| ButtonState {
                 hovered: false,
@@ -140,35 +146,49 @@ impl<M: Clone> Widget<M> for Button<M> {
             (st.hovered, st.pressed)
         };
 
-        let hovered = ctx.rect().contains(ctx.ui.mouse_pos);
+        let hovered = ctx.pointer_over();
         let mouse_pressed = ctx.is_mouse_pressed(MouseButton::Left);
         let mouse_released = ctx.is_mouse_released(MouseButton::Left);
 
         if hovered {
-            ctx.ui.hot_item = Some(id);
+            ctx.claim_hover();
         }
         if hovered && mouse_pressed {
-            ctx.ui.active_item = Some(id);
+            ctx.begin_press();
+            ctx.request_focus();
         }
 
-        let new_pressed =
-            ctx.ui.active_item == Some(id) && ctx.ui.is_button_down(MouseButton::Left);
+        let new_pressed = ctx.is_pressed() && ctx.ui.is_button_down(MouseButton::Left);
 
-        let st = ctx.state_or(|| ButtonState {
-            hovered: false,
-            pressed: false,
-        });
-        st.hovered = hovered;
-        st.pressed = new_pressed;
+        let key_activated = ctx.is_focused()
+            && matches!(
+                ctx.event,
+                Some(UiEventRef::Key(k))
+                    if k.state == KeyState::Pressed
+                        && matches!(k.logical_key, LogicalKey::Enter | LogicalKey::Space)
+            );
 
-        if mouse_released && ctx.ui.active_item == Some(id) {
+        {
+            let st = ctx.state_or(|| ButtonState {
+                hovered: false,
+                pressed: false,
+            });
+            st.hovered = hovered;
+            st.pressed = new_pressed;
+        }
+
+        if mouse_released && ctx.is_pressed() {
             if hovered && let Some(m) = self.on_press.clone() {
                 ctx.ui.emit(m);
             }
-            ctx.ui.active_item = None;
+            ctx.end_press();
         }
 
-        if hovered != was_hovered || new_pressed != was_pressed {
+        if key_activated && let Some(m) = self.on_press.clone() {
+            ctx.ui.emit(m);
+        }
+
+        if hovered != was_hovered || new_pressed != was_pressed || key_activated {
             ctx.ui.request_redraw();
         }
     }

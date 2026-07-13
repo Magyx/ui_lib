@@ -218,9 +218,9 @@ impl<M> Widget<M> for Slider<M> {
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
         let r = ctx.rect();
         let id = ctx.id();
-        let inside = r.contains(ctx.ui.mouse_pos);
+        let inside = ctx.pointer_over();
         if inside {
-            ctx.ui.hot_item = Some(id);
+            ctx.claim_hover();
         }
 
         let kcx = self.knob_center_x(r);
@@ -231,7 +231,7 @@ impl<M> Widget<M> for Slider<M> {
         let mut changed = false;
 
         if inside && ctx.is_mouse_pressed(MouseButton::Left) {
-            ctx.ui.active_item = Some(id);
+            ctx.begin_press();
 
             if over_knob {
                 let offset = ctx.ui.mouse_pos.x - kcx;
@@ -242,7 +242,7 @@ impl<M> Widget<M> for Slider<M> {
             }
         }
 
-        if ctx.ui.active_item == Some(id) && ctx.ui.is_button_down(MouseButton::Left) {
+        if ctx.is_pressed() && ctx.ui.is_button_down(MouseButton::Left) {
             let offset = self
                 .ensure_state(&mut ctx.ui.view_state, id)
                 .grab
@@ -250,14 +250,14 @@ impl<M> Widget<M> for Slider<M> {
             changed |= self.set_from_cursor(r, ctx.ui.mouse_pos.x - offset);
         }
 
-        if ctx.is_mouse_released(MouseButton::Left) && ctx.ui.active_item == Some(id) {
+        if ctx.is_mouse_released(MouseButton::Left) && ctx.is_pressed() {
             let offset = self
                 .ensure_state(&mut ctx.ui.view_state, id)
                 .grab
                 .unwrap_or(0.0);
             changed |= self.set_from_cursor(r, ctx.ui.mouse_pos.x - offset);
             self.ensure_state(&mut ctx.ui.view_state, id).grab = None;
-            ctx.ui.active_item = None;
+            ctx.end_press();
         }
 
         if changed {

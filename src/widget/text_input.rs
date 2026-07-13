@@ -510,6 +510,10 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         &mut self.child
     }
 
+    fn focusable(&self) -> bool {
+        true
+    }
+
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         let id = ctx.id();
         let Some((cursor, focused)) = self
@@ -633,11 +637,13 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         let r = ctx.rect();
         let id = ctx.id();
         let (was_hovered, hovered, focused) = {
+            let focused = ctx.is_focused();
+            let is_pointer = ctx.pointer_available();
             let st = self.ensure_state(&mut ctx.ui.view_state, id);
-            let inside = r.contains(ctx.ui.mouse_pos);
+            let inside = is_pointer && r.contains(ctx.ui.mouse_pos);
             let was_hovered = st.hovered;
             st.hovered = inside;
-            st.focused = ctx.ui.kbd_focus_item == Some(id);
+            st.focused = focused;
             (was_hovered, st.hovered, st.focused)
         };
 
@@ -647,7 +653,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         // place a fresh caret and arm a potential drag-select.
         if hovered && ctx.is_mouse_pressed(MouseButton::Left) {
             let hit = self.hit_cursor(ctx);
-            ctx.ui.kbd_focus_item = Some(id);
+            ctx.request_focus();
             if let Some(st) = self.state_mut(&mut ctx.ui.view_state, id) {
                 st.focused = true;
                 let c = hit.unwrap_or_else(|| TextCursor::new(0, self.value.len()));
@@ -690,7 +696,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         // (e.g. a synthetic click) still places the caret.
         if hovered && ctx.is_mouse_released(MouseButton::Left) {
             let hit = self.hit_cursor(ctx);
-            ctx.ui.kbd_focus_item = Some(id);
+            ctx.request_focus();
             if let Some(st) = self.state_mut(&mut ctx.ui.view_state, id) {
                 st.focused = true;
                 let was_dragging = st.dragging;
@@ -716,7 +722,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                 st.focused = false;
                 st.dragging = false;
             }
-            ctx.ui.kbd_focus_item = None;
+            ctx.clear_focus();
         }
 
         if !focused {
@@ -811,9 +817,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                                 if let Some(st) = self.state_mut(&mut ctx.ui.view_state, id) {
                                     st.focused = false;
                                 }
-                                if ctx.ui.kbd_focus_item == Some(id) {
-                                    ctx.ui.kbd_focus_item = None;
-                                }
+                                ctx.clear_focus();
                             }
                             needs_redraw = true;
                         }
@@ -877,15 +881,6 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                                     needs_redraw = true;
                                 }
                             }
-                        }
-                        Tab => {
-                            if let Some(st) = self.state_mut(&mut ctx.ui.view_state, id) {
-                                st.focused = false;
-                            }
-                            if ctx.ui.kbd_focus_item == Some(id) {
-                                ctx.ui.kbd_focus_item = None;
-                            }
-                            needs_redraw = true;
                         }
                         Character(_) | Space => {
                             let s = match k.logical_key {

@@ -5,8 +5,9 @@ use std::{
 
 use crate::{
     event::{KeyState, Modifiers, MouseButton, UiEventRef},
+    focus::{Dir, Focus, ScopeId},
     graphics::{Globals, Gpu},
-    layout::LayoutEngine,
+    layout::{LayoutEngine, ROOT_SEED},
     model::{Color, Position, Rect, Size},
     primitive::Instance,
     render::texture::TextureRegistry,
@@ -142,9 +143,7 @@ pub struct Context<M> {
 
     pub modifiers: Modifiers,
 
-    pub hot_item: Option<Id>,
-    pub active_item: Option<Id>,
-    pub kbd_focus_item: Option<Id>,
+    pub focus: Focus,
 
     messages: Vec<M>,
     redraw_requested: bool,
@@ -168,9 +167,7 @@ impl<M> Context<M> {
 
             modifiers: Modifiers::default(),
 
-            hot_item: None,
-            active_item: None,
-            kbd_focus_item: None,
+            focus: Focus::new(),
 
             messages: Vec::new(),
             redraw_requested: false,
@@ -210,21 +207,8 @@ impl<M> Context<M> {
     }
 
     pub fn sweep_focus(&mut self) {
-        if let Some(id) = self.hot_item
-            && !self.view_state.was_touched(&id)
-        {
-            self.hot_item = None;
-        }
-        if let Some(id) = self.active_item
-            && !self.view_state.was_touched(&id)
-        {
-            self.active_item = None;
-        }
-        if let Some(id) = self.kbd_focus_item
-            && !self.view_state.was_touched(&id)
-        {
-            self.kbd_focus_item = None;
-        }
+        let vs = &self.view_state;
+        self.focus.sweep(|id| vs.was_touched(&id));
     }
 }
 
@@ -355,6 +339,7 @@ pub struct PaintCtx<'a> {
     pub view_state: &'a mut ViewState,
     pub theme: &'a Theme,
     pub env: Env,
+    pub(crate) focus: &'a Focus,
 }
 
 impl<'a> PaintCtx<'a> {
@@ -364,6 +349,7 @@ impl<'a> PaintCtx<'a> {
         layout: &'a LayoutEngine,
         view_state: &'a mut ViewState,
         theme: &'a Theme,
+        focus: &'a Focus,
     ) -> Self {
         Self {
             globals,
@@ -374,6 +360,7 @@ impl<'a> PaintCtx<'a> {
             view_state,
             theme,
             env: theme.root_env(),
+            focus,
         }
     }
     pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32, env: Env) {
@@ -420,6 +407,22 @@ impl<'a> PaintCtx<'a> {
         )
     }
 
+    /// True if this widget currently holds keyboard focus.
+    #[inline]
+    pub fn is_focused(&self) -> bool {
+        self.focus.is_focused(self.id())
+    }
+    /// True if this widget is the current hover target.
+    #[inline]
+    pub fn is_hovered(&self) -> bool {
+        self.focus.is_hovered(self.id())
+    }
+    /// True if this widget is currently pressed/active.
+    #[inline]
+    pub fn is_pressed(&self) -> bool {
+        self.focus.is_pressed(self.id())
+    }
+
     pub fn fill(&self, out: &mut Vec<Instance>, (x, y, w, h): (i32, i32, i32, i32), color: Color) {
         if color.a() == 0 {
             return;
@@ -457,6 +460,7 @@ pub struct EventCtx<'a, M> {
     pub layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
     pub(crate) offset: Position<i32>,
+    pub(crate) focus_scope: ScopeId,
 }
 
 impl<'a, M> EventCtx<'a, M> {
@@ -475,11 +479,19 @@ impl<'a, M> EventCtx<'a, M> {
             layout,
             current_node: 0usize,
             offset: Position::splat(0),
+            focus_scope: ROOT_SEED,
         }
     }
-    pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32) {
+    pub(crate) fn __set_data(
+        &mut self,
+        current_node: usize,
+        acc_tx: i32,
+        acc_ty: i32,
+        focus_scope: ScopeId,
+    ) {
         self.current_node = current_node;
         self.offset = Position::new(acc_tx, acc_ty);
+        self.focus_scope = focus_scope;
     }
     pub fn current_node_id(&self) -> usize {
         self.current_node
@@ -509,6 +521,71 @@ impl<'a, M> EventCtx<'a, M> {
         } else {
             0
         }
+    }
+
+    /// Focus scope this node belongs to.
+    #[inline]
+    pub fn focus_scope(&self) -> ScopeId {
+        self.focus_scope
+    }
+    /// True if this widget currently holds keyboard focus.
+    #[inline]
+    pub fn is_focused(&self) -> bool {
+        self.ui.focus.is_focused(self.id())
+    }
+    /// True if this widget is the current hover target.
+    #[inline]
+    pub fn is_hovered(&self) -> bool {
+        self.ui.focus.is_hovered(self.id())
+    }
+    /// True if this widget is currently pressed/active (e.g. mid-drag).
+    #[inline]
+    pub fn is_pressed(&self) -> bool {
+        self.ui.focus.is_pressed(self.id())
+    }
+    /// Whether pointer input should reach this node given any active trap.
+    #[inline]
+    pub fn pointer_available(&self) -> bool {
+        self.ui.focus.pointer_available(self.focus_scope)
+    }
+    /// Convenience: pointer is over this node *and* reaches it.
+    #[inline]
+    pub fn pointer_over(&self) -> bool {
+        self.pointer_available() && self.rect().contains(self.ui.mouse_pos)
+    }
+    /// Claim hover for this node (last claimer in the walk wins).
+    #[inline]
+    pub fn claim_hover(&mut self) {
+        let id = self.id();
+        self.ui.focus.claim_hover(id);
+    }
+    /// Request keyboard focus for this node (resolved at end of walk).
+    #[inline]
+    pub fn request_focus(&mut self) {
+        let id = self.id();
+        self.ui.focus.request_set(id);
+    }
+    /// Request that keyboard focus be dropped.
+    #[inline]
+    pub fn clear_focus(&mut self) {
+        self.ui.focus.request_clear();
+    }
+    /// Request a keyboard focus move (used by the engine's Tab handling).
+    #[inline]
+    pub fn move_focus(&mut self, dir: Dir) {
+        self.ui.focus.request_move(dir);
+    }
+    /// Mark this node as pressed/active (persists across events until released).
+    #[inline]
+    pub fn begin_press(&mut self) {
+        let id = self.id();
+        self.ui.focus.begin_press(id);
+    }
+    /// Release this node's press if it holds it.
+    #[inline]
+    pub fn end_press(&mut self) {
+        let id = self.id();
+        self.ui.focus.end_press(id);
     }
 
     #[inline]
@@ -553,9 +630,9 @@ mod tests {
         assert_eq!(ctx.mouse_buttons_down, 0);
         assert_eq!(ctx.mouse_buttons_pressed, 0);
         assert_eq!(ctx.mouse_buttons_released, 0);
-        assert!(ctx.hot_item.is_none());
-        assert!(ctx.active_item.is_none());
-        assert!(ctx.kbd_focus_item.is_none());
+        assert!(ctx.focus.focused().is_none());
+        assert!(ctx.focus.hovered().is_none());
+        assert!(ctx.focus.pressed().is_none());
     }
 
     #[test]

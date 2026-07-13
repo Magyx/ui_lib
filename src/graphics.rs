@@ -724,6 +724,7 @@ impl<'a, M> Engine<'a, M> {
                 &self.layout_engine,
                 &mut target.ctx.view_state,
                 &self.theme,
+                &target.ctx.focus,
             );
 
             let mut cursor = root_id;

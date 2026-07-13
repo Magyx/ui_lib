@@ -8,6 +8,7 @@ pub mod builder;
 pub mod context;
 pub mod error;
 pub mod event;
+pub mod focus;
 pub mod graphics;
 pub mod layout;
 pub mod model;

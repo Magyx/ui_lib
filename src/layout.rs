@@ -3,6 +3,8 @@ use std::cmp::{max, min};
 
 use crate::{
     context::{Id, LayoutCtx, PaintCtx, PrepareCtx},
+    event::{KeyState, LogicalKey, UiEventRef},
+    focus::{Dir, ScopeId},
     model::{Color, Position, Size},
     primitive::Instance,
     theme::Env,
@@ -109,7 +111,10 @@ fn build_tree<'a, M>(
         n.clip_children = desc.clip_children;
     }
 
-    let child_env = w.child_env(env, ctx.theme);
+    let mut child_env = w.child_env(env, ctx.theme);
+    if w.focus_trap() {
+        child_env.focus_scope = seed;
+    }
     let count = w.child_count();
     for y in 0..count {
         let child = w.child_mut(y);
@@ -190,7 +195,27 @@ pub fn handle_tree<M>(
     cursor: &mut usize,
 ) {
     crate::scope!("layout::handle_tree");
-    __handle_tree(w, ctx, cursor, 0, 0);
+
+    ctx.ui.focus.begin_walk();
+    // Discrete keyboard traversal is captured centrally: a Tab press is not
+    // owned by any single widget. It becomes a Move request resolved at the end
+    // of the walk, once the ring is fully built.
+    if let Some(UiEventRef::Key(k)) = ctx.event
+        && k.state == KeyState::Pressed
+        && k.logical_key == LogicalKey::Tab
+    {
+        let dir = if ctx.ui.modifiers.shift {
+            Dir::Prev
+        } else {
+            Dir::Next
+        };
+        ctx.ui.focus.request_move(dir);
+        ctx.ui.request_redraw();
+    }
+
+    __handle_tree(w, ctx, cursor, 0, 0, ROOT_SEED);
+
+    ctx.ui.focus.end_walk();
 }
 
 fn __handle_tree<M>(
@@ -199,22 +224,34 @@ fn __handle_tree<M>(
     cursor: &mut usize,
     acc_tx: i32,
     acc_ty: i32,
+    scope: ScopeId,
 ) {
     let id = *cursor;
-    ctx.__set_data(id, acc_tx, acc_ty);
+    ctx.__set_data(id, acc_tx, acc_ty, scope);
+
+    let node_id = ctx.id();
+
+    if w.focusable() {
+        ctx.ui.focus.register(node_id, scope);
+    }
+    let child_scope = if w.focus_trap() {
+        ctx.ui.focus.note_trap(node_id);
+        node_id
+    } else {
+        scope
+    };
 
     w.handle(ctx);
     *cursor += 1;
 
-    let node_id = ctx.id();
     let (dx, dy) = w.children_offset(&mut ctx.ui.view_state, node_id);
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
-        __handle_tree(child, ctx, cursor, acc_tx + dx, acc_ty + dy);
+        __handle_tree(child, ctx, cursor, acc_tx + dx, acc_ty + dy, child_scope);
     }
 
-    ctx.__set_data(id, acc_tx, acc_ty);
+    ctx.__set_data(id, acc_tx, acc_ty, scope);
     w.handle_after(ctx);
 }
 
@@ -278,8 +315,12 @@ fn __paint_tree<M>(
 
     *cursor += 1;
 
-    let child_env = w.child_env(env, ctx.theme);
-    let (dx, dy) = w.children_offset(ctx.view_state, ctx.id());
+    let node_id = eng.nodes[id].id;
+    let mut child_env = w.child_env(env, ctx.theme);
+    if w.focus_trap() {
+        child_env.focus_scope = node_id;
+    }
+    let (dx, dy) = w.children_offset(ctx.view_state, node_id);
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);

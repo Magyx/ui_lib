@@ -1,4 +1,6 @@
 use crate::{
+    focus::ScopeId,
+    layout::ROOT_SEED,
     model::Color,
     text::{FontStyle, Weight},
 };
@@ -20,6 +22,10 @@ pub struct Env {
     pub foreground: Color,
     /// Inherited default text style.
     pub text: TextStyle,
+    /// Focus scope the subtree belongs to. Root subtree is
+    /// [`ROOT_SEED`](crate::layout::ROOT_SEED); a trapping container (a modal
+    /// overlay) rebinds this to its own id for its descendants.
+    pub focus_scope: ScopeId,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -180,13 +186,15 @@ impl Theme {
             base.darken(t)
         }
     }
+
     /// The ambient [`Env`] at the root of the tree: elevation 0, foreground on
     /// the page background, and the body text style.
-    pub fn root_env(&self) -> Env {
+    pub(crate) fn root_env(&self) -> Env {
         Env {
             elevation: 0,
             foreground: self.on_surface,
             text: self.typography.body,
+            focus_scope: ROOT_SEED,
         }
     }
 

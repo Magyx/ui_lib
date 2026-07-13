@@ -71,6 +71,7 @@ pub struct Overlay<M> {
     padding: Vec4<i32>,
     min: Size<i32>,
     max: Size<i32>,
+    modal: bool,
 }
 
 impl<M> Overlay<M> {
@@ -93,6 +94,7 @@ impl<M> Overlay<M> {
             padding: Vec4::splat(0),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
+            modal: false,
         }
     }
     pub fn size(mut self, size: Size<Length>) -> Self {
@@ -101,6 +103,13 @@ impl<M> Overlay<M> {
     }
     pub fn color(mut self, color: Color) -> Self {
         self.color = color;
+        self
+    }
+    pub fn modal(mut self) -> Self {
+        self.modal = true;
+        if self.color.a() == 0 {
+            self.color = Color::rgba(0, 0, 0, 120);
+        }
         self
     }
     pub fn padding(mut self, amount: Vec4<i32>) -> Self {
@@ -148,6 +157,10 @@ impl<M> Widget<M> for Overlay<M> {
     }
     fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
         &mut self.children[i]
+    }
+
+    fn focus_trap(&self) -> bool {
+        self.modal
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {

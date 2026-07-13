@@ -44,7 +44,7 @@ mod widget_interaction {
         harness.handle(&mut btn);
 
         assert!(
-            harness.ctx.hot_item.is_some(),
+            harness.ctx.focus.hovered().is_some(),
             "hot_item should be set when cursor is inside"
         );
     }
@@ -58,7 +58,7 @@ mod widget_interaction {
 
         // Button explicitly sets hot_item only when inside; since nothing else
         // runs, it stays None.
-        assert!(harness.ctx.hot_item.is_none());
+        assert!(harness.ctx.focus.hovered().is_none());
     }
 
     #[test]
@@ -114,7 +114,7 @@ mod widget_interaction {
         );
 
         assert!(
-            harness.ctx.active_item.is_some(),
+            harness.ctx.focus.pressed().is_some(),
             "pressing inside should capture active_item"
         );
         assert!(
@@ -137,7 +137,7 @@ mod widget_interaction {
         let msgs = harness.ctx.take();
         assert_eq!(msgs, vec![TopMsg::from(Msg::Clicked(1))]);
         assert!(
-            harness.ctx.active_item.is_none(),
+            harness.ctx.focus.pressed().is_none(),
             "active_item should be released on click completion"
         );
     }
@@ -159,7 +159,7 @@ mod widget_interaction {
                 state: KeyState::Pressed,
             },
         );
-        assert!(harness.ctx.active_item.is_some());
+        assert!(harness.ctx.focus.pressed().is_some());
 
         // Drag outside still holding the button.
         harness.ctx.mouse_pos = Position::new(500.0, 500.0);
@@ -184,7 +184,7 @@ mod widget_interaction {
             msgs
         );
         assert!(
-            harness.ctx.active_item.is_none(),
+            harness.ctx.focus.pressed().is_none(),
             "active_item should be cleared on release regardless of location"
         );
     }
@@ -200,7 +200,7 @@ mod widget_interaction {
         harness.ctx.mouse_buttons_down = 1 << MouseButton::Left.bit();
         harness.handle(&mut btn);
 
-        assert!(harness.ctx.active_item.is_none());
+        assert!(harness.ctx.focus.pressed().is_none());
 
         harness.ctx.mouse_buttons_pressed = 0;
         harness.ctx.mouse_buttons_down = 0;
@@ -241,7 +241,7 @@ mod widget_interaction {
         harness.ctx.mouse_pos = Position::new(0.0, 0.0);
         harness.handle(&mut btn);
         assert!(
-            harness.ctx.hot_item.is_some(),
+            harness.ctx.focus.hovered().is_some(),
             "point (0, 0) is inside an inclusive top-left bound"
         );
     }
@@ -254,7 +254,7 @@ mod widget_interaction {
         harness.ctx.mouse_pos = Position::new(100.0, 50.0);
         harness.handle(&mut btn);
         assert!(
-            harness.ctx.hot_item.is_none(),
+            harness.ctx.focus.hovered().is_none(),
             "point (w, h) is outside an exclusive bottom-right bound"
         );
     }
@@ -264,6 +264,6 @@ mod widget_interaction {
         let (mut btn, mut harness) = laid_out_button(100, 50, true);
         harness.ctx.mouse_pos = Position::new(99.999, 49.999);
         harness.handle(&mut btn);
-        assert!(harness.ctx.hot_item.is_some());
+        assert!(harness.ctx.focus.hovered().is_some());
     }
 }

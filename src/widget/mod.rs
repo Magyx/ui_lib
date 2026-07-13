@@ -44,6 +44,13 @@ pub trait Widget<M>: IntoElement {
         env
     }
 
+    fn focusable(&self) -> bool {
+        false
+    }
+    fn focus_trap(&self) -> bool {
+        false
+    }
+
     fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
         let _ = (ctx, width);
         None

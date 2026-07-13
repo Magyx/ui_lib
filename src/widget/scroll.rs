@@ -192,16 +192,11 @@ impl<M> Widget<M> for Scrollable<M> {
     }
 
     fn handle(&mut self, ctx: &mut EventCtx<M>) {
-        const HIT_SLOP: f32 = 4.0;
-
         let r = ctx.rect();
         let id = ctx.id();
         let mx = ctx.ui.mouse_pos.x;
         let my = ctx.ui.mouse_pos.y;
-        let inside = mx >= r.x as f32
-            && mx < r.x as f32 + r.w as f32
-            && my >= r.y as f32
-            && my < r.y as f32 + r.h as f32;
+        let inside = ctx.pointer_available() && r.contains(Position::new(mx, my));
 
         let content_h = ctx.child_content_height();
         let max = (content_h - r.h).max(0);
@@ -243,26 +238,26 @@ impl<M> Widget<M> for Scrollable<M> {
             let (track_x, track_y, track_w, track_h) = track;
 
             let over_thumb = {
-                let x0 = tx - HIT_SLOP;
-                let x1 = tx + tw + HIT_SLOP;
-                let y0 = ty - HIT_SLOP;
-                let y1 = ty + th + HIT_SLOP;
+                let x0 = tx;
+                let x1 = tx + tw;
+                let y0 = ty;
+                let y1 = ty + th;
                 mx >= x0 && mx < x1 && my >= y0 && my < y1
             };
             let over_track = {
-                let x0 = track_x - HIT_SLOP;
-                let x1 = track_x + track_w + HIT_SLOP;
-                let y0 = track_y - HIT_SLOP;
-                let y1 = track_y + track_h + HIT_SLOP;
+                let x0 = track_x;
+                let x1 = track_x + track_w;
+                let y0 = track_y;
+                let y1 = track_y + track_h;
                 mx >= x0 && mx < x1 && my >= y0 && my < y1
             };
 
             if over_thumb || over_track {
-                ctx.ui.hot_item = Some(id);
+                ctx.claim_hover();
             }
 
             if (over_thumb || over_track) && pressed {
-                ctx.ui.active_item = Some(id);
+                ctx.begin_press();
                 let grab = if over_thumb {
                     (my - ty).clamp(0.0, th)
                 } else {
@@ -283,7 +278,7 @@ impl<M> Widget<M> for Scrollable<M> {
                 }
             }
 
-            if ctx.ui.active_item == Some(id) && down {
+            if ctx.is_pressed() && down {
                 let st = self.ensure_state(&mut ctx.ui.view_state, id);
                 let old_y = st.y;
                 let mut pos = my - st.grab.unwrap_or(th / 2.0);
@@ -296,14 +291,10 @@ impl<M> Widget<M> for Scrollable<M> {
                     ctx.ui.request_redraw();
                 }
             }
+        }
 
-            if released && ctx.ui.active_item == Some(id) {
-                ctx.ui.active_item = None;
-                let st = self.ensure_state(&mut ctx.ui.view_state, id);
-                st.grab = None;
-            }
-        } else if released && ctx.ui.active_item == Some(id) {
-            ctx.ui.active_item = None;
+        if released && ctx.is_pressed() {
+            ctx.end_press();
             let st = self.ensure_state(&mut ctx.ui.view_state, id);
             st.grab = None;
         }

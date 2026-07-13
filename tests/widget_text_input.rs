@@ -66,7 +66,7 @@ mod text_input {
         );
         h.ctx.mouse_buttons_pressed = 0;
         assert!(
-            h.ctx.kbd_focus_item.is_some(),
+            h.ctx.focus.focused().is_some(),
             "field should be focused after click inside"
         );
 
@@ -300,7 +300,7 @@ mod text_input {
     #[test]
     fn click_outside_unfocuses() {
         let (mut field, mut h) = focused_field(200);
-        assert!(h.ctx.kbd_focus_item.is_some());
+        assert!(h.ctx.focus.focused().is_some());
 
         // Click outside.
         h.ctx.mouse_pos = Position::new(500.0, 500.0);
@@ -315,7 +315,7 @@ mod text_input {
         h.ctx.mouse_buttons_pressed = 0;
 
         assert!(
-            h.ctx.kbd_focus_item.is_none(),
+            h.ctx.focus.focused().is_none(),
             "click outside should clear focus"
         );
     }
@@ -382,19 +382,6 @@ mod text_input {
         assert!(h.ctx.take().is_empty(), "no handler => no message emitted");
         // But redraw still requested.
         assert!(h.ctx.take_redraw());
-    }
-
-    // Tab unfocuses
-
-    #[test]
-    fn tab_unfocuses_field() {
-        let (mut field, mut h) = focused_field(200);
-        assert!(h.ctx.kbd_focus_item.is_some());
-
-        let tab = key_press(LogicalKey::Tab);
-        h.handle_event(&mut field, UiEventRef::Key(&tab));
-
-        assert!(h.ctx.kbd_focus_item.is_none(), "Tab should clear kbd focus");
     }
 
     // Space
