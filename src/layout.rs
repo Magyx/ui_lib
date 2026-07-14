@@ -612,7 +612,7 @@ impl LayoutEngine {
     fn assign_width(&mut self, id: usize, parent_width: i32) {
         // Resolve this node's own width (shared by leaf and container).
         let target_w = match self.nodes[id].size.width {
-            Length::Grow => parent_width,
+            Length::Grow | Length::Weighted(_) => parent_width,
             Length::Fixed(w) => w,
             Length::Fit if self.stretched_by_vertical_parent(id) => parent_width,
             Length::Fit => self.nodes[id].current_size.width,
@@ -694,37 +694,56 @@ impl LayoutEngine {
         } else if remaining > 0 {
             // grow Grow children toward their max.
             while remaining > 0 {
-                let mut growers = 0;
+                let mut total_w = 0f32;
                 let mut idx = Some(first);
                 while let Some(child) = idx {
                     let n = &self.nodes[child];
-                    if matches!(n.size.width, Length::Grow) && n.current_size.width < n.max.width {
-                        growers += 1;
+                    if let Some(w) = n.size.width.weight()
+                        && n.current_size.width < n.max.width
+                    {
+                        total_w += w;
                     }
                     idx = n.next_sibling;
                 }
-                if growers == 0 {
+                if total_w <= 0.0 {
                     break;
                 }
-                let add_each = (remaining / growers).max(1);
+                let budget = remaining;
                 let mut used = 0;
                 let mut idx = Some(first);
                 while let Some(child) = idx {
                     let next = self.nodes[child].next_sibling;
                     let n = &mut self.nodes[child];
-                    if remaining > 0 && matches!(n.size.width, Length::Grow) {
+                    if remaining > 0
+                        && let Some(w) = n.size.width.weight()
+                    {
                         let addable = n.max.width - n.current_size.width;
-                        let amt = min(addable, add_each);
-                        if amt > 0 {
-                            n.current_size.width += amt;
-                            used += amt;
-                            remaining -= amt;
+                        if addable > 0 {
+                            let share = (budget as f32 * (w / total_w)).floor() as i32;
+                            let amt = min(addable, share);
+                            if amt > 0 {
+                                n.current_size.width += amt;
+                                used += amt;
+                                remaining -= amt;
+                            }
                         }
                     }
                     idx = next;
                 }
                 if used == 0 {
-                    break;
+                    let mut idx = Some(first);
+                    while let Some(child) = idx {
+                        let next = self.nodes[child].next_sibling;
+                        let n = &mut self.nodes[child];
+                        if n.size.width.weight().is_some() && n.current_size.width < n.max.width {
+                            n.current_size.width += 1;
+                            break;
+                        }
+                        idx = next;
+                    }
+                    if used == 0 {
+                        break;
+                    }
                 }
             }
         }
@@ -796,7 +815,7 @@ impl LayoutEngine {
     fn assign_height(&mut self, id: usize, parent_height: i32) {
         // Resolve this node's own height (shared by leaf and container).
         let target_h = match self.nodes[id].size.height {
-            Length::Grow => parent_height,
+            Length::Grow | Length::Weighted(_) => parent_height,
             Length::Fixed(h) => h,
             Length::Fit if self.stretched_by_horizontal_parent(id) => parent_height,
             Length::Fit => self.nodes[id].current_size.height,
@@ -880,38 +899,60 @@ impl LayoutEngine {
         } else if remaining > 0 {
             // Slack: grow Grow children toward their max.
             while remaining > 0 {
-                let mut growers = 0;
+                let mut total_h = 0f32;
                 let mut idx = Some(first);
                 while let Some(child) = idx {
                     let n = &self.nodes[child];
-                    if matches!(n.size.height, Length::Grow) && n.current_size.height < n.max.height
+                    if let Some(h) = n.size.height.weight()
+                        && n.current_size.height < n.max.height
                     {
-                        growers += 1;
+                        total_h += h;
                     }
                     idx = n.next_sibling;
                 }
-                if growers == 0 {
+                if total_h <= 0.0 {
                     break;
                 }
-                let add_each = (remaining / growers).max(1);
+                let budget = remaining;
                 let mut used = 0;
                 let mut idx = Some(first);
                 while let Some(child) = idx {
                     let next = self.nodes[child].next_sibling;
                     let n = &mut self.nodes[child];
-                    if remaining > 0 && matches!(n.size.height, Length::Grow) {
+                    if let Some(h) = n.size.height.weight()
+                        && remaining > 0
+                    {
                         let addable = n.max.height - n.current_size.height;
-                        let amt = min(addable, add_each);
-                        if amt > 0 {
-                            n.current_size.height += amt;
-                            used += amt;
-                            remaining -= amt;
+                        if addable > 0 {
+                            let share = (budget as f32 * (h / total_h)).floor() as i32;
+                            let amt = min(addable, share);
+                            if amt > 0 {
+                                n.current_size.height += amt;
+                                used += amt;
+                                remaining -= amt;
+                            }
                         }
                     }
                     idx = next;
                 }
                 if used == 0 {
-                    break;
+                    let mut idx = Some(first);
+                    while let Some(child) = idx {
+                        let next = self.nodes[child].next_sibling;
+                        let n = &mut self.nodes[child];
+                        if n.size.height.weight().is_some() && n.current_size.height < n.max.height
+                        {
+                            n.current_size.height += 1;
+                            remaining -= 1;
+                            used = 1;
+                            break;
+                        }
+                        idx = next;
+                    }
+
+                    if used == 0 {
+                        break;
+                    }
                 }
             }
         }

@@ -12,6 +12,17 @@ pub enum Length {
     Fit,
     Fixed(i32),
     Grow,
+    Weighted(f32),
+}
+
+impl Length {
+    pub(crate) fn weight(self) -> Option<f32> {
+        match self {
+            Length::Grow => Some(1.0),
+            Length::Weighted(w) => Some(w),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

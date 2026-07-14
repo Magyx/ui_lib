@@ -238,6 +238,50 @@ mod layout {
     }
 
     #[test]
+    fn row_weighted_grow_splits_by_weight() {
+        // Weighted(2.0) takes twice the flexible space of Grow: 200 / 100.
+        let mut h = Harness::default();
+
+        let (a, a_slot) = probed_rect(Length::Weighted(2.0), Length::Fixed(20), Color::RED);
+        let (b, b_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
+        let mut row: Row<TopMsg> =
+            Row::new([a, b]).size(Size::new(Length::Fixed(300), Length::Fixed(20)));
+
+        h.layout(&mut row, 1000, 1000);
+
+        assert_eq!(read(&a_slot).2, 200, "weight-2 child gets 2/3");
+        assert_eq!(read(&b_slot).2, 100, "weight-1 child gets 1/3");
+    }
+
+    #[test]
+    fn row_weighted_grow_is_base_additive_over_fixed_siblings() {
+        // Fixed sibling reserves its width first; only the *leftover* is split
+        // by weight (flex-grow, not fractional-of-parent). 320 - 20 = 300,
+        // split 3:1 -> 225 / 75.
+        let mut h = Harness::default();
+
+        let (fixed_child, f_slot) = probed_rect(Length::Fixed(20), Length::Fixed(20), Color::BLUE);
+        let (a, a_slot) = probed_rect(Length::Weighted(3.0), Length::Fixed(20), Color::RED);
+        let (b, b_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
+        let mut row: Row<TopMsg> =
+            Row::new([fixed_child, a, b]).size(Size::new(Length::Fixed(320), Length::Fixed(20)));
+
+        h.layout(&mut row, 1000, 1000);
+
+        assert_eq!(read(&f_slot).2, 20, "fixed sibling keeps its width");
+        assert_eq!(
+            read(&a_slot).2,
+            225,
+            "weight-3 child gets 3/4 of the leftover"
+        );
+        assert_eq!(
+            read(&b_slot).2,
+            75,
+            "weight-1 child gets 1/4 of the leftover"
+        );
+    }
+
+    #[test]
     fn row_capped_grow_redistributes_slack_to_uncapped_siblings() {
         // Three Grow children split 300 evenly (100 each), but the middle one
         // is capped at 40. The 60 it can't take must flow to the other two,
@@ -309,6 +353,35 @@ mod layout {
             read(&content_slot).2,
             500,
             "content overflows (clipped), not shrunk"
+        );
+    }
+
+    #[test]
+    fn fit_clip_container_shrinks_to_assigned_width_and_clips_content() {
+        // Blessed behavior: a Fit-width clip container squeezed below its
+        // content takes the width its parent assigns (300) rather than reading
+        // back its own measured content size. Its content stays 500 and
+        // overflows *within* the clip container (scissored), not out of the row.
+        let mut h = Harness::default();
+
+        let (content, content_slot) =
+            probed_rect(Length::Fixed(500), Length::Fixed(40), Color::GREEN);
+        let clip = ClipBox::new(Size::new(Length::Fit, Length::Fixed(50)), true, content);
+        let (clip_probe, clip_slot) = Probe::new(clip);
+        let mut root: Row<TopMsg> = Row::new([Element::new(clip_probe)])
+            .size(Size::new(Length::Fixed(300), Length::Fixed(60)));
+
+        h.layout(&mut root, 1000, 1000);
+
+        assert_eq!(
+            read(&clip_slot).2,
+            300,
+            "Fit clip container takes the assigned width"
+        );
+        assert_eq!(
+            read(&content_slot).2,
+            500,
+            "content overflows the clip box, not the row"
         );
     }
 

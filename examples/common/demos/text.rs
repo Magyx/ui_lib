@@ -1,7 +1,7 @@
 use super::*;
 
 pub fn view(state: &State) -> Element<Message> {
-    use Length::{Fit, Fixed, Grow};
+    use Length::{Fit, Fixed, Grow, Weighted};
 
     let t = &state.theme;
 
@@ -27,7 +27,7 @@ pub fn view(state: &State) -> Element<Message> {
     .spacing(space::XS)
     .padding(Vec4::splat(space::SM))
     .color(t.surface)
-    .size(Size::new(Fixed(220), Grow));
+    .size(Size::new(Weighted(0.2), Grow));
 
     // Top bar (fixed height)
     let topbar = Row::new(el![
