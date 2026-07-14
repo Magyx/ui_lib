@@ -238,6 +238,31 @@ mod layout {
     }
 
     #[test]
+    fn row_capped_grow_redistributes_slack_to_uncapped_siblings() {
+        // Three Grow children split 300 evenly (100 each), but the middle one
+        // is capped at 40. The 60 it can't take must flow to the other two,
+        // which requires a second distribution pass: 130 / 40 / 130.
+        let mut h = Harness::default();
+
+        let (a, a_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::RED);
+        let (b, b_slot) = Probe::new(
+            Rectangle::new(Size::new(Length::Grow, Length::Fixed(20)), Color::GREEN)
+                .max(Size::new(40, 20)),
+        );
+        let (c, c_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::BLUE);
+        let mut row: Row<TopMsg> =
+            Row::new([a, Element::new(b), c]).size(Size::new(Length::Fixed(300), Length::Fit));
+
+        h.layout(&mut row, 1000, 1000);
+
+        let (aw, bw, cw) = (read(&a_slot).2, read(&b_slot).2, read(&c_slot).2);
+        assert_eq!(bw, 40, "capped child stays at its max");
+        assert_eq!(aw, 130, "uncapped sibling absorbs half the freed slack");
+        assert_eq!(cw, 130, "other uncapped sibling absorbs the rest");
+        assert_eq!(aw + bw + cw, 300, "row is fully filled");
+    }
+
+    #[test]
     fn row_with_fixed_children_exceeding_viewport_does_not_shrink() {
         // A Fit row containing two Fixed(300) children in a 200-wide viewport
         // should report width 600. Children should render at their fixed
@@ -257,6 +282,58 @@ mod layout {
         );
         assert_eq!(read(&a_slot).2, 300, "child A keeps its fixed width");
         assert_eq!(read(&b_slot).2, 300, "child B keeps its fixed width");
+    }
+
+    #[test]
+    fn clip_container_shrinks_below_content_to_fit_smaller_parent() {
+        // A clip container doesn't raise its `min` to its content, so a
+        // Fixed(300) parent can shrink it from its 500-wide content down to
+        // 300. The content itself stays 500 (it overflows and is scissored).
+        let mut h = Harness::default();
+
+        let (content, content_slot) =
+            probed_rect(Length::Fixed(500), Length::Fixed(40), Color::GREEN);
+        let clip = ClipBox::new(Size::new(Length::Grow, Length::Fixed(50)), true, content);
+        let (clip_probe, clip_slot) = Probe::new(clip);
+        let mut root: Row<TopMsg> = Row::new([Element::new(clip_probe)])
+            .size(Size::new(Length::Fixed(300), Length::Fixed(60)));
+
+        h.layout(&mut root, 1000, 1000);
+
+        assert_eq!(
+            read(&clip_slot).2,
+            300,
+            "clip container shrinks to fit parent"
+        );
+        assert_eq!(
+            read(&content_slot).2,
+            500,
+            "content overflows (clipped), not shrunk"
+        );
+    }
+
+    #[test]
+    fn non_clip_container_refuses_to_shrink_and_overflows() {
+        // Identical shape, clip = false: measure raises the container's min to
+        // its 500-wide content, so the shrink pass can't touch it — it holds
+        // 500 and overflows the 300 parent. This is the control that proves
+        // clip is the causal factor above.
+        let mut h = Harness::default();
+
+        let (content, _content_slot) =
+            probed_rect(Length::Fixed(500), Length::Fixed(40), Color::GREEN);
+        let plain = ClipBox::new(Size::new(Length::Grow, Length::Fixed(50)), false, content);
+        let (plain_probe, plain_slot) = Probe::new(plain);
+        let mut root: Row<TopMsg> = Row::new([Element::new(plain_probe)])
+            .size(Size::new(Length::Fixed(300), Length::Fixed(60)));
+
+        h.layout(&mut root, 1000, 1000);
+
+        assert_eq!(
+            read(&plain_slot).2,
+            500,
+            "non-clip container holds its content width"
+        );
     }
 
     #[test]
@@ -394,6 +471,38 @@ mod layout {
         assert!((ah - 200).abs() <= 1);
         assert!((bh - 200).abs() <= 1);
         assert_eq!(ah + bh, 400);
+    }
+
+    #[test]
+    fn column_capped_grow_redistributes_slack_to_uncapped_siblings() {
+        // Height-axis mirror of the row test: three Grow children split 300
+        // evenly, but the middle is capped at 40, so the freed 60 flows to the
+        // other two in a second pass: 130 / 40 / 130.
+        let mut h = Harness::default();
+
+        let (a, a_slot) = Probe::new(Rectangle::new(
+            Size::new(Length::Fixed(20), Length::Grow),
+            Color::RED,
+        ));
+        let (b, b_slot) = Probe::new(
+            Rectangle::new(Size::new(Length::Fixed(20), Length::Grow), Color::GREEN)
+                .max(Size::new(20, 40)),
+        );
+        let (c, c_slot) = Probe::new(Rectangle::new(
+            Size::new(Length::Fixed(20), Length::Grow),
+            Color::BLUE,
+        ));
+        let mut col: Column<TopMsg> =
+            Column::new([Element::new(a), Element::new(b), Element::new(c)])
+                .size(Size::new(Length::Fit, Length::Fixed(300)));
+
+        h.layout(&mut col, 1000, 1000);
+
+        let (ah, bh, ch) = (read(&a_slot).3, read(&b_slot).3, read(&c_slot).3);
+        assert_eq!(bh, 40, "capped child stays at its max height");
+        assert_eq!(ah, 130, "uncapped sibling absorbs half the freed slack");
+        assert_eq!(ch, 130, "other uncapped sibling absorbs the rest");
+        assert_eq!(ah + bh + ch, 300, "column is fully filled");
     }
 
     #[test]

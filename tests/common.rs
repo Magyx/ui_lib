@@ -233,4 +233,40 @@ mod harness {
         slot.get()
             .expect("layout+paint did not capture a rect for this Probe")
     }
+
+    /// Minimal clip container for exercising `clip_children` layout behavior.
+    pub struct ClipBox<M> {
+        child: Element<M>,
+        size: Size<Length>,
+        clip: bool,
+    }
+
+    impl<M> ClipBox<M> {
+        pub fn new(size: Size<Length>, clip: bool, child: impl Into<Element<M>>) -> Self {
+            Self {
+                child: child.into(),
+                size,
+                clip,
+            }
+        }
+    }
+
+    impl<M> IntoElement for ClipBox<M> {}
+
+    impl<M: 'static> Widget<M> for ClipBox<M> {
+        fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> ui::layout::Node {
+            ui::layout::Node {
+                size: self.size,
+                clip_children: self.clip,
+                ..Default::default()
+            }
+        }
+        fn child_count(&self) -> usize {
+            1
+        }
+        fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+            self.child.as_mut()
+        }
+        fn paint(&mut self, _ctx: &mut PaintCtx, _out: &mut Vec<Instance>) {}
+    }
 }
