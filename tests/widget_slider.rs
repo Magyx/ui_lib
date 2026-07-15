@@ -7,6 +7,7 @@ mod common;
 mod widget_slider {
     use super::common::*;
 
+    use ui::context::MessageSink;
     use ui::event::{KeyState, MouseButton, UiEventRef};
     use ui::model::{Position, Size};
     use ui::widget::{Length, Slider};
@@ -80,7 +81,7 @@ mod widget_slider {
 
     /// Drain the message queue and assert exactly one Changed(v); return v.
     fn expect_single_change(harness: &mut Harness) -> f32 {
-        let msgs = harness.ctx.take();
+        let msgs = harness.drain_messages();
         assert_eq!(
             msgs.len(),
             1,
@@ -166,7 +167,7 @@ mod widget_slider {
             "knob press must still capture active_item"
         );
         assert!(
-            harness.ctx.take().is_empty(),
+            harness.message_sink.drain().is_empty(),
             "pressing the knob must not emit a value change",
         );
     }
@@ -183,7 +184,7 @@ mod widget_slider {
 
         harness.ctx.mouse_pos = Position::new(53.0, 15.0);
         press(&mut harness, &mut s, MouseButton::Left);
-        assert!(harness.ctx.take().is_empty());
+        assert!(harness.message_sink.drain().is_empty());
 
         cursor_moved(&mut harness, &mut s, Position::new(70.0, 15.0));
 
@@ -202,7 +203,7 @@ mod widget_slider {
         // [0, 12]. So x=10 is on the knob; grab offset = 4.
         harness.ctx.mouse_pos = Position::new(10.0, 15.0);
         press(&mut harness, &mut s, MouseButton::Left);
-        let _ = harness.ctx.take();
+        let _ = harness.message_sink.drain();
 
         // Drag way past the right edge; t should clamp to 1.0, value=100.
         cursor_moved(&mut harness, &mut s, Position::new(999.0, 15.0));
@@ -221,7 +222,7 @@ mod widget_slider {
         // Press at x=50 (on the knob).
         harness.ctx.mouse_pos = Position::new(50.0, 15.0);
         press(&mut harness, &mut s, MouseButton::Left);
-        let _ = harness.ctx.take();
+        let _ = harness.message_sink.drain();
 
         cursor_moved(&mut harness, &mut s, Position::new(-500.0, 15.0));
 
@@ -239,7 +240,7 @@ mod widget_slider {
         // Grab offset = 10 - 6 = 4.
         harness.ctx.mouse_pos = Position::new(10.0, 15.0);
         press(&mut harness, &mut s, MouseButton::Left);
-        let _ = harness.ctx.take();
+        let _ = harness.message_sink.drain();
 
         // Drag to x=80 but y=500 (far below slider).
         cursor_moved(&mut harness, &mut s, Position::new(80.0, 500.0));
@@ -259,7 +260,7 @@ mod widget_slider {
         harness.ctx.mouse_pos = Position::new(30.0, 15.0);
         press(&mut harness, &mut s, MouseButton::Left);
         assert!(harness.ctx.focus.pressed().is_some());
-        let _ = harness.ctx.take();
+        let _ = harness.message_sink.drain();
 
         harness.ctx.mouse_pos = Position::new(75.0, 15.0);
         release(&mut harness, &mut s, MouseButton::Left);
@@ -277,7 +278,7 @@ mod widget_slider {
         let (mut s, mut harness) = laid_out_slider(100, (0.0, 100.0), 50.0, true);
         harness.ctx.mouse_pos = Position::new(50.0, 15.0);
         harness.handle(&mut s);
-        assert!(harness.ctx.take().is_empty());
+        assert!(harness.message_sink.drain().is_empty());
     }
 
     #[test]
@@ -290,7 +291,10 @@ mod widget_slider {
         harness.ctx.mouse_pos = Position::new(25.0, 15.0);
         press(&mut harness, &mut s, MouseButton::Left);
 
-        assert!(harness.ctx.take().is_empty(), "no handler => no emit");
+        assert!(
+            harness.message_sink.drain().is_empty(),
+            "no handler => no emit"
+        );
         assert!(
             harness.ctx.take_redraw(),
             "value actually changed => redraw requested"
@@ -314,7 +318,7 @@ mod widget_slider {
         press(&mut harness, &mut s, MouseButton::Left);
 
         assert!(
-            harness.ctx.take().is_empty(),
+            harness.message_sink.drain().is_empty(),
             "initial should already be clamped to hi, so no Changed expected"
         );
     }

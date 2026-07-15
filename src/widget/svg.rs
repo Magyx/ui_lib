@@ -155,7 +155,7 @@ fn fit_rect(
 
 impl IntoElement for Svg {}
 
-impl<M> Widget<M> for Svg {
+impl Widget for Svg {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -170,7 +170,7 @@ impl<M> Widget<M> for Svg {
         0
     }
 
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         unreachable!()
     }
 

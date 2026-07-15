@@ -48,7 +48,7 @@ pub fn with_alpha(c: Color, a: u8) -> Color {
     Color::rgba(c.r(), c.g(), c.b(), a)
 }
 
-fn small_block(color: Color) -> Element<Message> {
+fn small_block(color: Color) -> Element {
     Rectangle::new(
         Size::new(Length::Fixed(size::BLOCK), Length::Fixed(size::BLOCK)),
         color,

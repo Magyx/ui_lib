@@ -410,11 +410,10 @@ fn run_app_core<'a, M, S, V, U, H, F>(
 ) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug + Clone + Send,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
-        + 'static,
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
     H: handler::SctkHandler<M> + 'static,
-    F: FnOnce(&mut Engine<'a, M>),
+    F: FnOnce(&mut Engine<'a>),
 {
     // 1) Wayland connection + queue
     let conn = Connection::connect_to_env().map_err(crate::error::SctkError::connect)?;
@@ -519,7 +518,7 @@ where
             rec.size.height * rec.scale_factor.max(1) as u32,
         );
         let target = Arc::new(RawWaylandHandles::new(&conn, &rec.wl_surface));
-        let (tid, mut engine) = Engine::new_for(target, phys, sf);
+        let (tid, mut engine) = Engine::new_for::<M, _>(target, phys, sf);
         post_engine_init(&mut engine);
         sid_to_tid.insert(*sid, tid);
 
@@ -662,9 +661,8 @@ pub fn run_layer<'a, M, S, H, V, U>(
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
-        + 'static,
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
 {
     run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Layer(opts), |_| {})
 }
@@ -679,9 +677,8 @@ pub fn run_layer_with<'a, M, S, H, V, U, I>(
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
-        + 'static,
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
     I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
 {
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
@@ -702,9 +699,8 @@ pub fn run_app<'a, M, S, H, V, U>(
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
-        + 'static,
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
 {
     run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Xdg(opts), |_| {})
 }
@@ -719,9 +715,8 @@ pub fn run_app_with<'a, M, S, H, V, U, I>(
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
-        + 'static,
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
     I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
 {
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
@@ -742,9 +737,8 @@ pub fn run_lock<'a, M, S, H, V, U>(
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
-        + 'static,
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
 {
     run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Lock(opts), |_| {})
 }
@@ -759,9 +753,8 @@ pub fn run_lock_with<'a, M, S, H, V, U, I>(
 where
     M: 'static + std::fmt::Debug + Clone + Send,
     H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(TargetId, &mut Engine<'a, M>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool
-        + 'static,
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
     I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
 {
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();

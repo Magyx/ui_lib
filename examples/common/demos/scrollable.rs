@@ -2,7 +2,7 @@ use super::*;
 
 use Length::{Fit, Fixed, Grow};
 
-pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
+pub fn view(tid: &TargetId, state: &State) -> Element {
     let target = match state.per_target.get(tid) {
         Some(t) => t,
         None => return Rectangle::placeholder().into(),
@@ -40,8 +40,8 @@ pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
 /// Left panel: a single Scrollable with many buttons. Tests that wheel
 /// scrolling works on first frame and that hit-testing inside the scrolled
 /// region tracks the visible button.
-fn flat_panel(t: &Theme) -> Element<Message> {
-    let buttons: Vec<Element<Message>> = (0..40)
+fn flat_panel(t: &Theme) -> Element {
+    let buttons: Vec<Element> = (0..40)
         .map(|i| labeled_button(t, format!("Row {i}")).into())
         .collect();
 
@@ -68,8 +68,8 @@ fn flat_panel(t: &Theme) -> Element<Message> {
 
 /// Right panel: a Scrollable that contains another Scrollable. Tests that
 /// nested children_offset accumulates correctly through write_back.
-fn nested_panel(t: &Theme) -> Element<Message> {
-    let inner_buttons: Vec<Element<Message>> = (100..130)
+fn nested_panel(t: &Theme) -> Element {
+    let inner_buttons: Vec<Element> = (100..130)
         .map(|i| labeled_button(t, format!("Inner {i}")).into())
         .collect();
 
@@ -131,21 +131,21 @@ fn labeled_button(t: &Theme, label: String) -> Button<Message> {
     .size(Size::new(Grow, Fixed(size::ROW_H)))
 }
 
-fn panel_label(t: &Theme, s: &'static str) -> Element<Message> {
+fn panel_label(t: &Theme, s: &'static str) -> Element {
     Text::label(s)
         .color(t.on_surface_variant)
         .size(Size::new(Grow, Fixed(20)))
         .into()
 }
 
-fn section_text(t: &Theme, s: &'static str) -> Element<Message> {
+fn section_text(t: &Theme, s: &'static str) -> Element {
     Text::caption(s)
         .color(t.on_surface_variant)
         .size(Size::new(Grow, Fit))
         .into()
 }
 
-fn filler_block(t: &Theme, label: &'static str, h: i32) -> Element<Message> {
+fn filler_block(t: &Theme, label: &'static str, h: i32) -> Element {
     Row::new(el![Text::body(label)
         .color(t.on_surface_variant)
         .size(Size::new(Fit, Grow)),])

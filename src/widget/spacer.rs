@@ -26,7 +26,7 @@ impl Spacer {
 
 impl IntoElement for Spacer {}
 
-impl<M> Widget<M> for Spacer {
+impl Widget for Spacer {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -39,7 +39,7 @@ impl<M> Widget<M> for Spacer {
     fn child_count(&self) -> usize {
         0
     }
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         unreachable!()
     }
 

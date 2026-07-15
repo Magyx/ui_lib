@@ -1,7 +1,7 @@
 use super::*;
 
-pub struct Column<M> {
-    children: Vec<Element<M>>,
+pub struct Column {
+    children: Vec<Element>,
     spacing: i32,
     padding: Vec4<i32>,
     size: Size<Length>,
@@ -12,14 +12,14 @@ pub struct Column<M> {
     cross_align: Align,
 }
 
-impl<M> Column<M> {
+impl Column {
     pub fn empty() -> Self {
-        Self::new::<Vec<_>, Element<M>>(el!())
+        Self::new::<Vec<_>, Element>(el!())
     }
     pub fn new<I, E>(children: I) -> Self
     where
         I: IntoIterator<Item = E>,
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
         Self {
             children: children.into_iter().map(Into::into).collect(),
@@ -70,15 +70,15 @@ impl<M> Column<M> {
 
     pub fn push<E>(&mut self, element: E)
     where
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
         self.children.push(element.into());
     }
 }
 
-impl<M> IntoElement for Column<M> {}
+impl IntoElement for Column {}
 
-impl<M> Widget<M> for Column<M> {
+impl Widget for Column {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -101,7 +101,7 @@ impl<M> Widget<M> for Column<M> {
     fn child_count(&self) -> usize {
         self.children.len()
     }
-    fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, i: usize) -> &mut dyn Widget {
         self.children[i].as_mut()
     }
 
@@ -117,9 +117,9 @@ pub struct Center;
 
 impl Center {
     #![allow(clippy::new_ret_no_self)]
-    pub fn new<M, E>(child: E) -> Column<M>
+    pub fn new<E>(child: E) -> Column
     where
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
         Column::new(std::iter::once(child))
             .size(Size::splat(Length::Grow))

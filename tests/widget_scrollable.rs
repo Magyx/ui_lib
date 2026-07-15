@@ -17,7 +17,7 @@ mod view_state_sweep {
     /// have, so this test only exercises the path where no entry has
     /// an OnSweep impl. That's fine — Scrollable's state has no
     /// resources, only data, so its sweep callback is None.
-    fn frame<W: ui::widget::Widget<TopMsg>>(h: &mut Harness, root: &mut W) {
+    fn frame<W: ui::widget::Widget>(h: &mut Harness, root: &mut W) {
         h.layout(root, 800, 600);
         h.handle(root);
         let _ = h.paint(root);
@@ -29,7 +29,7 @@ mod view_state_sweep {
 
     #[test]
     fn removed_scrollable_is_swept_and_re_added_one_starts_fresh() {
-        fn get_scroll_y(ctx: &Context<TopMsg>) -> i32 {
+        fn get_scroll_y(ctx: &Context) -> i32 {
             ctx.view_state
                 .get::<ScrollViewState>(&ui::layout::ROOT_SEED)
                 .map_or(0, |s| s.y)
@@ -38,7 +38,7 @@ mod view_state_sweep {
         let mut h = Harness::default();
 
         // Frame 1: scrollable present.
-        let mut s1: Scrollable<TopMsg> = Scrollable::new(Rectangle::new(
+        let mut s1 = Scrollable::new(Rectangle::new(
             Size::new(Length::Fixed(400), Length::Fixed(2000)),
             Color::WHITE,
         ));
@@ -72,7 +72,7 @@ mod view_state_sweep {
 
         // Frame 3: scrollable re-added at the same tree position.
         // Must start at y=0, not inherit s1's offset.
-        let mut s2: Scrollable<TopMsg> = Scrollable::new(Rectangle::new(
+        let mut s2 = Scrollable::new(Rectangle::new(
             Size::new(Length::Fixed(400), Length::Fixed(2000)),
             Color::WHITE,
         ));

@@ -37,10 +37,10 @@ fn color_for_depth(depth: usize) -> (u8, u8, u8, u8) {
     P[depth % P.len()]
 }
 
-pub fn run_layout<'a, M>(
+pub fn run_layout<'a>(
     layout_engine: &mut LayoutEngine,
     ctx: &mut LayoutCtx<'a>,
-    root: &mut dyn Widget<M>,
+    root: &mut dyn Widget,
     max_w: i32,
     max_h: i32,
 ) -> usize {
@@ -89,10 +89,10 @@ pub fn run_layout<'a, M>(
     root_id
 }
 
-fn build_tree<'a, M>(
+fn build_tree<'a>(
     layout_engine: &mut LayoutEngine,
     ctx: &mut LayoutCtx<'a>,
-    w: &mut dyn Widget<M>,
+    w: &mut dyn Widget,
     seed: u64,
     env: Env,
 ) -> usize {
@@ -131,8 +131,8 @@ fn build_tree<'a, M>(
     i
 }
 
-fn post_width_query<'a, M>(
-    w: &mut dyn Widget<M>,
+fn post_width_query<'a>(
+    w: &mut dyn Widget,
     eng: &mut LayoutEngine,
     ctx: &mut LayoutCtx<'a>,
     cursor: &mut usize,
@@ -155,18 +155,14 @@ fn post_width_query<'a, M>(
     }
 }
 
-pub fn prepare_tree<M>(
-    w: &mut dyn crate::widget::Widget<M>,
-    ctx: &mut PrepareCtx,
-    cursor: &mut usize,
-) {
+pub fn prepare_tree(w: &mut dyn crate::widget::Widget, ctx: &mut PrepareCtx, cursor: &mut usize) {
     crate::scope!("layout::prepare_tree");
     let env = ctx.theme.root_env();
     __prepare_tree(w, ctx, cursor, 0, 0, env);
 }
 
-fn __prepare_tree<M>(
-    w: &mut dyn crate::widget::Widget<M>,
+fn __prepare_tree(
+    w: &mut dyn crate::widget::Widget,
     ctx: &mut PrepareCtx,
     cursor: &mut usize,
     acc_tx: i32,
@@ -191,9 +187,9 @@ fn __prepare_tree<M>(
     w.prepare_overlay(ctx);
 }
 
-pub fn handle_tree<M>(
-    w: &mut dyn crate::widget::Widget<M>,
-    ctx: &mut crate::context::EventCtx<M>,
+pub fn handle_tree(
+    w: &mut dyn crate::widget::Widget,
+    ctx: &mut crate::context::EventCtx,
     cursor: &mut usize,
 ) {
     crate::scope!("layout::handle_tree");
@@ -220,9 +216,9 @@ pub fn handle_tree<M>(
     ctx.ui.focus.end_walk();
 }
 
-fn __handle_tree<M>(
-    w: &mut dyn crate::widget::Widget<M>,
-    ctx: &mut crate::context::EventCtx<M>,
+fn __handle_tree(
+    w: &mut dyn crate::widget::Widget,
+    ctx: &mut crate::context::EventCtx,
     cursor: &mut usize,
     acc_tx: i32,
     acc_ty: i32,
@@ -257,8 +253,8 @@ fn __handle_tree<M>(
     w.handle_after(ctx);
 }
 
-pub fn paint_tree<M>(
-    w: &mut dyn crate::widget::Widget<M>,
+pub fn paint_tree(
+    w: &mut dyn crate::widget::Widget,
     ctx: &mut PaintCtx,
     eng: &crate::layout::LayoutEngine,
     cursor: &mut usize,
@@ -270,8 +266,8 @@ pub fn paint_tree<M>(
     __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, 0, 0, env);
 }
 #[allow(clippy::too_many_arguments)]
-fn __paint_tree<M>(
-    w: &mut dyn crate::widget::Widget<M>,
+fn __paint_tree(
+    w: &mut dyn crate::widget::Widget,
     ctx: &mut PaintCtx,
     eng: &crate::layout::LayoutEngine,
     cursor: &mut usize,

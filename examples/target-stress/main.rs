@@ -50,7 +50,7 @@ use ui::{
 #[derive(Debug, Clone)]
 struct Msg;
 
-fn view(_tid: &TargetId, _state: &()) -> Element<Msg> {
+fn view(_tid: &TargetId, _state: &()) -> Element {
     Rectangle::placeholder().into()
 }
 
@@ -99,7 +99,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_queue.roundtrip(&mut state)?;
 
     // 3) One long-lived engine, shared across every iteration.
-    let mut engine: Engine<'_, Msg> = Engine::default();
+    let mut engine = Engine::builder::<Msg>()
+        .build()
+        .map_err(|_| "Engine failed to build!")?;
     let mut s: () = ();
 
     let opts = LayerOptions {

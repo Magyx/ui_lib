@@ -1,19 +1,19 @@
 use super::*;
 use crate::render::pipeline::PipelineKey;
 
-pub struct SimpleCanvas<M> {
+pub struct SimpleCanvas {
     size: Size<Length>,
     key: &'static str,
-    with_handle: Option<fn(&mut EventCtx<M>)>,
+    with_handle: Option<fn(&mut EventCtx)>,
     min: Size<i32>,
     max: Size<i32>,
 }
 
-impl<M> SimpleCanvas<M> {
+impl SimpleCanvas {
     pub fn new(
         size: Size<Length>,
         pipeline_key: &'static str,
-        with_handle: Option<fn(&mut EventCtx<M>)>,
+        with_handle: Option<fn(&mut EventCtx)>,
     ) -> Self {
         Self {
             size,
@@ -33,9 +33,9 @@ impl<M> SimpleCanvas<M> {
     }
 }
 
-impl<M> IntoElement for SimpleCanvas<M> {}
+impl IntoElement for SimpleCanvas {}
 
-impl<M> Widget<M> for SimpleCanvas<M> {
+impl Widget for SimpleCanvas {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -48,7 +48,7 @@ impl<M> Widget<M> for SimpleCanvas<M> {
     fn child_count(&self) -> usize {
         0
     }
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         unreachable!()
     }
 
@@ -63,7 +63,7 @@ impl<M> Widget<M> for SimpleCanvas<M> {
         ));
     }
 
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx) {
         if let Some(f) = self.with_handle {
             f(ctx);
         }

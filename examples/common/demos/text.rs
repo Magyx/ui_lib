@@ -1,6 +1,6 @@
 use super::*;
 
-pub fn view(state: &State) -> Element<Message> {
+pub fn view(state: &State) -> Element {
     use Length::{Fit, Fixed, Grow, Weighted};
 
     let t = &state.theme;

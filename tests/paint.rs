@@ -56,7 +56,7 @@ mod paint {
             Size::new(Length::Fixed(60), Length::Fixed(20)),
             Color::GREEN,
         );
-        let mut row: Row<TopMsg> = Row::new([Element::new(a), Element::new(b)]);
+        let mut row = Row::new([Element::new(a), Element::new(b)]);
 
         h.layout(&mut row, 1000, 1000);
         let instances = h.paint(&mut row);
@@ -82,7 +82,7 @@ mod paint {
 
         let a = Rectangle::new(Size::new(Length::Fixed(30), Length::Fixed(20)), Color::RED);
         let b = Rectangle::new(Size::new(Length::Fixed(30), Length::Fixed(40)), Color::BLUE);
-        let mut col: Column<TopMsg> = Column::new([Element::new(a), Element::new(b)]);
+        let mut col = Column::new([Element::new(a), Element::new(b)]);
 
         h.layout(&mut col, 1000, 1000);
         let instances = h.paint(&mut col);
@@ -112,7 +112,7 @@ mod paint {
         // passes `screen_clip = Some([0, 0, max_w, max_h])`, every
         // instance should have a scissor matching the screen.
         let a = Rectangle::new(Size::new(Length::Fixed(40), Length::Fixed(20)), Color::RED);
-        let mut row: Row<TopMsg> = Row::new([Element::new(a)]);
+        let mut row = Row::new([Element::new(a)]);
 
         h.layout(&mut row, 200, 100);
         let instances = h.paint(&mut row);
@@ -141,8 +141,8 @@ mod paint {
         );
         let c = Rectangle::new(Size::new(Length::Fixed(10), Length::Fixed(10)), Color::BLUE);
 
-        let col: Column<TopMsg> = Column::new([Element::new(b), Element::new(c)]);
-        let mut row: Row<TopMsg> = Row::new([Element::new(a), Element::new(col)]);
+        let col = Column::new([Element::new(b), Element::new(c)]);
+        let mut row = Row::new([Element::new(a), Element::new(col)]);
 
         h.layout(&mut row, 1000, 1000);
         let instances = h.paint(&mut row);
@@ -161,7 +161,7 @@ mod paint {
             Size::new(Length::Fixed(20), Length::Fixed(20)),
             Color::GREEN,
         );
-        let mut row: Row<TopMsg> = Row::new([Element::new(child)]).color(Color::RED);
+        let mut row = Row::new([Element::new(child)]).color(Color::RED);
 
         h.layout(&mut row, 1000, 1000);
         let instances = h.paint(&mut row);
@@ -197,8 +197,8 @@ mod paint {
         );
         let c = Rectangle::new(Size::new(Length::Fixed(30), Length::Fixed(25)), Color::BLUE);
 
-        let col: Column<TopMsg> = Column::new([Element::new(b), Element::new(c)]);
-        let mut row: Row<TopMsg> = Row::new([Element::new(a), Element::new(col)]);
+        let col = Column::new([Element::new(b), Element::new(c)]);
+        let mut row = Row::new([Element::new(a), Element::new(col)]);
 
         h.layout(&mut row, 1000, 1000);
         let instances = h.paint(&mut row);

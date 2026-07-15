@@ -12,6 +12,7 @@ mod common;
 mod text_input {
     use super::common::*;
 
+    use ui::context::MessageSink;
     use ui::event::{
         KeyEvent, KeyLocation, KeyState, LogicalKey, Modifiers, MouseButton, PhysicalKey,
         TextInput as TextInputEvent, UiEventRef,
@@ -75,7 +76,7 @@ mod text_input {
         };
         h.handle_event(&mut field, UiEventRef::Text(&ev));
 
-        let _ = h.ctx.take(); // drain any messages from focus event
+        let _ = h.message_sink.drain(); // drain any messages from focus event
         let _ = h.ctx.take_redraw();
 
         (field, h)
@@ -116,7 +117,7 @@ mod text_input {
         };
         h.handle_event(&mut area, UiEventRef::Text(&ev));
 
-        let _ = h.ctx.take();
+        let _ = h.message_sink.drain();
         let _ = h.ctx.take_redraw();
 
         (area, h)
@@ -124,7 +125,7 @@ mod text_input {
 
     /// Drain messages and return the last Changed value (if any).
     fn last_value(h: &mut Harness) -> Option<String> {
-        let msgs = h.ctx.take();
+        let msgs = h.drain_messages();
         msgs.iter()
             .filter_map(|m| m.get::<Msg>())
             .filter_map(|m| match m {
@@ -196,7 +197,7 @@ mod text_input {
 
         // No Changed message should be emitted.
         assert!(
-            h.ctx.take().is_empty(),
+            h.message_sink.drain().is_empty(),
             "backspace on empty should not emit"
         );
     }
@@ -213,14 +214,14 @@ mod text_input {
             text: "abc".to_string(),
         };
         h.handle_event(&mut field, UiEventRef::Text(&ev));
-        let _ = h.ctx.take();
+        let _ = h.message_sink.drain();
 
         let del = key_press(LogicalKey::Delete);
         h.handle_event(&mut field, UiEventRef::Key(&del));
 
         // No Changed should fire — nothing to delete forward.
         assert!(
-            h.ctx.take().is_empty(),
+            h.message_sink.drain().is_empty(),
             "Delete at end of string should be a no-op"
         );
     }
@@ -253,7 +254,7 @@ mod text_input {
         let enter = key_press(LogicalKey::Enter);
         h.handle_event(&mut field, UiEventRef::Key(&enter));
 
-        let msgs = h.ctx.take();
+        let msgs = h.drain_messages();
         assert!(
             msgs.iter()
                 .any(|m| m.get::<Msg>() == Some(&Msg::Submitted("hello".to_string()))),
@@ -269,12 +270,12 @@ mod text_input {
             text: "hi".to_string(),
         };
         h.handle_event(&mut field, UiEventRef::Text(&ev));
-        let _ = h.ctx.take();
+        let _ = h.message_sink.drain();
 
         let enter = key_press(LogicalKey::Enter);
         h.handle_event(&mut field, UiEventRef::Key(&enter));
 
-        let msgs = h.ctx.take();
+        let msgs = h.drain_messages();
         // No Changed message — value stays "hi".
         assert!(
             !msgs
@@ -334,7 +335,7 @@ mod text_input {
         h.handle_event(&mut field, UiEventRef::Key(&k));
 
         assert!(
-            h.ctx.take().is_empty(),
+            h.message_sink.drain().is_empty(),
             "unfocused field should ignore key events"
         );
     }
@@ -348,14 +349,14 @@ mod text_input {
         let ka = key_press(LogicalKey::Character("a".into()));
         h.handle_event(&mut field, UiEventRef::Key(&ka));
         assert_eq!(
-            h.ctx.take(),
+            h.drain_messages(),
             vec![TopMsg::from(Msg::Changed("a".to_string()))]
         );
 
         let kb = key_press(LogicalKey::Character("b".into()));
         h.handle_event(&mut field, UiEventRef::Key(&kb));
         assert_eq!(
-            h.ctx.take(),
+            h.drain_messages(),
             vec![TopMsg::from(Msg::Changed("b".to_string()))]
         );
     }
@@ -374,12 +375,15 @@ mod text_input {
         h.ctx.mouse_buttons_released = 1 << MouseButton::Left.bit();
         h.handle(&mut field);
         h.ctx.mouse_buttons_released = 0;
-        let _ = h.ctx.take();
+        let _ = h.message_sink.drain();
 
         let ka = key_press(LogicalKey::Character("x".into()));
         h.handle_event(&mut field, UiEventRef::Key(&ka));
 
-        assert!(h.ctx.take().is_empty(), "no handler => no message emitted");
+        assert!(
+            h.message_sink.drain().is_empty(),
+            "no handler => no message emitted"
+        );
         // But redraw still requested.
         assert!(h.ctx.take_redraw());
     }

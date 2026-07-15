@@ -15,7 +15,7 @@ pub struct Button<M> {
     min: Size<i32>,
     max: Size<i32>,
 
-    content: Option<Element<M>>,
+    content: Option<Element>,
 
     style: Style,
     border: bool,
@@ -41,7 +41,7 @@ impl<M: Clone> Button<M> {
 
     pub fn new_with<E>(content: E) -> Self
     where
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
         Self {
             size: Size::splat(Length::Fit),
@@ -86,7 +86,7 @@ impl<M: Clone> Button<M> {
 
 impl<M> IntoElement for Button<M> {}
 
-impl<M: Clone> Widget<M> for Button<M> {
+impl<M: Clone + 'static> Widget for Button<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -100,7 +100,7 @@ impl<M: Clone> Widget<M> for Button<M> {
     fn child_count(&self) -> usize {
         if self.content.is_some() { 1 } else { 0 }
     }
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         self.content.as_mut().unwrap().as_mut()
     }
     fn child_env(&self, env: Env, theme: &Theme) -> Env {
@@ -137,7 +137,7 @@ impl<M: Clone> Widget<M> for Button<M> {
         ctx.surface(instances, ctx_rect.xywh(), fill, border);
     }
 
-    fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle_after(&mut self, ctx: &mut EventCtx) {
         let (was_hovered, was_pressed) = {
             let st = ctx.state_or(|| ButtonState {
                 hovered: false,
@@ -179,13 +179,13 @@ impl<M: Clone> Widget<M> for Button<M> {
 
         if mouse_released && ctx.is_pressed() {
             if hovered && let Some(m) = self.on_press.clone() {
-                ctx.ui.emit(m);
+                ctx.emit(m);
             }
             ctx.end_press();
         }
 
         if key_activated && let Some(m) = self.on_press.clone() {
-            ctx.ui.emit(m);
+            ctx.emit(m);
         }
 
         if hovered != was_hovered || new_pressed != was_pressed || key_activated {

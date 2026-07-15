@@ -289,11 +289,11 @@ impl Text {
 
 impl IntoElement for Text {}
 
-impl<M> Widget<M> for Text {
+impl Widget for Text {
     fn child_count(&self) -> usize {
         0
     }
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         unreachable!()
     }
 

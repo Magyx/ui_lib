@@ -1,7 +1,7 @@
 use super::*;
 
-pub struct Card<M> {
-    children: Vec<Element<M>>,
+pub struct Card {
+    children: Vec<Element>,
     spacing: i32,
     padding: Vec4<i32>,
     size: Size<Length>,
@@ -9,11 +9,11 @@ pub struct Card<M> {
     max: Size<i32>,
 }
 
-impl<M> Card<M> {
+impl Card {
     pub fn new<I, E>(children: I) -> Self
     where
         I: IntoIterator<Item = E>,
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
         Self {
             children: children.into_iter().map(Into::into).collect(),
@@ -46,9 +46,9 @@ impl<M> Card<M> {
     }
 }
 
-impl<M> IntoElement for Card<M> {}
+impl IntoElement for Card {}
 
-impl<M> Widget<M> for Card<M> {
+impl Widget for Card {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -69,7 +69,7 @@ impl<M> Widget<M> for Card<M> {
     fn child_count(&self) -> usize {
         self.children.len()
     }
-    fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, i: usize) -> &mut dyn Widget {
         self.children[i].as_mut()
     }
 

@@ -149,7 +149,7 @@ mod layout {
     #[test]
     fn empty_row_has_zero_fit_size() {
         let mut h = Harness::default();
-        let (mut row, slot) = Probe::new(Row::<TopMsg>::new(Vec::<Element<TopMsg>>::new()));
+        let (mut row, slot) = Probe::new(Row::new(Vec::<Element>::new()));
         h.layout(&mut row, 800, 600);
         let r = read(&slot);
         assert_eq!((r.2, r.3), (0, 0));
@@ -161,7 +161,7 @@ mod layout {
 
         let (a, _) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, _) = probed_rect(Length::Fixed(60), Length::Fixed(30), Color::GREEN);
-        let (mut row, slot) = Probe::new(Row::<TopMsg>::new([a, b]));
+        let (mut row, slot) = Probe::new(Row::new([a, b]));
 
         h.layout(&mut row, 1000, 1000);
         let r = read(&slot);
@@ -177,7 +177,7 @@ mod layout {
         let (a, _) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, _) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
         let (c, _) = probed_rect(Length::Fixed(30), Length::Fixed(20), Color::BLUE);
-        let (mut row, slot) = Probe::new(Row::<TopMsg>::new([a, b, c]).spacing(10));
+        let (mut row, slot) = Probe::new(Row::new([a, b, c]).spacing(10));
 
         h.layout(&mut row, 1000, 1000);
         let r = read(&slot);
@@ -189,8 +189,7 @@ mod layout {
         let mut h = Harness::default();
 
         let (child, _) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
-        let (mut row, slot) =
-            Probe::new(Row::<TopMsg>::new([child]).padding(Vec4::new(5, 6, 7, 8)));
+        let (mut row, slot) = Probe::new(Row::new([child]).padding(Vec4::new(5, 6, 7, 8)));
 
         h.layout(&mut row, 1000, 1000);
         let r = read(&slot);
@@ -204,8 +203,7 @@ mod layout {
 
         let (a, a_slot) = probed_rect(Length::Fixed(100), Length::Fixed(20), Color::RED);
         let (b, b_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
-        let mut row: Row<TopMsg> =
-            Row::new([a, b]).size(Size::new(Length::Fixed(500), Length::Fit));
+        let mut row = Row::new([a, b]).size(Size::new(Length::Fixed(500), Length::Fit));
 
         h.layout(&mut row, 1000, 1000);
 
@@ -224,8 +222,7 @@ mod layout {
 
         let (a, a_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::RED);
         let (b, b_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
-        let mut row: Row<TopMsg> =
-            Row::new([a, b]).size(Size::new(Length::Fixed(400), Length::Fit));
+        let mut row = Row::new([a, b]).size(Size::new(Length::Fixed(400), Length::Fit));
 
         h.layout(&mut row, 1000, 1000);
 
@@ -249,8 +246,7 @@ mod layout {
         let (a, a_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::RED);
         let (b, b_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
         let (c, c_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::BLUE);
-        let mut row: Row<TopMsg> =
-            Row::new([a, b, c]).size(Size::new(Length::Fixed(101), Length::Fixed(20)));
+        let mut row = Row::new([a, b, c]).size(Size::new(Length::Fixed(101), Length::Fixed(20)));
 
         h.layout(&mut row, 1000, 1000);
 
@@ -275,8 +271,7 @@ mod layout {
 
         let (a, a_slot) = probed_rect(Length::Weighted(2.0), Length::Fixed(20), Color::RED);
         let (b, b_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
-        let mut row: Row<TopMsg> =
-            Row::new([a, b]).size(Size::new(Length::Fixed(300), Length::Fixed(20)));
+        let mut row = Row::new([a, b]).size(Size::new(Length::Fixed(300), Length::Fixed(20)));
 
         h.layout(&mut row, 1000, 1000);
 
@@ -294,7 +289,7 @@ mod layout {
         let (fixed_child, f_slot) = probed_rect(Length::Fixed(20), Length::Fixed(20), Color::BLUE);
         let (a, a_slot) = probed_rect(Length::Weighted(3.0), Length::Fixed(20), Color::RED);
         let (b, b_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
-        let mut row: Row<TopMsg> =
+        let mut row =
             Row::new([fixed_child, a, b]).size(Size::new(Length::Fixed(320), Length::Fixed(20)));
 
         h.layout(&mut row, 1000, 1000);
@@ -325,7 +320,7 @@ mod layout {
                 .max(Size::new(40, 20)),
         );
         let (c, c_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::BLUE);
-        let mut row: Row<TopMsg> =
+        let mut row =
             Row::new([a, Element::new(b), c]).size(Size::new(Length::Fixed(300), Length::Fit));
 
         h.layout(&mut row, 1000, 1000);
@@ -346,7 +341,7 @@ mod layout {
 
         let (a, a_slot) = probed_rect(Length::Fixed(300), Length::Fixed(20), Color::RED);
         let (b, b_slot) = probed_rect(Length::Fixed(300), Length::Fixed(20), Color::GREEN);
-        let (mut row, slot) = Probe::new(Row::<TopMsg>::new([a, b]));
+        let (mut row, slot) = Probe::new(Row::new([a, b]));
 
         h.layout(&mut row, 200, 200);
 
@@ -370,7 +365,7 @@ mod layout {
             probed_rect(Length::Fixed(500), Length::Fixed(40), Color::GREEN);
         let clip = ClipBox::new(Size::new(Length::Grow, Length::Fixed(50)), true, content);
         let (clip_probe, clip_slot) = Probe::new(clip);
-        let mut root: Row<TopMsg> = Row::new([Element::new(clip_probe)])
+        let mut root = Row::new([Element::new(clip_probe)])
             .size(Size::new(Length::Fixed(300), Length::Fixed(60)));
 
         h.layout(&mut root, 1000, 1000);
@@ -399,7 +394,7 @@ mod layout {
             probed_rect(Length::Fixed(500), Length::Fixed(40), Color::GREEN);
         let clip = ClipBox::new(Size::new(Length::Fit, Length::Fixed(50)), true, content);
         let (clip_probe, clip_slot) = Probe::new(clip);
-        let mut root: Row<TopMsg> = Row::new([Element::new(clip_probe)])
+        let mut root = Row::new([Element::new(clip_probe)])
             .size(Size::new(Length::Fixed(300), Length::Fixed(60)));
 
         h.layout(&mut root, 1000, 1000);
@@ -428,7 +423,7 @@ mod layout {
             probed_rect(Length::Fixed(500), Length::Fixed(40), Color::GREEN);
         let plain = ClipBox::new(Size::new(Length::Grow, Length::Fixed(50)), false, content);
         let (plain_probe, plain_slot) = Probe::new(plain);
-        let mut root: Row<TopMsg> = Row::new([Element::new(plain_probe)])
+        let mut root = Row::new([Element::new(plain_probe)])
             .size(Size::new(Length::Fixed(300), Length::Fixed(60)));
 
         h.layout(&mut root, 1000, 1000);
@@ -449,12 +444,12 @@ mod layout {
         let mut h = Harness::default();
 
         let (content, _c) = probed_rect(Length::Fixed(400), Length::Fixed(40), Color::GREEN);
-        let sidebar = Row::<TopMsg>::new([content])
+        let sidebar = Row::new([content])
             .size(Size::new(Length::Fit, Length::Fixed(50)))
             .max(Size::new(300, i32::MAX));
         let (side_probe, side_slot) = Probe::new(sidebar);
         let (main, main_slot) = probed_rect(Length::Grow, Length::Fixed(50), Color::BLUE);
-        let mut root: Row<TopMsg> = Row::new([Element::new(side_probe), main])
+        let mut root = Row::new([Element::new(side_probe), main])
             .size(Size::new(Length::Fixed(1000), Length::Fixed(60)));
 
         h.layout(&mut root, 2000, 2000);
@@ -480,11 +475,11 @@ mod layout {
         let mut h = Harness::default();
 
         let (content, _c) = probed_rect(Length::Fixed(200), Length::Fixed(40), Color::GREEN);
-        let sidebar = Row::<TopMsg>::new([content])
+        let sidebar = Row::new([content])
             .size(Size::new(Length::Grow, Length::Fixed(50)))
             .max(Size::new(300, i32::MAX));
         let (side_probe, side_slot) = Probe::new(sidebar);
-        let mut root: Row<TopMsg> = Row::new([Element::new(side_probe)])
+        let mut root = Row::new([Element::new(side_probe)])
             .size(Size::new(Length::Fixed(1000), Length::Fixed(60)));
 
         h.layout(&mut root, 2000, 2000);
@@ -503,7 +498,7 @@ mod layout {
         let sidebar = ClipBox::new(Size::new(Length::Fit, Length::Fixed(50)), true, content)
             .max(Size::new(300, i32::MAX));
         let (side_probe, side_slot) = Probe::new(sidebar);
-        let mut root: Row<TopMsg> = Row::new([Element::new(side_probe)])
+        let mut root = Row::new([Element::new(side_probe)])
             .size(Size::new(Length::Fixed(1000), Length::Fixed(60)));
 
         h.layout(&mut root, 2000, 2000);
@@ -527,8 +522,7 @@ mod layout {
         let child = Rectangle::new(Size::splat(Length::Grow), Color::RED).min(Size::new(500, 20));
         let (child_probe, child_slot) = Probe::new(child);
 
-        let mut row: Row<TopMsg> =
-            Row::new([child_probe]).size(Size::new(Length::Fixed(300), Length::Fit));
+        let mut row = Row::new([child_probe]).size(Size::new(Length::Fixed(300), Length::Fit));
 
         h.layout(&mut row, 1000, 1000);
 
@@ -543,9 +537,9 @@ mod layout {
     fn fixed_row_containing_empty_column_keeps_its_fixed_size() {
         let mut h = Harness::default();
 
-        let empty_col: Column<TopMsg> = Column::new(Vec::<Element<TopMsg>>::new());
+        let empty_col = Column::new(Vec::<Element>::new());
         let (mut row, slot) = Probe::new(
-            Row::<TopMsg>::new([empty_col]).size(Size::new(Length::Fixed(200), Length::Fixed(100))),
+            Row::new([empty_col]).size(Size::new(Length::Fixed(200), Length::Fixed(100))),
         );
 
         h.layout(&mut row, 800, 600);
@@ -561,7 +555,7 @@ mod layout {
 
         let (a, _) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, _) = probed_rect(Length::Fixed(60), Length::Fixed(30), Color::GREEN);
-        let (mut col, slot) = Probe::new(Column::<TopMsg>::new([a, b]));
+        let (mut col, slot) = Probe::new(Column::new([a, b]));
 
         h.layout(&mut col, 1000, 1000);
         let r = read(&slot);
@@ -576,7 +570,7 @@ mod layout {
         let (a, _) = probed_rect(Length::Fixed(10), Length::Fixed(20), Color::RED);
         let (b, _) = probed_rect(Length::Fixed(10), Length::Fixed(30), Color::GREEN);
         let (c, _) = probed_rect(Length::Fixed(10), Length::Fixed(40), Color::BLUE);
-        let (mut col, slot) = Probe::new(Column::<TopMsg>::new([a, b, c]).spacing(5));
+        let (mut col, slot) = Probe::new(Column::new([a, b, c]).spacing(5));
 
         h.layout(&mut col, 1000, 1000);
         let r = read(&slot);
@@ -589,7 +583,7 @@ mod layout {
 
         let (a, a_slot) = probed_rect(Length::Fixed(10), Length::Fixed(20), Color::RED);
         let (b, b_slot) = probed_rect(Length::Fixed(10), Length::Fixed(30), Color::GREEN);
-        let mut col: Column<TopMsg> = Column::new([a, b]);
+        let mut col = Column::new([a, b]);
 
         h.layout(&mut col, 1000, 1000);
 
@@ -614,8 +608,7 @@ mod layout {
             Size::new(Length::Fixed(20), Length::Grow),
             Color::GREEN,
         ));
-        let mut col: Column<TopMsg> =
-            Column::new([a, b]).size(Size::new(Length::Fit, Length::Fixed(500)));
+        let mut col = Column::new([a, b]).size(Size::new(Length::Fit, Length::Fixed(500)));
 
         h.layout(&mut col, 1000, 1000);
 
@@ -640,8 +633,7 @@ mod layout {
             Size::new(Length::Fixed(20), Length::Grow),
             Color::GREEN,
         ));
-        let mut col: Column<TopMsg> =
-            Column::new([a, b]).size(Size::new(Length::Fit, Length::Fixed(400)));
+        let mut col = Column::new([a, b]).size(Size::new(Length::Fit, Length::Fixed(400)));
 
         h.layout(&mut col, 1000, 1000);
 
@@ -672,9 +664,8 @@ mod layout {
             Size::new(Length::Fixed(20), Length::Grow),
             Color::BLUE,
         ));
-        let mut col: Column<TopMsg> =
-            Column::new([Element::new(a), Element::new(b), Element::new(c)])
-                .size(Size::new(Length::Fit, Length::Fixed(300)));
+        let mut col = Column::new([Element::new(a), Element::new(b), Element::new(c)])
+            .size(Size::new(Length::Fit, Length::Fixed(300)));
 
         h.layout(&mut col, 1000, 1000);
 
@@ -703,7 +694,7 @@ mod layout {
             Size::new(Length::Fixed(20), Length::Grow),
             Color::BLUE,
         ));
-        let mut col: Column<TopMsg> = Column::new([a, b, c])
+        let mut col = Column::new([a, b, c])
             .spacing(20)
             .size(Size::new(Length::Fit, Length::Fixed(400)));
 
@@ -731,7 +722,7 @@ mod layout {
 
         let (a, a_slot) = probed_rect(Length::Fixed(20), Length::Fixed(300), Color::RED);
         let (b, b_slot) = probed_rect(Length::Fixed(20), Length::Fixed(300), Color::GREEN);
-        let (mut col, slot) = Probe::new(Column::<TopMsg>::new([a, b]));
+        let (mut col, slot) = Probe::new(Column::new([a, b]));
 
         h.layout(&mut col, 200, 200);
 
@@ -753,12 +744,12 @@ mod layout {
         // Column { Row { 40x20, 60x20 }, Row { 30x15 } }
         let (a1, _) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (a2, _) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
-        let r1: Row<TopMsg> = Row::new([a1, a2]);
+        let r1 = Row::new([a1, a2]);
 
         let (b1, _) = probed_rect(Length::Fixed(30), Length::Fixed(15), Color::BLUE);
-        let r2: Row<TopMsg> = Row::new([b1]);
+        let r2 = Row::new([b1]);
 
-        let (mut col, slot) = Probe::new(Column::<TopMsg>::new([r1, r2]));
+        let (mut col, slot) = Probe::new(Column::new([r1, r2]));
         h.layout(&mut col, 1000, 1000);
 
         let r = read(&slot);
@@ -773,11 +764,10 @@ mod layout {
         let mut h = Harness::default();
 
         let (left, left_slot) = probed_rect(Length::Fixed(50), Length::Fixed(20), Color::RED);
-        let spacer: Element<TopMsg> =
-            Element::new(Spacer::new(Size::new(Length::Grow, Length::Fixed(20))));
+        let spacer = Element::new(Spacer::new(Size::new(Length::Grow, Length::Fixed(20))));
         let (right, right_slot) = probed_rect(Length::Fixed(50), Length::Fixed(20), Color::BLUE);
 
-        let mut row: Row<TopMsg> =
+        let mut row =
             Row::new([left, spacer, right]).size(Size::new(Length::Fixed(300), Length::Fit));
 
         h.layout(&mut row, 1000, 1000);
@@ -804,7 +794,7 @@ mod layout {
             Color::RED,
         ));
 
-        let (mut overlay, overlay_slot) = Probe::new(Overlay::<TopMsg>::new([child]));
+        let (mut overlay, overlay_slot) = Probe::new(Overlay::new([child]));
 
         h.layout(&mut overlay, 800, 600);
 
@@ -834,7 +824,7 @@ mod layout {
             Color::BLUE,
         ));
 
-        let mut overlay: Overlay<TopMsg> =
+        let mut overlay =
             Overlay::new([child]).size(Size::new(Length::Fixed(300), Length::Fixed(200)));
 
         h.layout(&mut overlay, 1000, 1000);
@@ -859,7 +849,7 @@ mod layout {
             Color::RED,
         ));
 
-        let mut overlay: Overlay<TopMsg> = Overlay::new(Vec::<Element<TopMsg>>::new())
+        let mut overlay = Overlay::new(Vec::<Element>::new())
             .size(Size::new(Length::Fixed(400), Length::Fixed(300)));
         overlay.push(child, 100, 80);
 
@@ -884,7 +874,7 @@ mod layout {
             Color::RED,
         ));
 
-        let mut overlay: Overlay<TopMsg> = Overlay::new(Vec::<Element<TopMsg>>::new())
+        let mut overlay = Overlay::new(Vec::<Element>::new())
             .size(Size::new(Length::Fixed(200), Length::Fixed(200)))
             .padding(Vec4::new(7, 11, 0, 0));
         overlay.push(child, 0, 0);
@@ -914,7 +904,7 @@ mod layout {
             Color::GREEN,
         ));
 
-        let mut overlay: Overlay<TopMsg> = Overlay::new(Vec::<Element<TopMsg>>::new())
+        let mut overlay = Overlay::new(Vec::<Element>::new())
             .size(Size::new(Length::Fixed(500), Length::Fixed(400)));
         overlay.push(a, 10, 20);
         overlay.push(b, 200, 150);
@@ -949,9 +939,9 @@ mod layout {
             Size::new(Length::Fixed(100), Length::Fixed(100)),
             Color::GREEN,
         );
-        let overlay: Overlay<TopMsg> = Overlay::new([inner_rect]);
+        let overlay = Overlay::new([inner_rect]);
 
-        let mut row: Row<TopMsg> = Row::new(el![left, overlay, right]);
+        let mut row = Row::new(el![left, overlay, right]);
 
         h.layout(&mut row, 1000, 1000);
 
@@ -997,7 +987,7 @@ mod layout {
 
     impl IntoElement for IntrinsicHeightLeaf {}
 
-    impl<M: 'static> Widget<M> for IntrinsicHeightLeaf {
+    impl Widget for IntrinsicHeightLeaf {
         fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
             Node {
                 size: Size::new(Length::Grow, Length::Fit),
@@ -1007,7 +997,7 @@ mod layout {
         fn child_count(&self) -> usize {
             0
         }
-        fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+        fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
             unreachable!("leaf has no children")
         }
         fn min_height_for_width<'a>(
@@ -1025,7 +1015,7 @@ mod layout {
             let r = ctx.rect();
             self.slot.set(Some(r.xywh()));
         }
-        fn handle(&mut self, _ctx: &mut ui::context::EventCtx<M>) {}
+        fn handle(&mut self, _ctx: &mut ui::context::EventCtx) {}
     }
 
     #[test]
@@ -1038,8 +1028,7 @@ mod layout {
         let (leaf, leaf_slot) = IntrinsicHeightLeaf::new(|w| w / 4);
 
         // Wrap in a Row so the leaf gets a concrete width.
-        let mut row: Row<TopMsg> =
-            Row::new([leaf]).size(Size::new(Length::Fixed(400), Length::Fit));
+        let mut row = Row::new([leaf]).size(Size::new(Length::Fixed(400), Length::Fit));
 
         h.layout(&mut row, 1000, 1000);
 
@@ -1059,8 +1048,7 @@ mod layout {
             let mut h = Harness::default();
             let (leaf, leaf_slot) =
                 IntrinsicHeightLeaf::new(|w| if w > 0 { 1000 / w } else { 1000 });
-            let mut row: Row<TopMsg> =
-                Row::new([leaf]).size(Size::new(Length::Fixed(50), Length::Fit));
+            let mut row = Row::new([leaf]).size(Size::new(Length::Fixed(50), Length::Fit));
             h.layout(&mut row, 1000, 1000);
             read(&leaf_slot).3
         };
@@ -1069,8 +1057,7 @@ mod layout {
             let mut h = Harness::default();
             let (leaf, leaf_slot) =
                 IntrinsicHeightLeaf::new(|w| if w > 0 { 1000 / w } else { 1000 });
-            let mut row: Row<TopMsg> =
-                Row::new([leaf]).size(Size::new(Length::Fixed(500), Length::Fit));
+            let mut row = Row::new([leaf]).size(Size::new(Length::Fixed(500), Length::Fit));
             h.layout(&mut row, 1000, 1000);
             read(&leaf_slot).3
         };
@@ -1091,7 +1078,7 @@ mod layout {
             slot: RectSlot,
         }
         impl IntoElement for LeafWithMin {}
-        impl<M: 'static> Widget<M> for LeafWithMin {
+        impl Widget for LeafWithMin {
             fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
                 Node {
                     size: Size::new(Length::Grow, Length::Fit),
@@ -1102,7 +1089,7 @@ mod layout {
             fn child_count(&self) -> usize {
                 0
             }
-            fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+            fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
                 unreachable!()
             }
             fn min_height_for_width<'a>(
@@ -1120,14 +1107,13 @@ mod layout {
                 let r = ctx.rect();
                 self.slot.set(Some(r.xywh()));
             }
-            fn handle(&mut self, _ctx: &mut ui::context::EventCtx<M>) {}
+            fn handle(&mut self, _ctx: &mut ui::context::EventCtx) {}
         }
 
         let mut h = Harness::default();
         let slot: RectSlot = Rc::new(Cell::new(None));
         let leaf = LeafWithMin { slot: slot.clone() };
-        let mut row: Row<TopMsg> =
-            Row::new([leaf]).size(Size::new(Length::Fixed(200), Length::Fit));
+        let mut row = Row::new([leaf]).size(Size::new(Length::Fixed(200), Length::Fit));
 
         h.layout(&mut row, 1000, 1000);
         let r = slot.get().unwrap();
@@ -1146,7 +1132,7 @@ mod layout {
             slot: RectSlot,
         }
         impl IntoElement for LeafWithMax {}
-        impl<M: 'static> Widget<M> for LeafWithMax {
+        impl Widget for LeafWithMax {
             fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
                 Node {
                     size: Size::new(Length::Grow, Length::Fit),
@@ -1157,7 +1143,7 @@ mod layout {
             fn child_count(&self) -> usize {
                 0
             }
-            fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+            fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
                 unreachable!()
             }
             fn min_height_for_width<'a>(
@@ -1175,14 +1161,13 @@ mod layout {
                 let r = ctx.rect();
                 self.slot.set(Some(r.xywh()));
             }
-            fn handle(&mut self, _ctx: &mut ui::context::EventCtx<M>) {}
+            fn handle(&mut self, _ctx: &mut ui::context::EventCtx) {}
         }
 
         let mut h = Harness::default();
         let slot: RectSlot = Rc::new(Cell::new(None));
         let leaf = LeafWithMax { slot: slot.clone() };
-        let mut row: Row<TopMsg> =
-            Row::new([leaf]).size(Size::new(Length::Fixed(200), Length::Fit));
+        let mut row = Row::new([leaf]).size(Size::new(Length::Fixed(200), Length::Fit));
 
         h.layout(&mut row, 1000, 1000);
         let r = slot.get().unwrap();
@@ -1200,11 +1185,11 @@ mod layout {
         // called on it, even if it overrides the method. Test with a
         // wrapper that panics in min_height_for_width; layout should
         // succeed (no panic).
-        struct WrapperThatWouldPanic<M: 'static> {
-            child: Element<M>,
+        struct WrapperThatWouldPanic {
+            child: Element,
         }
-        impl<M: 'static> IntoElement for WrapperThatWouldPanic<M> {}
-        impl<M: 'static> Widget<M> for WrapperThatWouldPanic<M> {
+        impl IntoElement for WrapperThatWouldPanic {}
+        impl Widget for WrapperThatWouldPanic {
             fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
                 Node {
                     size: Size::new(Length::Fit, Length::Fit),
@@ -1214,7 +1199,7 @@ mod layout {
             fn child_count(&self) -> usize {
                 1
             }
-            fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+            fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
                 self.child.as_mut()
             }
             fn min_height_for_width<'a>(
@@ -1230,17 +1215,17 @@ mod layout {
                 _out: &mut Vec<ui::primitive::Instance>,
             ) {
             }
-            fn handle(&mut self, _ctx: &mut ui::context::EventCtx<M>) {}
+            fn handle(&mut self, _ctx: &mut ui::context::EventCtx) {}
         }
 
         let mut h = Harness::default();
-        let wrapper: WrapperThatWouldPanic<TopMsg> = WrapperThatWouldPanic {
+        let wrapper = WrapperThatWouldPanic {
             child: Element::new(Rectangle::new(
                 Size::new(Length::Fixed(10), Length::Fixed(10)),
                 Color::RED,
             )),
         };
-        let mut root: Column<TopMsg> = Column::new([wrapper]);
+        let mut root = Column::new([wrapper]);
 
         // Must not panic.
         h.layout(&mut root, 1000, 1000);
@@ -1254,10 +1239,10 @@ mod layout {
         // identical results. Catches state leaks between frames.
         let mut h = Harness::default();
 
-        let build = || -> (Probe<TopMsg, Column<TopMsg>>, RectSlot) {
+        let build = || -> (Probe<Column>, RectSlot) {
             let (a, _) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
             let (b, _) = probed_rect(Length::Fixed(60), Length::Fixed(30), Color::GREEN);
-            Probe::new(Column::<TopMsg>::new([a, b]))
+            Probe::new(Column::new([a, b]))
         };
 
         let (mut first, slot1) = build();
@@ -1282,7 +1267,7 @@ mod layout {
         let mut h = Harness::default();
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
-        let mut row: Row<TopMsg> = Row::new([a, b])
+        let mut row = Row::new([a, b])
             .spacing(10)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1296,7 +1281,7 @@ mod layout {
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
         // content 100 in a 300 container -> free 200, lead 100.
-        let mut row: Row<TopMsg> = Row::new([a, b])
+        let mut row = Row::new([a, b])
             .main(Align::Center)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1309,7 +1294,7 @@ mod layout {
         let mut h = Harness::default();
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
-        let mut row: Row<TopMsg> = Row::new([a, b])
+        let mut row = Row::new([a, b])
             .main(Align::End)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1326,7 +1311,7 @@ mod layout {
         let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
         let (c, sc) = probed_rect(Length::Fixed(50), Length::Fixed(20), Color::BLUE);
         // content 150, free 150, 2 gaps -> +75 each.
-        let mut row: Row<TopMsg> = Row::new([a, b, c])
+        let mut row = Row::new([a, b, c])
             .main(Align::SpaceBetween)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1343,7 +1328,7 @@ mod layout {
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
         // content 100, free 200, unit 200/3 = 66 (floored).
-        let mut row: Row<TopMsg> = Row::new([a, b])
+        let mut row = Row::new([a, b])
             .main(Align::SpaceEvenly)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1357,7 +1342,7 @@ mod layout {
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
         // content 100, free 200, unit 100, lead 50, gap 100.
-        let mut row: Row<TopMsg> = Row::new([a, b])
+        let mut row = Row::new([a, b])
             .main(Align::SpaceAround)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1372,7 +1357,7 @@ mod layout {
         let mut h = Harness::default();
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         // inner height 100, child 20 -> y = 40.
-        let mut row: Row<TopMsg> = Row::new([a])
+        let mut row = Row::new([a])
             .cross(Align::Center)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1383,7 +1368,7 @@ mod layout {
     fn cross_end_aligns_child_to_the_bottom() {
         let mut h = Harness::default();
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
-        let mut row: Row<TopMsg> = Row::new([a])
+        let mut row = Row::new([a])
             .cross(Align::End)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1402,7 +1387,7 @@ mod layout {
             Size::new(Length::Fixed(40), Length::Fit),
             Color::RED,
         ));
-        let mut row: Row<TopMsg> = Row::new([Element::new(child)])
+        let mut row = Row::new([Element::new(child)])
             .cross(Align::Stretch)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1415,8 +1400,7 @@ mod layout {
     fn cross_start_is_the_default_and_leaves_child_at_top() {
         let mut h = Harness::default();
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
-        let mut row: Row<TopMsg> =
-            Row::new([a]).size(Size::new(Length::Fixed(300), Length::Fixed(100)));
+        let mut row = Row::new([a]).size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
         let ra = read(&sa);
         assert_eq!(ra.1, 0);
@@ -1432,7 +1416,7 @@ mod layout {
         let (b, sb) = probed_rect(Length::Fixed(80), Length::Fixed(40), Color::GREEN);
         // main = height 300, content 80 -> free 220, lead 110.
         // cross = width 200 -> a x = 80, b x = 60.
-        let mut col: Column<TopMsg> = Column::new([a, b])
+        let mut col = Column::new([a, b])
             .main(Align::Center)
             .cross(Align::Center)
             .size(Size::new(Length::Fixed(200), Length::Fixed(300)));
@@ -1450,7 +1434,7 @@ mod layout {
         let mut h = Harness::default();
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, sb) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
-        let mut row: Row<TopMsg> = Row::new([a, b])
+        let mut row = Row::new([a, b])
             .main(Align::Center)
             .size(Size::new(Length::Fixed(300), Length::Fixed(100)));
         h.layout(&mut row, 1000, 1000);
@@ -1466,7 +1450,7 @@ mod layout {
         let mut h = Harness::default();
         let (a, sa) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
         let (b, sb) = probed_rect(Length::Fixed(60), Length::Fixed(20), Color::GREEN);
-        let mut row: Row<TopMsg> = Row::new([a, b]).main(Align::Center).cross(Align::Start);
+        let mut row = Row::new([a, b]).main(Align::Center).cross(Align::Start);
         h.layout(&mut row, 1000, 1000);
         assert_eq!(read(&sa).0, 0);
         assert_eq!(read(&sb).0, 40, "packed tight; nothing to center");
@@ -1479,8 +1463,7 @@ mod layout {
         let mut h = Harness::default();
         let (child, sc) = probed_rect(Length::Fixed(40), Length::Fixed(40), Color::RED);
         let inner = Center::new(child); // Center::new returns a Grow/Grow Column
-        let mut root: Column<TopMsg> =
-            Column::new([Element::new(inner)]).size(Size::splat(Length::Fixed(400)));
+        let mut root = Column::new([Element::new(inner)]).size(Size::splat(Length::Fixed(400)));
         // note: root is 400 wide, 400 tall here for a clean center.
         h.layout(&mut root, 1000, 1000);
         let rc = read(&sc);

@@ -189,20 +189,13 @@ fn frame_interval_from_monitor(window: &Window) -> Duration {
 // TODO: winit can only have 1 target
 pub struct WinitApp<'a, M, S, V, U>
 where
-    M: 'static + std::fmt::Debug,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(
-            TargetId,
-            &mut Engine<'a, M>,
-            &Event<M, WindowEvent>,
-            &mut S,
-            &ActiveEventLoop,
-        ) -> bool
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, WindowEvent>, &mut S, &ActiveEventLoop) -> bool
         + 'static,
 {
     window: Option<Arc<Window>>,
     target: Option<TargetId>,
-    engine: Option<Engine<'a, M>>,
+    engine: Option<Engine<'a>>,
     extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
     state: S,
     view: V,
@@ -212,19 +205,15 @@ where
     frame_interval: Duration,
 
     startup_error: Option<crate::Error>,
+
+    _marker: std::marker::PhantomData<M>,
 }
 
 impl<'a, M, S, V, U> WinitApp<'a, M, S, V, U>
 where
     M: 'static + std::fmt::Debug,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(
-            TargetId,
-            &mut Engine<'a, M>,
-            &Event<M, WindowEvent>,
-            &mut S,
-            &ActiveEventLoop,
-        ) -> bool
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, WindowEvent>, &mut S, &ActiveEventLoop) -> bool
         + 'static,
 {
     pub fn new(
@@ -247,21 +236,17 @@ where
             frame_interval: Duration::from_millis(16),
 
             startup_error: None,
+
+            _marker: std::marker::PhantomData,
         }
     }
 }
 
 impl<'a, M, S, V, U> ApplicationHandler for WinitApp<'a, M, S, V, U>
 where
-    M: 'static + std::fmt::Debug,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(
-            TargetId,
-            &mut Engine<'a, M>,
-            &Event<M, WindowEvent>,
-            &mut S,
-            &ActiveEventLoop,
-        ) -> bool
+    M: 'static,
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, WindowEvent>, &mut S, &ActiveEventLoop) -> bool
         + 'static,
 {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -275,7 +260,8 @@ where
                 }
             };
             let size = window.inner_size().into();
-            let (target, mut engine) = Engine::new_for(window.clone(), size, window.scale_factor());
+            let (target, mut engine) =
+                Engine::new_for::<M, _>(window.clone(), size, window.scale_factor());
             if let Some(pipelines) = self.extra_pipelines.take() {
                 for (key, factory) in pipelines {
                     engine.register_pipeline(
@@ -366,14 +352,8 @@ fn run_app_core<'a, M, S, V, U>(
 ) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(
-            TargetId,
-            &mut Engine<'a, M>,
-            &Event<M, WindowEvent>,
-            &mut S,
-            &ActiveEventLoop,
-        ) -> bool
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, WindowEvent>, &mut S, &ActiveEventLoop) -> bool
         + 'static,
 {
     crate::profile::set_thread_name("ui-main");
@@ -396,14 +376,8 @@ pub fn run_app<'a, M, S, V, U>(
 ) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(
-            TargetId,
-            &mut Engine<'a, M>,
-            &Event<M, WindowEvent>,
-            &mut S,
-            &ActiveEventLoop,
-        ) -> bool
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, WindowEvent>, &mut S, &ActiveEventLoop) -> bool
         + 'static,
 {
     run_app_core(state, view, update, window_attrs, None)
@@ -418,14 +392,8 @@ pub fn run_app_with<'a, M, S, V, U, I>(
 ) -> crate::Result<()>
 where
     M: 'static + std::fmt::Debug,
-    V: Fn(&TargetId, &S) -> Element<M> + 'static,
-    U: FnMut(
-            TargetId,
-            &mut Engine<'a, M>,
-            &Event<M, WindowEvent>,
-            &mut S,
-            &ActiveEventLoop,
-        ) -> bool
+    V: Fn(&TargetId, &S) -> Element + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, WindowEvent>, &mut S, &ActiveEventLoop) -> bool
         + 'static,
     I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
 {

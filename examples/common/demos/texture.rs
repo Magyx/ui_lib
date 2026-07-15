@@ -2,7 +2,7 @@ use super::*;
 use std::num::NonZero;
 use ui::widget::{ContentFit, Image};
 
-pub fn view(state: &State) -> Element<Message> {
+pub fn view(state: &State) -> Element {
     use Length::{Fit, Fixed, Grow};
 
     const ICON_PX: i32 = 48;
@@ -11,7 +11,7 @@ pub fn view(state: &State) -> Element<Message> {
 
     let t = &state.theme;
 
-    let png_cells: Vec<Element<Message>> = state
+    let png_cells: Vec<Element> = state
         .icons
         .iter()
         .take(MAX_DEMO_ICONS)
@@ -35,7 +35,7 @@ pub fn view(state: &State) -> Element<Message> {
     let svg_panel = {
         use ui::widget::Svg;
 
-        let svg_cells: Vec<Element<Message>> = state
+        let svg_cells: Vec<Element> = state
             .svg_icons
             .iter()
             .take(MAX_DEMO_ICONS)

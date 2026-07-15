@@ -7,6 +7,7 @@ mod common;
 mod widget_interaction {
     use super::common::*;
 
+    use ui::context::MessageSink;
     use ui::event::{KeyState, MouseButton, UiEventRef};
     use ui::model::{Color, Position, Size};
     use ui::widget::{Button, Length};
@@ -118,7 +119,7 @@ mod widget_interaction {
             "pressing inside should capture active_item"
         );
         assert!(
-            harness.ctx.take().is_empty(),
+            harness.message_sink.drain().is_empty(),
             "press alone should not emit the message"
         );
 
@@ -134,7 +135,7 @@ mod widget_interaction {
             },
         );
 
-        let msgs = harness.ctx.take();
+        let msgs = harness.drain_messages();
         assert_eq!(msgs, vec![TopMsg::from(Msg::Clicked(1))]);
         assert!(
             harness.ctx.focus.pressed().is_none(),
@@ -177,7 +178,7 @@ mod widget_interaction {
             },
         );
 
-        let msgs = harness.ctx.take();
+        let msgs = harness.message_sink.drain();
         assert!(
             msgs.is_empty(),
             "release outside must not emit the message, got {:?}",
@@ -207,7 +208,7 @@ mod widget_interaction {
         harness.ctx.mouse_buttons_released = 1 << MouseButton::Left.bit();
         harness.handle(&mut btn);
 
-        assert!(harness.ctx.take().is_empty());
+        assert!(harness.message_sink.drain().is_empty());
     }
 
     // Button without on_press: click is safe no-op
@@ -227,7 +228,7 @@ mod widget_interaction {
         harness.ctx.mouse_buttons_released = 1 << MouseButton::Left.bit();
         harness.handle(&mut btn);
 
-        assert!(harness.ctx.take().is_empty());
+        assert!(harness.message_sink.drain().is_empty());
     }
 
     // contains() boundary behaviour (inclusive-left/top, exclusive-right/bottom)

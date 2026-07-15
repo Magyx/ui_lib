@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use crate::{
     builder::{EngineBuilder, GpuSource, TargetConfig},
     consts::*,
-    context::{Context, EventCtx, LayoutCtx, PaintCtx, PrepareCtx, SweepCtx},
+    context::{Context, EventCtx, LayoutCtx, MessageSink, PaintCtx, PrepareCtx, SweepCtx},
     event::{Event, KeyState, ScrollDelta, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
@@ -63,7 +63,7 @@ pub struct Gpu {
     pub queue: wgpu::Queue,
 }
 
-pub struct Target<'a, M> {
+pub struct Target<'a> {
     pub surface: wgpu::Surface<'a>,
     pub config: wgpu::SurfaceConfiguration,
     /// Logical size of the surface (in logical pixels)
@@ -71,17 +71,17 @@ pub struct Target<'a, M> {
     /// Device-pixel ratio. Physical size = logical size x scale_factor
     pub scale_factor: f64,
     pub globals: Globals,
-    ctx: Context<M>,
+    ctx: Context,
 
     start_time: Instant,
     last_frame_time: Instant,
-    root: Option<Element<M>>,
+    root: Option<Element>,
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TargetId(u32);
 
-pub struct Engine<'a, M> {
+pub struct Engine<'a> {
     instance_buf: Vec<Instance>,
     primitive_buf: Vec<Primitive>,
     layout_engine: LayoutEngine,
@@ -90,30 +90,24 @@ pub struct Engine<'a, M> {
     gpu: Arc<Gpu>,
     target_alloc: TargetIdAlloc,
     primary_target: Option<TargetId>,
-    targets: HashMap<TargetId, Target<'a, M>>,
+    targets: HashMap<TargetId, Target<'a>>,
     pub(crate) push_constant_ranges: Vec<wgpu::PushConstantRange>,
     pipeline_registry: PipelineRegistry,
     renderer: Renderer,
     text: Box<dyn TextBackend>,
+    message_sink: MessageSink,
 
     target_defaults: TargetConfig,
     pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
 }
-impl<'a, M> Default for Engine<'a, M> {
-    fn default() -> Self {
-        Engine::builder()
-            .build()
-            .expect("wgpu: failed to initialize default Engine")
-    }
-}
-impl<'a, M> Engine<'a, M> {
+impl<'a> Engine<'a> {
     /// Start an [`EngineBuilder`]. This is the configurable entry point; see
     /// [`crate::builder`] for the full set of knobs.
-    pub fn builder() -> EngineBuilder<M> {
+    pub fn builder<M: 'static>() -> EngineBuilder<M> {
         EngineBuilder::default()
     }
 
-    pub(crate) fn from_builder(builder: EngineBuilder<M>) -> crate::Result<Self> {
+    pub(crate) fn from_builder<M: 'static>(builder: EngineBuilder<M>) -> crate::Result<Self> {
         let EngineBuilder {
             power_preference,
             force_fallback_adapter,
@@ -247,13 +241,14 @@ impl<'a, M> Engine<'a, M> {
             pipeline_registry,
             renderer,
             text,
+            message_sink: MessageSink::new(),
 
             target_defaults,
             pending_pipelines,
         })
     }
 
-    pub fn new_for<T>(
+    pub fn new_for<M: 'static, T>(
         target: Arc<T>,
         physical_size: Size<u32>,
         scale_factor: f64,
@@ -266,7 +261,9 @@ impl<'a, M> Engine<'a, M> {
             + std::marker::Send
             + 'a,
     {
-        let mut engine = Self::default();
+        let mut engine = Self::builder::<M>()
+            .build()
+            .expect("wgpu: failed to initialize default Engine");
 
         let cfg = engine.target_defaults;
         let target = engine
@@ -441,7 +438,7 @@ impl<'a, M> Engine<'a, M> {
     }
 
     #[inline]
-    fn primary_target(&self) -> Option<&Target<'a, M>> {
+    fn primary_target(&self) -> Option<&Target<'a>> {
         self.primary_target_id()
             .and_then(|id| self.targets.get(&id))
     }
@@ -600,7 +597,7 @@ impl<'a, M> Engine<'a, M> {
         self.renderer.textures.destroy_atlas(&self.gpu, atlas)
     }
 
-    pub fn poll<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
+    pub fn poll<S, P, M: 'static, E: ToEvent<M, E> + std::fmt::Debug>(
         &mut self,
         tid: &TargetId,
         update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
@@ -635,6 +632,7 @@ impl<'a, M> Engine<'a, M> {
                 &mut target.ctx,
                 None,
                 &self.layout_engine,
+                &mut self.message_sink,
             );
             let mut cursor = 0usize;
             layout::handle_tree(root.as_mut(), &mut event_cx, &mut cursor);
@@ -646,8 +644,9 @@ impl<'a, M> Engine<'a, M> {
 
         require_redraw |= target.ctx.take_redraw();
 
-        for message in target.ctx.take() {
-            require_redraw |= update(self, &Event::Message(message), state, params);
+        for message in self.message_sink.drain() {
+            let msg = message.downcast::<M>().unwrap();
+            require_redraw |= update(self, &Event::Message(*msg), state, params);
         }
 
         require_redraw |= update(self, &Event::RedrawRequested, state, params);
@@ -658,7 +657,7 @@ impl<'a, M> Engine<'a, M> {
         &mut self,
         tid: &TargetId,
         need: bool,
-        view: &impl Fn(&TargetId, &S) -> Element<M>,
+        view: &impl Fn(&TargetId, &S) -> Element,
         state: &mut S,
     ) -> crate::Result<RenderOutcome> {
         if !need {
@@ -790,7 +789,7 @@ impl<'a, M> Engine<'a, M> {
             Err(_) => Err(crate::error::EngineError::OutOfMemory.into()),
         }
     }
-    pub fn handle_platform_event<S, P, E: ToEvent<M, E> + std::fmt::Debug>(
+    pub fn handle_platform_event<S, P, M, E: ToEvent<M, E> + std::fmt::Debug>(
         &mut self,
         target_id: &TargetId,
         event: &E,
@@ -905,6 +904,7 @@ impl<'a, M> Engine<'a, M> {
                     &mut target.ctx,
                     ev_view,
                     &self.layout_engine,
+                    &mut self.message_sink,
                 );
                 let mut cursor = 0usize;
                 layout::handle_tree(root.as_mut(), &mut ctx, &mut cursor);

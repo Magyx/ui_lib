@@ -56,13 +56,13 @@ pub struct Padding {
 
 pub trait IntoElement {}
 
-pub trait Widget<M>: IntoElement {
+pub trait Widget: IntoElement {
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node;
     fn key(&self) -> Option<u64> {
         None
     }
     fn child_count(&self) -> usize;
-    fn child_mut(&mut self, idx: usize) -> &mut dyn Widget<M>;
+    fn child_mut(&mut self, idx: usize) -> &mut dyn Widget;
     fn child_env(&self, env: Env, theme: &Theme) -> Env {
         let _ = theme;
         env
@@ -95,22 +95,22 @@ pub trait Widget<M>: IntoElement {
         let _ = (ctx, instances);
     }
 
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx) {
         let _ = ctx;
     }
-    fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle_after(&mut self, ctx: &mut EventCtx) {
         let _ = ctx;
     }
 }
 
-pub struct Element<M> {
-    inner: Box<dyn Widget<M>>,
+pub struct Element {
+    inner: Box<dyn Widget>,
 }
 
-impl<M> Element<M> {
+impl Element {
     pub fn new<W>(widget: W) -> Self
     where
-        W: Widget<M> + 'static,
+        W: Widget + 'static,
     {
         Self {
             inner: Box::new(widget),
@@ -118,23 +118,23 @@ impl<M> Element<M> {
     }
 }
 
-impl<M, W> From<W> for Element<M>
+impl<W> From<W> for Element
 where
-    W: Widget<M> + IntoElement + 'static,
+    W: Widget + IntoElement + 'static,
 {
     fn from(w: W) -> Self {
         Self::new(w)
     }
 }
 
-impl<M> AsRef<dyn Widget<M>> for Element<M> {
-    fn as_ref(&self) -> &(dyn Widget<M> + 'static) {
+impl AsRef<dyn Widget> for Element {
+    fn as_ref(&self) -> &(dyn Widget + 'static) {
         self.inner.as_ref()
     }
 }
 
-impl<M> AsMut<dyn Widget<M> + 'static> for Element<M> {
-    fn as_mut(&mut self) -> &mut (dyn Widget<M> + 'static) {
+impl AsMut<dyn Widget + 'static> for Element {
+    fn as_mut(&mut self) -> &mut (dyn Widget + 'static) {
         self.inner.as_mut()
     }
 }

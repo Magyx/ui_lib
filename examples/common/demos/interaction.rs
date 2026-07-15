@@ -1,6 +1,6 @@
 use super::*;
 
-pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
+pub fn view(tid: &TargetId, state: &State) -> Element {
     use Length::{Fit, Fixed, Grow};
 
     let target = match state.per_target.get(tid) {

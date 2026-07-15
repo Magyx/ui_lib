@@ -2,7 +2,7 @@ use super::*;
 
 use Length::{Fit, Fixed, Grow};
 
-pub fn view(state: &State) -> Element<Message> {
+pub fn view(state: &State) -> Element {
     let t = &state.theme;
 
     let main = Column::new(vec![
@@ -29,7 +29,7 @@ pub fn view(state: &State) -> Element<Message> {
 }
 
 /// 1) Fixed + Fixed, zero padding baseline
-fn view_fixed_fixed(t: &Theme) -> Element<Message> {
+fn view_fixed_fixed(t: &Theme) -> Element {
     Row::new(el![
         Rectangle::new(Size::new(Fixed(80), Fixed(40)), swatch(0)),
         Rectangle::new(Size::new(Fixed(120), Fixed(40)), swatch(5)),
@@ -42,7 +42,7 @@ fn view_fixed_fixed(t: &Theme) -> Element<Message> {
 }
 
 /// 2) Fixed + Grow + Fixed; height fixed, width grow
-fn view_fixed_grow_fixed(t: &Theme) -> Element<Message> {
+fn view_fixed_grow_fixed(t: &Theme) -> Element {
     Row::new(el![
         Rectangle::new(Size::new(Fixed(60), Fixed(60)), swatch(2)),
         Rectangle::new(Size::new(Grow, Grow), swatch(4)),
@@ -56,7 +56,7 @@ fn view_fixed_grow_fixed(t: &Theme) -> Element<Message> {
 }
 
 /// 3) Multiple Grow children in a Row (checks equalization)
-fn view_multiple_grow(t: &Theme) -> Element<Message> {
+fn view_multiple_grow(t: &Theme) -> Element {
     Row::new(el![
         Rectangle::new(Size::new(Grow, Fixed(50)), swatch(0)),
         Rectangle::new(Size::new(Grow, Fixed(50)), swatch(3)),
@@ -70,7 +70,7 @@ fn view_multiple_grow(t: &Theme) -> Element<Message> {
 }
 
 /// 4) Column with Grow height distribution and fixed caps
-fn view_column_grow(t: &Theme) -> Element<Message> {
+fn view_column_grow(t: &Theme) -> Element {
     Column::new(el![
         Rectangle::new(Size::new(Grow, Fixed(20)), swatch(6)),
         Rectangle::new(Size::new(Grow, Grow), swatch(3)).min_y(20),
@@ -84,7 +84,7 @@ fn view_column_grow(t: &Theme) -> Element<Message> {
 }
 
 /// 5) Fit sizing demo: Column(Fit,Fit) measured by fixed children
-fn view_fit_sizing(t: &Theme) -> Element<Message> {
+fn view_fit_sizing(t: &Theme) -> Element {
     use Length::{Fit, Fixed, Grow};
     Row::new(el![
         Column::new(el![
@@ -105,7 +105,7 @@ fn view_fit_sizing(t: &Theme) -> Element<Message> {
 }
 
 /// 6) Nested grow: Row of two Columns
-fn view_nested_grow(t: &Theme) -> Element<Message> {
+fn view_nested_grow(t: &Theme) -> Element {
     Row::new(el![
         Column::new(el![
             Rectangle::new(Size::new(Grow, Fixed(18)), swatch(2)),
@@ -132,7 +132,7 @@ fn view_nested_grow(t: &Theme) -> Element<Message> {
 }
 
 /// 7) Spacing extremes: zero vs nonzero, plus a Grow filler
-fn view_spacing_extremes(t: &Theme) -> Element<Message> {
+fn view_spacing_extremes(t: &Theme) -> Element {
     let block = || {
         [
             Rectangle::new(Size::new(Fixed(40), Fixed(40)), swatch(6)),
@@ -160,7 +160,7 @@ fn view_spacing_extremes(t: &Theme) -> Element<Message> {
 }
 
 /// 8) Many children + padding stress
-fn view_many_children(t: &Theme) -> Element<Message> {
+fn view_many_children(t: &Theme) -> Element {
     Row::new((0..8).map(|i| small_block(swatch(i))).collect::<Vec<_>>())
         .spacing(space::XS + 2)
         .padding(Vec4::splat(space::LG))
@@ -170,7 +170,7 @@ fn view_many_children(t: &Theme) -> Element<Message> {
 }
 
 /// 9) Test clamping (min/max)
-fn view_clamping(t: &Theme) -> Element<Message> {
+fn view_clamping(t: &Theme) -> Element {
     Row::new(el![
         Rectangle::new(Size::new(Length::Grow, Length::Fixed(24)), swatch(3))
             .min(Size::new(120, 24)) // >= 120px wide
@@ -187,7 +187,7 @@ fn view_clamping(t: &Theme) -> Element<Message> {
 }
 
 /// 10) Transparent container background
-fn view_transparent_container() -> Element<Message> {
+fn view_transparent_container() -> Element {
     Column::new(el![
         Rectangle::new(Size::new(Grow, Fixed(20)), swatch(3)),
         Rectangle::new(Size::new(Grow, Fixed(20)), swatch(5)),
@@ -200,7 +200,7 @@ fn view_transparent_container() -> Element<Message> {
 }
 
 /// 11) Grid layout example
-fn view_grid(t: &Theme) -> Element<Message> {
+fn view_grid(t: &Theme) -> Element {
     use std::num::NonZero;
 
     let cells: Vec<_> = (0..12).map(|i| small_block(swatch(i))).collect();
@@ -218,7 +218,7 @@ fn view_grid(t: &Theme) -> Element<Message> {
 ///     Because the container grows wider than its content, each row has free
 ///     space for `main()` to arrange. (A `Grow` child would eat that slack and
 ///     make alignment a no-op — see `view_multiple_grow`.)
-fn view_main_alignment(t: &Theme) -> Element<Message> {
+fn view_main_alignment(t: &Theme) -> Element {
     let modes = [
         Align::Start,
         Align::Center,
@@ -228,7 +228,7 @@ fn view_main_alignment(t: &Theme) -> Element<Message> {
         Align::SpaceEvenly,
     ];
 
-    let rows: Vec<Element<Message>> = modes
+    let rows: Vec<Element> = modes
         .into_iter()
         .map(|mode| {
             Row::new(el![
@@ -257,8 +257,8 @@ fn view_main_alignment(t: &Theme) -> Element<Message> {
 ///     of different sizes so Start/Center/End are visible. The last row uses
 ///     `Fit`-height children so `Stretch` visibly grows them to fill the row —
 ///     the one alignment resolved in the assign pass rather than in `place`.
-fn view_cross_alignment(t: &Theme) -> Element<Message> {
-    let varied = |cross: Align| -> Element<Message> {
+fn view_cross_alignment(t: &Theme) -> Element {
+    let varied = |cross: Align| -> Element {
         Row::new(el![
             Rectangle::new(Size::new(Fixed(44), Fixed(20)), swatch(0)),
             Rectangle::new(Size::new(Fixed(44), Fixed(48)), swatch(3)),
@@ -272,7 +272,7 @@ fn view_cross_alignment(t: &Theme) -> Element<Message> {
         .into()
     };
 
-    let stretch_row: Element<Message> = Row::new(el![
+    let stretch_row: Element = Row::new(el![
         Rectangle::new(Size::new(Fixed(44), Fit), swatch(1)),
         Rectangle::new(Size::new(Fixed(44), Fit), swatch(4)),
         Rectangle::new(Size::new(Fixed(44), Fit), swatch(6)),
@@ -299,13 +299,13 @@ fn view_cross_alignment(t: &Theme) -> Element<Message> {
 
 /// 14) `Center::new` one-liner: a Grow/Grow container that centers its child
 ///     on both axes within whatever space its parent gives it.
-fn view_center_helper(t: &Theme) -> Element<Message> {
-    let centered: Column<Message> =
-        Center::new(Rectangle::new(Size::new(Fixed(80), Fixed(40)), swatch(4)));
-
-    Row::new(el![centered])
-        .padding(Vec4::splat(space::SM))
-        .color(t.surface_variant)
-        .size(Size::new(Grow, Fixed(120)))
-        .into()
+fn view_center_helper(t: &Theme) -> Element {
+    Row::new(el![Center::new(Rectangle::new(
+        Size::new(Fixed(80), Fixed(40)),
+        swatch(4)
+    ))])
+    .padding(Vec4::splat(space::SM))
+    .color(t.surface_variant)
+    .size(Size::new(Grow, Fixed(120)))
+    .into()
 }

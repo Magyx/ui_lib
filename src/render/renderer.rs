@@ -79,10 +79,10 @@ impl Renderer {
         true
     }
 
-    pub fn render<'a, M>(
+    pub fn render<'a>(
         &mut self,
         gpu: &Gpu,
-        target: &Target<'a, M>,
+        target: &Target<'a>,
         pipeline_registry: &mut PipelineRegistry,
         globals: &Globals,
         instances: &[Instance],

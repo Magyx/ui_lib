@@ -2,8 +2,8 @@ use std::num::NonZero;
 
 use super::*;
 
-pub struct WrappingRows<M> {
-    rows: Vec<Row<M>>,
+pub struct WrappingRows {
+    rows: Vec<Row>,
     size: Size<Length>,
     color: Color,
     padding: Vec4<i32>,
@@ -12,17 +12,17 @@ pub struct WrappingRows<M> {
     max: Size<i32>,
 }
 
-impl<M> WrappingRows<M> {
+impl WrappingRows {
     pub fn empty(columns: NonZero<usize>) -> Self {
-        Self::new::<Vec<_>, Element<M>>(columns, el!())
+        Self::new::<Vec<_>, Element>(columns, el!())
     }
     pub fn new<I, E>(columns: NonZero<usize>, children: I) -> Self
     where
         I: IntoIterator<Item = E>,
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
-        let mut cells: Vec<Element<M>> = children.into_iter().map(Into::into).collect();
-        let mut rows: Vec<Row<M>> = Vec::new();
+        let mut cells: Vec<Element> = children.into_iter().map(Into::into).collect();
+        let mut rows: Vec<Row> = Vec::new();
 
         while !cells.is_empty() {
             let take = cells.len().min(columns.into());
@@ -76,9 +76,9 @@ impl<M> WrappingRows<M> {
     }
 }
 
-impl<M> IntoElement for WrappingRows<M> {}
+impl IntoElement for WrappingRows {}
 
-impl<M> Widget<M> for WrappingRows<M> {
+impl Widget for WrappingRows {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -99,7 +99,7 @@ impl<M> Widget<M> for WrappingRows<M> {
     fn child_count(&self) -> usize {
         self.rows.len()
     }
-    fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, i: usize) -> &mut dyn Widget {
         &mut self.rows[i]
     }
 

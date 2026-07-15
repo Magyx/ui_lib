@@ -1,7 +1,7 @@
 use super::*;
 use ui::widget::SimpleCanvas;
 
-pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
+pub fn view(tid: &TargetId, state: &State) -> Element {
     use Length::{Fit, Grow};
 
     let target = match state.per_target.get(tid) {

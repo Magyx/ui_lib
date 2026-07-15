@@ -1,7 +1,7 @@
 use super::*;
 
-pub struct Row<M> {
-    children: Vec<Element<M>>,
+pub struct Row {
+    children: Vec<Element>,
     spacing: i32,
     padding: Vec4<i32>,
     size: Size<Length>,
@@ -12,14 +12,14 @@ pub struct Row<M> {
     cross_align: Align,
 }
 
-impl<M> Row<M> {
+impl Row {
     pub fn empty() -> Self {
-        Self::new::<Vec<_>, Element<M>>(el!())
+        Self::new::<Vec<_>, Element>(el!())
     }
     pub fn new<I, E>(children: I) -> Self
     where
         I: IntoIterator<Item = E>,
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
         Self {
             children: children.into_iter().map(Into::into).collect(),
@@ -74,15 +74,15 @@ impl<M> Row<M> {
 
     pub fn push<E>(&mut self, element: E)
     where
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
         self.children.push(element.into());
     }
 }
 
-impl<M> IntoElement for Row<M> {}
+impl IntoElement for Row {}
 
-impl<M> Widget<M> for Row<M> {
+impl Widget for Row {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -105,7 +105,7 @@ impl<M> Widget<M> for Row<M> {
     fn child_count(&self) -> usize {
         self.children.len()
     }
-    fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, i: usize) -> &mut dyn Widget {
         self.children[i].as_mut()
     }
 

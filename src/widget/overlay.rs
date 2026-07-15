@@ -1,13 +1,13 @@
 use super::*;
 
-struct Absolute<M> {
-    inner: Element<M>,
+struct Absolute {
+    inner: Element,
     offx: i32,
     offy: i32,
 }
 
-impl<M> Absolute<M> {
-    fn new(child: Element<M>, offx: i32, offy: i32) -> Self {
+impl Absolute {
+    fn new(child: Element, offx: i32, offy: i32) -> Self {
         Self {
             inner: child,
             offx,
@@ -16,9 +16,9 @@ impl<M> Absolute<M> {
     }
 }
 
-impl<M> IntoElement for Absolute<M> {}
+impl IntoElement for Absolute {}
 
-impl<M> Widget<M> for Absolute<M> {
+impl Widget for Absolute {
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node {
         let mut n = self.inner.as_mut().layout(ctx);
         n.is_absolute = true;
@@ -32,7 +32,7 @@ impl<M> Widget<M> for Absolute<M> {
     fn child_count(&self) -> usize {
         self.inner.as_ref().child_count()
     }
-    fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, i: usize) -> &mut dyn Widget {
         self.inner.as_mut().child_mut(i)
     }
     fn child_env(&self, env: Env, theme: &Theme) -> Env {
@@ -56,16 +56,16 @@ impl<M> Widget<M> for Absolute<M> {
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, instancess: &mut Vec<Instance>) {
         self.inner.as_mut().paint_overlay(ctx, instancess);
     }
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx) {
         self.inner.as_mut().handle(ctx);
     }
-    fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle_after(&mut self, ctx: &mut EventCtx) {
         self.inner.as_mut().handle_after(ctx);
     }
 }
 
-pub struct Overlay<M> {
-    children: Vec<Absolute<M>>,
+pub struct Overlay {
+    children: Vec<Absolute>,
     size: Size<Length>,
     color: Color,
     padding: Vec4<i32>,
@@ -74,14 +74,14 @@ pub struct Overlay<M> {
     modal: bool,
 }
 
-impl<M> Overlay<M> {
+impl Overlay {
     pub fn empty() -> Self {
-        Self::new::<Vec<_>, Element<M>>(el!())
+        Self::new::<Vec<_>, Element>(el!())
     }
     pub fn new<I, E>(children: I) -> Self
     where
         I: IntoIterator<Item = E>,
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
         let wrapped = children
             .into_iter()
@@ -127,15 +127,15 @@ impl<M> Overlay<M> {
 
     pub fn push<E>(&mut self, element: E, x: i32, y: i32)
     where
-        E: Into<Element<M>>,
+        E: Into<Element>,
     {
         self.children.push(Absolute::new(element.into(), x, y));
     }
 }
 
-impl<M> IntoElement for Overlay<M> {}
+impl IntoElement for Overlay {}
 
-impl<M> Widget<M> for Overlay<M> {
+impl Widget for Overlay {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -155,7 +155,7 @@ impl<M> Widget<M> for Overlay<M> {
     fn child_count(&self) -> usize {
         self.children.len()
     }
-    fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, i: usize) -> &mut dyn Widget {
         &mut self.children[i]
     }
 

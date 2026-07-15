@@ -47,7 +47,7 @@ impl Image {
 
 impl IntoElement for Image {}
 
-impl<M> Widget<M> for Image {
+impl Widget for Image {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         let mut node = Node {
             size: self.size,
@@ -64,7 +64,7 @@ impl<M> Widget<M> for Image {
     fn child_count(&self) -> usize {
         0
     }
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         unreachable!()
     }
 

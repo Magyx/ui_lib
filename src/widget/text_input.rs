@@ -439,7 +439,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
     }
 
     /// Hit-test the current mouse position to a text cursor.
-    fn hit_cursor(&self, ctx: &EventCtx<M>) -> Option<TextCursor> {
+    fn hit_cursor(&self, ctx: &EventCtx) -> Option<TextCursor> {
         let id = ctx.id();
         if self.value.is_empty() {
             return Some(TextCursor::new(0, 0));
@@ -469,7 +469,7 @@ impl<M> TextInput<M, MultiLine> {
 
 impl<M, Mode: TextMode> IntoElement for TextInput<M, Mode> {}
 
-impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
+impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
     fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b>) -> Node {
         let id = ctx.id();
         self.ensure_state(ctx.view_state, id);
@@ -506,7 +506,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
     fn child_count(&self) -> usize {
         1
     }
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         &mut self.child
     }
 
@@ -633,7 +633,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         }
     }
 
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx) {
         let r = ctx.rect();
         let id = ctx.id();
         let (was_hovered, hovered, focused) = {
@@ -770,7 +770,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
                             _ => {}
                         }
                         if let Some(msg) = queued_emit.take() {
-                            ctx.ui.emit(msg);
+                            ctx.emit(msg);
                         }
                         if needs_redraw {
                             ctx.ui.request_redraw();
@@ -911,7 +911,7 @@ impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
         }
 
         if let Some(msg) = queued_emit {
-            ctx.ui.emit(msg);
+            ctx.emit(msg);
         }
         if needs_redraw || was_hovered != hovered {
             ctx.ui.request_redraw();

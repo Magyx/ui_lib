@@ -21,7 +21,7 @@ pub struct Slider<M> {
     knob_color: Option<Color>,
     bg_color: Option<Color>,
 
-    on_change: Option<Box<dyn Fn(f32) -> M + Send + Sync + 'static>>,
+    on_change: Option<Box<dyn Fn(f32) -> M + 'static>>,
 }
 
 impl<M> Slider<M> {
@@ -147,7 +147,7 @@ impl<M> Slider<M> {
 
 impl<M> IntoElement for Slider<M> {}
 
-impl<M> Widget<M> for Slider<M> {
+impl<M: 'static> Widget for Slider<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -160,7 +160,7 @@ impl<M> Widget<M> for Slider<M> {
     fn child_count(&self) -> usize {
         0
     }
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         unreachable!()
     }
 
@@ -215,7 +215,7 @@ impl<M> Widget<M> for Slider<M> {
         ));
     }
 
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx) {
         let r = ctx.rect();
         let id = ctx.id();
         let inside = ctx.pointer_over();
@@ -262,7 +262,7 @@ impl<M> Widget<M> for Slider<M> {
 
         if changed {
             if let Some(ref cb) = self.on_change {
-                ctx.ui.emit(cb(self.value));
+                ctx.emit(cb(self.value));
             }
             ctx.ui.request_redraw();
         }

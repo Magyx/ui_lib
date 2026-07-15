@@ -11,7 +11,7 @@ use common::{Message, State, pipeline::PlanetPipeline, view};
 
 fn update<'a>(
     target: TargetId,
-    engine: &mut Engine<'a, Message>,
+    engine: &mut Engine<'a>,
     event: &Event<Message, SctkEvent>,
     state: &mut State,
     loop_ctl: &SctkLoop,

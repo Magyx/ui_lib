@@ -18,9 +18,9 @@ impl<W> Keyed<W> {
     }
 }
 
-impl<M> IntoElement for Keyed<M> {}
+impl<W> IntoElement for Keyed<W> {}
 
-impl<M, W: Widget<M>> Widget<M> for Keyed<W> {
+impl<W: Widget> Widget for Keyed<W> {
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node {
         self.inner.layout(ctx)
     }
@@ -30,7 +30,7 @@ impl<M, W: Widget<M>> Widget<M> for Keyed<W> {
     fn child_count(&self) -> usize {
         self.inner.child_count()
     }
-    fn child_mut(&mut self, idx: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, idx: usize) -> &mut dyn Widget {
         self.inner.child_mut(idx)
     }
     fn child_env(&self, env: Env, theme: &Theme) -> Env {
@@ -57,10 +57,10 @@ impl<M, W: Widget<M>> Widget<M> for Keyed<W> {
         self.inner.paint_overlay(ctx, instancess)
     }
 
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx) {
         self.inner.handle(ctx)
     }
-    fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle_after(&mut self, ctx: &mut EventCtx) {
         self.inner.handle_after(ctx)
     }
 }

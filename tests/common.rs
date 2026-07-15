@@ -8,7 +8,7 @@ mod harness {
     use std::{any::Any, cell::Cell, rc::Rc, sync::Arc};
 
     use ui::{
-        context::{Context, EventCtx, LayoutCtx, PaintCtx},
+        context::{Context, EventCtx, LayoutCtx, MessageSink, PaintCtx},
         event::UiEventRef,
         graphics::Globals,
         layout::{LayoutEngine, handle_tree, paint_tree, run_layout},
@@ -69,14 +69,25 @@ mod harness {
 
     pub struct Harness {
         pub globals: Globals,
-        pub ctx: Context<TopMsg>,
+        pub ctx: Context,
         pub text: TextCosmic,
+        pub message_sink: MessageSink,
         pub engine: LayoutEngine,
         pub theme: Theme,
     }
 
     impl Harness {
-        pub fn layout<W: Widget<TopMsg>>(&mut self, root: &mut W, max_w: i32, max_h: i32) -> usize {
+        pub fn drain_messages(&mut self) -> Vec<TopMsg> {
+            self.message_sink
+                .drain()
+                .into_iter()
+                .map(|msg| {
+                    *msg.downcast::<TopMsg>()
+                        .expect("VecSink contained wrong message type")
+                })
+                .collect()
+        }
+        pub fn layout<W: Widget>(&mut self, root: &mut W, max_w: i32, max_h: i32) -> usize {
             self.globals.window_size = [max_w as f32, max_h as f32];
             let rood_id = {
                 let mut lctx = LayoutCtx::new(
@@ -90,30 +101,32 @@ mod harness {
             let _ = self.paint(&mut *root);
             rood_id
         }
-        pub fn handle<W: Widget<TopMsg>>(&mut self, root: &mut W) {
-            let mut ectx: EventCtx<TopMsg> = EventCtx::new(
+        pub fn handle<W: Widget>(&mut self, root: &mut W) {
+            let mut ectx = EventCtx::new(
                 &self.globals,
                 &mut self.text,
                 &mut self.ctx,
                 None,
                 &self.engine,
+                &mut self.message_sink,
             );
             let mut cursor = 0usize;
             handle_tree(root, &mut ectx, &mut cursor);
         }
-        pub fn handle_event<W: Widget<TopMsg>>(&mut self, root: &mut W, event: UiEventRef) {
-            let mut ectx: EventCtx<TopMsg> = EventCtx::new(
+        pub fn handle_event<W: Widget>(&mut self, root: &mut W, event: UiEventRef) {
+            let mut ectx = EventCtx::new(
                 &self.globals,
                 &mut self.text,
                 &mut self.ctx,
                 Some(event),
                 &self.engine,
+                &mut self.message_sink,
             );
             let mut cursor = 0usize;
             handle_tree(root, &mut ectx, &mut cursor);
         }
 
-        pub fn paint<W: Widget<TopMsg>>(&mut self, root: &mut W) -> Vec<Instance> {
+        pub fn paint<W: Widget>(&mut self, root: &mut W) -> Vec<Instance> {
             let mut out = Vec::new();
             let mut cursor = 0;
             let mut pctx = PaintCtx::new(
@@ -156,6 +169,7 @@ mod harness {
                 },
                 ctx: Context::new(),
                 text: TextCosmic::default(),
+                message_sink: MessageSink::new(),
                 engine: LayoutEngine::new(),
                 theme: Theme::dark(),
             }
@@ -168,36 +182,34 @@ mod harness {
     /// Wraps any Widget and captures its final (x, y, w, h) in a shared cell.
     /// Cloning the Rc<Cell<...>> before moving the Probe into an Element lets
     /// us read back the captured rect after layout without any unsafe code.
-    pub struct Probe<M, W: Widget<M>> {
+    pub struct Probe<W: Widget> {
         inner: W,
         slot: RectSlot,
-        _ph: std::marker::PhantomData<M>,
     }
 
-    impl<M, W: Widget<M>> Probe<M, W> {
+    impl<W: Widget> Probe<W> {
         pub fn new(inner: W) -> (Self, RectSlot) {
             let slot: RectSlot = Rc::new(Cell::new(None));
             (
                 Self {
                     inner,
                     slot: slot.clone(),
-                    _ph: std::marker::PhantomData,
                 },
                 slot,
             )
         }
     }
 
-    impl<M, W: Widget<M>> IntoElement for Probe<M, W> {}
+    impl<W: Widget> IntoElement for Probe<W> {}
 
-    impl<M: 'static, W: Widget<M>> Widget<M> for Probe<M, W> {
+    impl<W: Widget> Widget for Probe<W> {
         fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> ui::layout::Node {
             self.inner.layout(ctx)
         }
         fn child_count(&self) -> usize {
             self.inner.child_count()
         }
-        fn child_mut(&mut self, i: usize) -> &mut dyn Widget<M> {
+        fn child_mut(&mut self, i: usize) -> &mut dyn Widget {
             self.inner.child_mut(i)
         }
         fn prepare(&mut self, ctx: &mut ui::context::PrepareCtx) {
@@ -218,16 +230,16 @@ mod harness {
         fn paint_overlay(&mut self, ctx: &mut PaintCtx, instancess: &mut Vec<Instance>) {
             self.inner.paint_overlay(ctx, instancess);
         }
-        fn handle(&mut self, ctx: &mut ui::context::EventCtx<M>) {
+        fn handle(&mut self, ctx: &mut ui::context::EventCtx) {
             self.inner.handle(ctx);
         }
-        fn handle_after(&mut self, ctx: &mut EventCtx<M>) {
+        fn handle_after(&mut self, ctx: &mut EventCtx) {
             self.inner.handle_after(ctx);
         }
     }
 
     /// Convenience: build a probed rectangle, return (Element, slot).
-    pub fn probed_rect(w: Length, h: Length, color: Color) -> (Element<TopMsg>, RectSlot) {
+    pub fn probed_rect(w: Length, h: Length, color: Color) -> (Element, RectSlot) {
         let (p, slot) = Probe::new(Rectangle::new(Size::new(w, h), color));
         (Element::new(p), slot)
     }
@@ -239,15 +251,15 @@ mod harness {
     }
 
     /// Minimal clip container for exercising `clip_children` layout behavior.
-    pub struct ClipBox<M> {
-        child: Element<M>,
+    pub struct ClipBox {
+        child: Element,
         size: Size<Length>,
         clip: bool,
         max: Size<i32>,
     }
 
-    impl<M> ClipBox<M> {
-        pub fn new(size: Size<Length>, clip: bool, child: impl Into<Element<M>>) -> Self {
+    impl ClipBox {
+        pub fn new(size: Size<Length>, clip: bool, child: impl Into<Element>) -> Self {
             Self {
                 child: child.into(),
                 size,
@@ -261,9 +273,9 @@ mod harness {
         }
     }
 
-    impl<M> IntoElement for ClipBox<M> {}
+    impl IntoElement for ClipBox {}
 
-    impl<M: 'static> Widget<M> for ClipBox<M> {
+    impl Widget for ClipBox {
         fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> ui::layout::Node {
             ui::layout::Node {
                 size: self.size,
@@ -275,7 +287,7 @@ mod harness {
         fn child_count(&self) -> usize {
             1
         }
-        fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+        fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
             self.child.as_mut()
         }
         fn paint(&mut self, _ctx: &mut PaintCtx, _out: &mut Vec<Instance>) {}

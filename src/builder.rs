@@ -100,13 +100,13 @@ pub struct EngineBuilder<M> {
     pub(crate) _marker: PhantomData<fn() -> M>,
 }
 
-impl<M> Default for EngineBuilder<M> {
+impl<M: 'static> Default for EngineBuilder<M> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<M> EngineBuilder<M> {
+impl<M: 'static> EngineBuilder<M> {
     pub fn new() -> Self {
         Self {
             power_preference: wgpu::PowerPreference::default(),
@@ -228,7 +228,7 @@ impl<M> EngineBuilder<M> {
 
     /// Consume the builder and create the engine. Fallible: surfaces
     /// adapter/device acquisition errors and unimplemented feature profiles.
-    pub fn build<'a>(self) -> crate::Result<Engine<'a, M>> {
-        Engine::<'a, M>::from_builder(self)
+    pub fn build<'a>(self) -> crate::Result<Engine<'a>> {
+        Engine::<'a>::from_builder(self)
     }
 }

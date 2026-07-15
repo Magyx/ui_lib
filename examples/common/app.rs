@@ -98,11 +98,7 @@ mod update {
         render::AllocatorKind,
     };
 
-    pub fn ensure_icons_loaded<'a>(
-        engine: &mut Engine<'a, super::Message>,
-        state: &mut super::State,
-        scale: f32,
-    ) {
+    pub fn ensure_icons_loaded<'a>(engine: &mut Engine<'a>, state: &mut super::State, scale: f32) {
         if state.icon_atlas.is_some() {
             return;
         }
@@ -181,10 +177,7 @@ mod update {
         state.svg_icons = svg_paths;
     }
 
-    fn ensure_background_loaded<'a>(
-        engine: &mut Engine<'a, super::Message>,
-        state: &mut super::State,
-    ) {
+    fn ensure_background_loaded<'a>(engine: &mut Engine<'a>, state: &mut super::State) {
         if state.background.is_some() {
             return;
         }
@@ -208,7 +201,7 @@ mod update {
 
     pub fn cycle_view<'a>(
         tid: TargetId,
-        engine: &mut Engine<'a, super::Message>,
+        engine: &mut Engine<'a>,
         state: &mut super::State,
         dir: bool,
     ) -> bool {
@@ -236,7 +229,7 @@ mod update {
         true
     }
 
-    pub fn toggle_debug<'a>(engine: &mut Engine<'a, super::Message>) -> bool {
+    pub fn toggle_debug<'a>(engine: &mut Engine<'a>) -> bool {
         engine.toggle_debug();
         true
     }
@@ -257,7 +250,7 @@ mod update {
 
 pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
     tid: TargetId,
-    engine: &mut Engine<'a, Message>,
+    engine: &mut Engine<'a>,
     event: &crate::Event<Message, E>,
     state: &mut State,
 ) -> bool {
@@ -312,7 +305,7 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
     }
 }
 
-pub fn view(tid: &TargetId, state: &State) -> Element<Message> {
+pub fn view(tid: &TargetId, state: &State) -> Element {
     let target = match state.per_target.get(tid) {
         Some(t) => t,
         None => return Rectangle::placeholder().into(),

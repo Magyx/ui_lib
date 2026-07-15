@@ -22,11 +22,11 @@ pub struct ScrollViewState {
     viewport_h: i32,
 }
 
-pub struct Scrollable<M> {
+pub struct Scrollable {
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
-    child: Element<M>,
+    child: Element,
 
     scrollbar_behavior: ScrollBarBehavior,
 
@@ -35,8 +35,8 @@ pub struct Scrollable<M> {
     bg: Option<Color>,
 }
 
-impl<M> Scrollable<M> {
-    pub fn new<E: Into<Element<M>>>(child: E) -> Self {
+impl Scrollable {
+    pub fn new<E: Into<Element>>(child: E) -> Self {
         Self {
             size: Size::new(Length::Grow, Length::Grow),
             min: Size::splat(0),
@@ -127,9 +127,9 @@ impl<M> Scrollable<M> {
     }
 }
 
-impl<M> IntoElement for Scrollable<M> {}
+impl IntoElement for Scrollable {}
 
-impl<M> Widget<M> for Scrollable<M> {
+impl Widget for Scrollable {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -143,7 +143,7 @@ impl<M> Widget<M> for Scrollable<M> {
     fn child_count(&self) -> usize {
         1
     }
-    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget<M> {
+    fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         self.child.as_mut()
     }
     fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
@@ -191,7 +191,7 @@ impl<M> Widget<M> for Scrollable<M> {
         }
     }
 
-    fn handle(&mut self, ctx: &mut EventCtx<M>) {
+    fn handle(&mut self, ctx: &mut EventCtx) {
         let r = ctx.rect();
         let id = ctx.id();
         let mx = ctx.ui.mouse_pos.x;

@@ -1,6 +1,6 @@
 use super::*;
 
-pub fn view(state: &State) -> Element<Message> {
+pub fn view(state: &State) -> Element {
     use Length::{Fit, Fixed, Grow};
 
     let t = state.theme;
@@ -70,9 +70,10 @@ pub fn view(state: &State) -> Element<Message> {
         .on_press(Message::ButtonPressed)
         .size(Size::new(Fixed(160), Fixed(size::CONTROL_H))),
         // Input using theme defaults
-        TextField::new("", Size::new(Grow, Fixed(size::CONTROL_H))).placeholder("Preview input"),
+        TextField::<Message>::new("", Size::new(Grow, Fixed(size::CONTROL_H)))
+            .placeholder("Preview input"),
         // Slider using theme defaults
-        Slider::new(Size::new(Grow, Fixed(size::SLIDER_H)), (0.0, 100.0), 65.0),
+        Slider::<Message>::new(Size::new(Grow, Fixed(size::SLIDER_H)), (0.0, 100.0), 65.0),
         // Nested container — distinct marker blocks
         Column::new(el![
             Text::caption("Nested container"),
