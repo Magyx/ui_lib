@@ -14,6 +14,7 @@ use crate::{
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
     },
+    text::TextBackend,
     theme::Theme,
     widget::Element,
 };
@@ -93,6 +94,7 @@ pub struct Engine<'a, M> {
     pub(crate) push_constant_ranges: Vec<wgpu::PushConstantRange>,
     pipeline_registry: PipelineRegistry,
     renderer: Renderer,
+    text: Box<dyn TextBackend>,
 
     target_defaults: TargetConfig,
     pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
@@ -213,6 +215,9 @@ impl<'a, M> Engine<'a, M> {
             range: 0..std::mem::size_of::<Globals>() as u32,
         }];
 
+        let pipeline_registry = PipelineRegistry::new();
+        let renderer = Renderer::with_capacity(&gpu.device, max_instances);
+
         let text = if let Some(tb) = text_backend {
             tb
         } else {
@@ -227,8 +232,6 @@ impl<'a, M> Engine<'a, M> {
                 unimplemented!()
             }
         };
-        let renderer = Renderer::with_capacity(&gpu.device, max_instances, text);
-        let pipeline_registry = PipelineRegistry::new();
 
         Ok(Self {
             layout_engine: LayoutEngine::new(),
@@ -243,6 +246,7 @@ impl<'a, M> Engine<'a, M> {
             push_constant_ranges,
             pipeline_registry,
             renderer,
+            text,
 
             target_defaults,
             pending_pipelines,
@@ -620,16 +624,14 @@ impl<'a, M> Engine<'a, M> {
 
         crate::plot!("ui.dt_ms", (target.globals.delta_time as f64) * 1000.0);
 
-        self.renderer
-            .text
-            .set_scale_factor(target.scale_factor as f32);
+        self.text.set_scale_factor(target.scale_factor as f32);
 
         let mut require_redraw = false;
 
         if let Some(root) = target.root.as_mut() {
             let mut event_cx = EventCtx::new(
                 &target.globals,
-                &mut *self.renderer.text,
+                &mut *self.text,
                 &mut target.ctx,
                 None,
                 &self.layout_engine,
@@ -669,9 +671,7 @@ impl<'a, M> Engine<'a, M> {
 
         crate::scope!("Engine::render");
 
-        self.renderer
-            .text
-            .set_scale_factor(target.scale_factor as f32);
+        self.text.set_scale_factor(target.scale_factor as f32);
 
         target.root = Some(view(tid, state));
         let root = target.root.as_mut().unwrap();
@@ -687,7 +687,7 @@ impl<'a, M> Engine<'a, M> {
             let mut layout_ctx = LayoutCtx::new(
                 &target.globals,
                 &mut target.ctx.view_state,
-                &mut *self.renderer.text,
+                &mut *self.text,
                 &self.theme,
             );
             layout::run_layout(
@@ -699,13 +699,13 @@ impl<'a, M> Engine<'a, M> {
             )
         };
 
-        self.renderer.text.tick();
+        self.text.tick();
 
         {
             crate::scope!("prepare");
             let mut prepare_ctx = PrepareCtx::new(
                 &target.globals,
-                &mut *self.renderer.text,
+                &mut *self.text,
                 &self.gpu,
                 &mut self.renderer.textures,
                 &self.layout_engine,
@@ -720,7 +720,7 @@ impl<'a, M> Engine<'a, M> {
             crate::scope!("paint");
             let mut paint_ctx = PaintCtx::new(
                 &target.globals,
-                &*self.renderer.text,
+                &*self.text,
                 &self.layout_engine,
                 &mut target.ctx.view_state,
                 &self.theme,
@@ -809,9 +809,7 @@ impl<'a, M> Engine<'a, M> {
         target.ctx.mouse_buttons_pressed = 0;
         target.ctx.mouse_buttons_released = 0;
 
-        self.renderer
-            .text
-            .set_scale_factor(target.scale_factor as f32);
+        self.text.set_scale_factor(target.scale_factor as f32);
 
         match event {
             Event::Resized { size } => {
@@ -903,7 +901,7 @@ impl<'a, M> Engine<'a, M> {
             if ev_view.is_some() {
                 let mut ctx = EventCtx::new(
                     &target.globals,
-                    &mut *self.renderer.text,
+                    &mut *self.text,
                     &mut target.ctx,
                     ev_view,
                     &self.layout_engine,
