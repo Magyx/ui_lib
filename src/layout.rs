@@ -602,8 +602,10 @@ impl LayoutEngine {
         let total_min_w = max(min_w, self.nodes[id].min.width);
         let natural_w = max(total_min_w, base_w);
         self.nodes[id].content_size.width = natural_w;
-        self.nodes[id].current_size.width = natural_w.min(self.nodes[id].max.width);
-        if !self.nodes[id].clip_children {
+        if self.nodes[id].clip_children {
+            self.nodes[id].current_size.width = natural_w.min(self.nodes[id].max.width);
+        } else {
+            self.nodes[id].current_size.width = natural_w;
             self.nodes[id].min.width = total_min_w;
         }
     }
@@ -617,7 +619,9 @@ impl LayoutEngine {
             Length::Fit if self.stretched_by_vertical_parent(id) => parent_width,
             Length::Fit => self.nodes[id].current_size.width,
         };
-        let target_w = max(target_w, self.nodes[id].min.width).min(self.nodes[id].max.width);
+        let target_w = target_w
+            .min(self.nodes[id].max.width)
+            .max(self.nodes[id].min.width);
         self.nodes[id].current_size.width = target_w;
 
         let Some(first) = self.nodes[id].first_child else {
@@ -805,9 +809,11 @@ impl LayoutEngine {
         let total_min_h = max(min_h, self.nodes[id].min.height);
         let natural_h = max(total_min_h, base_h);
         self.nodes[id].content_size.height = natural_h;
-        self.nodes[id].current_size.height = natural_h.min(self.nodes[id].max.height);
-        if !self.nodes[id].clip_children {
-            self.nodes[id].min.height = natural_h;
+        if self.nodes[id].clip_children {
+            self.nodes[id].current_size.height = natural_h.min(self.nodes[id].max.height);
+        } else {
+            self.nodes[id].current_size.height = natural_h;
+            self.nodes[id].min.height = total_min_h;
         }
     }
 
@@ -820,7 +826,9 @@ impl LayoutEngine {
             Length::Fit if self.stretched_by_horizontal_parent(id) => parent_height,
             Length::Fit => self.nodes[id].current_size.height,
         };
-        let target_h = max(target_h, self.nodes[id].min.height).min(self.nodes[id].max.height);
+        let target_h = target_h
+            .min(self.nodes[id].max.height)
+            .max(self.nodes[id].min.height);
         self.nodes[id].current_size.height = target_h;
 
         let Some(first) = self.nodes[id].first_child else {

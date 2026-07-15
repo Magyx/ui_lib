@@ -410,6 +410,70 @@ mod layout {
     }
 
     #[test]
+    fn non_clip_sidebar_grows_to_fit_content_past_its_max() {
+        // min-wins: a non-clip sidebar whose content (400) exceeds its max
+        // (300) grows to fit the content — the max only caps discretionary
+        // growth — and reports that honest width to the row, so the Grow main
+        // pane gets the true remainder (600) with no overlap.
+        let mut h = Harness::default();
+
+        let (content, _c) = probed_rect(Length::Fixed(400), Length::Fixed(40), Color::GREEN);
+        let sidebar = Row::<TopMsg>::new([content])
+            .size(Size::new(Length::Fit, Length::Fixed(50)))
+            .max(Size::new(300, i32::MAX));
+        let (side_probe, side_slot) = Probe::new(sidebar);
+        let (main, main_slot) = probed_rect(Length::Grow, Length::Fixed(50), Color::BLUE);
+        let mut root: Row<TopMsg> = Row::new([Element::new(side_probe), main])
+            .size(Size::new(Length::Fixed(1000), Length::Fixed(60)));
+
+        h.layout(&mut root, 2000, 2000);
+
+        assert_eq!(read(&side_slot).2, 400, "sidebar grows to fit content past its max");
+        assert_eq!(read(&main_slot).0, 400, "main starts after the honest sidebar width");
+        assert_eq!(read(&main_slot).2, 600, "main gets the true remainder");
+    }
+
+    #[test]
+    fn non_clip_grow_sidebar_still_caps_growth_at_max() {
+        // Control: when content (200) is smaller than the max (300), the max
+        // still caps a Grow sidebar's growth — min-wins only changes the
+        // min > max case, so ordinary caps are untouched.
+        let mut h = Harness::default();
+
+        let (content, _c) = probed_rect(Length::Fixed(200), Length::Fixed(40), Color::GREEN);
+        let sidebar = Row::<TopMsg>::new([content])
+            .size(Size::new(Length::Grow, Length::Fixed(50)))
+            .max(Size::new(300, i32::MAX));
+        let (side_probe, side_slot) = Probe::new(sidebar);
+        let mut root: Row<TopMsg> = Row::new([Element::new(side_probe)])
+            .size(Size::new(Length::Fixed(1000), Length::Fixed(60)));
+
+        h.layout(&mut root, 2000, 2000);
+
+        assert_eq!(read(&side_slot).2, 300, "grow sidebar is capped at its max");
+    }
+
+    #[test]
+    fn clip_sidebar_hard_caps_at_max_and_clips_content() {
+        // The other half of the toggle: a *clip* sidebar keeps min low, so max
+        // wins — it hard-caps at 300 and its 400-wide content is scissored.
+        let mut h = Harness::default();
+
+        let (content, content_slot) =
+            probed_rect(Length::Fixed(400), Length::Fixed(40), Color::GREEN);
+        let sidebar = ClipBox::new(Size::new(Length::Fit, Length::Fixed(50)), true, content)
+            .max(Size::new(300, i32::MAX));
+        let (side_probe, side_slot) = Probe::new(sidebar);
+        let mut root: Row<TopMsg> = Row::new([Element::new(side_probe)])
+            .size(Size::new(Length::Fixed(1000), Length::Fixed(60)));
+
+        h.layout(&mut root, 2000, 2000);
+
+        assert_eq!(read(&side_slot).2, 300, "clip sidebar hard-caps at its max");
+        assert_eq!(read(&content_slot).2, 400, "content overflows the clip box, clipped");
+    }
+
+    #[test]
     fn row_with_grow_min_child_overflows_fixed_parent() {
         // A fixed-width Row(300) containing one Grow child with min=500
         // should have the child at 500 (its min), even though the row is

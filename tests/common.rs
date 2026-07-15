@@ -239,6 +239,7 @@ mod harness {
         child: Element<M>,
         size: Size<Length>,
         clip: bool,
+        max: Size<i32>,
     }
 
     impl<M> ClipBox<M> {
@@ -247,7 +248,12 @@ mod harness {
                 child: child.into(),
                 size,
                 clip,
+                max: Size::splat(i32::MAX),
             }
+        }
+        pub fn max(mut self, m: Size<i32>) -> Self {
+            self.max = m;
+            self
         }
     }
 
@@ -258,6 +264,7 @@ mod harness {
             ui::layout::Node {
                 size: self.size,
                 clip_children: self.clip,
+                max: self.max,
                 ..Default::default()
             }
         }
