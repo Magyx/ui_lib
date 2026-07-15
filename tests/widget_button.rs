@@ -7,7 +7,6 @@ mod common;
 mod widget_interaction {
     use super::common::*;
 
-    use ui::context::MessageSink;
     use ui::event::{KeyState, MouseButton, UiEventRef};
     use ui::model::{Color, Position, Size};
     use ui::widget::{Button, Length};

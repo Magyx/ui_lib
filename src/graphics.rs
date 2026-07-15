@@ -166,7 +166,7 @@ impl<'a> Engine<'a> {
                         memory_hints: wgpu::MemoryHints::MemoryUsage,
                         trace: wgpu::Trace::Off,
                     }))
-                    .map_err(|_| crate::error::InitError::RequestDevice)?;
+                    .map_err(crate::error::InitError::RequestDevice)?;
 
                 #[cfg(feature = "tracing")]
                 device.on_uncaptured_error(Box::new(|err| {
@@ -303,7 +303,7 @@ impl<'a> Engine<'a> {
             .ok_or(crate::error::InitError::NoInstance)?;
         let surface = instance
             .create_surface(target.clone())
-            .map_err(|_| crate::error::InitError::CreateSurface)?;
+            .map_err(crate::error::InitError::CreateSurface)?;
 
         let adapter = self
             .gpu

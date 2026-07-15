@@ -7,7 +7,6 @@ mod common;
 mod widget_slider {
     use super::common::*;
 
-    use ui::context::MessageSink;
     use ui::event::{KeyState, MouseButton, UiEventRef};
     use ui::model::{Position, Size};
     use ui::widget::{Length, Slider};

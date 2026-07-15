@@ -12,7 +12,6 @@ mod common;
 mod text_input {
     use super::common::*;
 
-    use ui::context::MessageSink;
     use ui::event::{
         KeyEvent, KeyLocation, KeyState, LogicalKey, Modifiers, MouseButton, PhysicalKey,
         TextInput as TextInputEvent, UiEventRef,
