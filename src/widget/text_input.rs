@@ -470,9 +470,9 @@ impl<M> TextInput<M, MultiLine> {
 impl<M, Mode: TextMode> IntoElement for TextInput<M, Mode> {}
 
 impl<M, Mode: TextMode + 'static> Widget<M> for TextInput<M, Mode> {
-    fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
+    fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b>) -> Node {
         let id = ctx.id();
-        self.ensure_state(&mut ctx.ui.view_state, id);
+        self.ensure_state(ctx.view_state, id);
         let placeholder = self.value.is_empty();
 
         let text = if placeholder {

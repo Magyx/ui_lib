@@ -57,7 +57,7 @@ pub struct Padding {
 pub trait IntoElement {}
 
 pub trait Widget<M>: IntoElement {
-    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node;
+    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node;
     fn key(&self) -> Option<u64> {
         None
     }
@@ -75,7 +75,7 @@ pub trait Widget<M>: IntoElement {
         false
     }
 
-    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
+    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a>, width: i32) -> Option<i32> {
         let _ = (ctx, width);
         None
     }

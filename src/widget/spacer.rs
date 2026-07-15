@@ -27,7 +27,7 @@ impl Spacer {
 impl IntoElement for Spacer {}
 
 impl<M> Widget<M> for Spacer {
-    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
             min: self.min,

@@ -148,7 +148,7 @@ impl<M> Slider<M> {
 impl<M> IntoElement for Slider<M> {}
 
 impl<M> Widget<M> for Slider<M> {
-    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
             min: self.min,

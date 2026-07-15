@@ -19,7 +19,7 @@ impl<M> Absolute<M> {
 impl<M> IntoElement for Absolute<M> {}
 
 impl<M> Widget<M> for Absolute<M> {
-    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node {
+    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node {
         let mut n = self.inner.as_mut().layout(ctx);
         n.is_absolute = true;
         n.offset_pos.x += self.offx;
@@ -38,7 +38,7 @@ impl<M> Widget<M> for Absolute<M> {
     fn child_env(&self, env: Env, theme: &Theme) -> Env {
         self.inner.as_ref().child_env(env, theme)
     }
-    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
+    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a>, width: i32) -> Option<i32> {
         self.inner.as_mut().min_height_for_width(ctx, width)
     }
     fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
@@ -136,7 +136,7 @@ impl<M> Overlay<M> {
 impl<M> IntoElement for Overlay<M> {}
 
 impl<M> Widget<M> for Overlay<M> {
-    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
             min: self.min,

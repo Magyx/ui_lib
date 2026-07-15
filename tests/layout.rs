@@ -998,7 +998,7 @@ mod layout {
     impl IntoElement for IntrinsicHeightLeaf {}
 
     impl<M: 'static> Widget<M> for IntrinsicHeightLeaf {
-        fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+        fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
             Node {
                 size: Size::new(Length::Grow, Length::Fit),
                 ..Default::default()
@@ -1012,7 +1012,7 @@ mod layout {
         }
         fn min_height_for_width<'a>(
             &mut self,
-            _ctx: &mut LayoutCtx<'a, M>,
+            _ctx: &mut LayoutCtx<'a>,
             width: i32,
         ) -> Option<i32> {
             Some((self.height_for_width)(width))
@@ -1092,7 +1092,7 @@ mod layout {
         }
         impl IntoElement for LeafWithMin {}
         impl<M: 'static> Widget<M> for LeafWithMin {
-            fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+            fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
                 Node {
                     size: Size::new(Length::Grow, Length::Fit),
                     min: Size::new(0, 50), // force height floor
@@ -1107,7 +1107,7 @@ mod layout {
             }
             fn min_height_for_width<'a>(
                 &mut self,
-                _ctx: &mut LayoutCtx<'a, M>,
+                _ctx: &mut LayoutCtx<'a>,
                 _width: i32,
             ) -> Option<i32> {
                 Some(0) // would shrink if post_width_query didn't clamp
@@ -1147,7 +1147,7 @@ mod layout {
         }
         impl IntoElement for LeafWithMax {}
         impl<M: 'static> Widget<M> for LeafWithMax {
-            fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+            fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
                 Node {
                     size: Size::new(Length::Grow, Length::Fit),
                     max: Size::new(i32::MAX, 30),
@@ -1162,7 +1162,7 @@ mod layout {
             }
             fn min_height_for_width<'a>(
                 &mut self,
-                _ctx: &mut LayoutCtx<'a, M>,
+                _ctx: &mut LayoutCtx<'a>,
                 _width: i32,
             ) -> Option<i32> {
                 Some(1000)
@@ -1205,7 +1205,7 @@ mod layout {
         }
         impl<M: 'static> IntoElement for WrapperThatWouldPanic<M> {}
         impl<M: 'static> Widget<M> for WrapperThatWouldPanic<M> {
-            fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+            fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
                 Node {
                     size: Size::new(Length::Fit, Length::Fit),
                     ..Default::default()
@@ -1219,7 +1219,7 @@ mod layout {
             }
             fn min_height_for_width<'a>(
                 &mut self,
-                _ctx: &mut LayoutCtx<'a, M>,
+                _ctx: &mut LayoutCtx<'a>,
                 _width: i32,
             ) -> Option<i32> {
                 panic!("post_width_query called min_height_for_width on a non-leaf");

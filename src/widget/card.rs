@@ -49,7 +49,7 @@ impl<M> Card<M> {
 impl<M> IntoElement for Card<M> {}
 
 impl<M> Widget<M> for Card<M> {
-    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
             min: self.min,

@@ -40,7 +40,7 @@ impl Rectangle {
 impl IntoElement for Rectangle {}
 
 impl<M> Widget<M> for Rectangle {
-    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
             min: self.min,

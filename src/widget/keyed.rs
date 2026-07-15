@@ -21,7 +21,7 @@ impl<W> Keyed<W> {
 impl<M> IntoElement for Keyed<M> {}
 
 impl<M, W: Widget<M>> Widget<M> for Keyed<W> {
-    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> Node {
+    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node {
         self.inner.layout(ctx)
     }
     fn key(&self) -> Option<u64> {
@@ -37,7 +37,7 @@ impl<M, W: Widget<M>> Widget<M> for Keyed<W> {
         self.inner.child_env(env, theme)
     }
 
-    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>, width: i32) -> Option<i32> {
+    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a>, width: i32) -> Option<i32> {
         self.inner.min_height_for_width(ctx, width)
     }
 

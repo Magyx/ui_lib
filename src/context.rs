@@ -212,25 +212,25 @@ impl<M> Context<M> {
     }
 }
 
-pub struct LayoutCtx<'a, M> {
+pub struct LayoutCtx<'a> {
     pub globals: &'a Globals,
-    pub ui: &'a mut Context<M>,
+    pub view_state: &'a mut ViewState,
     pub text: &'a mut dyn TextBackend,
     pub theme: &'a Theme,
     pub env: Env,
     pub(crate) current_id: Id,
 }
 
-impl<'a, M> LayoutCtx<'a, M> {
+impl<'a> LayoutCtx<'a> {
     pub fn new(
         globals: &'a Globals,
-        ui: &'a mut Context<M>,
+        view_state: &'a mut ViewState,
         text: &'a mut dyn TextBackend,
         theme: &'a Theme,
     ) -> Self {
         Self {
             globals,
-            ui,
+            view_state,
             text,
             theme,
             env: theme.root_env(),

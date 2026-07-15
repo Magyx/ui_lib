@@ -686,7 +686,7 @@ impl<'a, M> Engine<'a, M> {
             crate::scope!("layout");
             let mut layout_ctx = LayoutCtx::new(
                 &target.globals,
-                &mut target.ctx,
+                &mut target.ctx.view_state,
                 &mut *self.renderer.text,
                 &self.theme,
             );

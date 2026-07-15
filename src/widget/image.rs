@@ -48,7 +48,7 @@ impl Image {
 impl IntoElement for Image {}
 
 impl<M> Widget<M> for Image {
-    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         let mut node = Node {
             size: self.size,
             min: self.min,

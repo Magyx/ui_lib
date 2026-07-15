@@ -79,8 +79,12 @@ mod harness {
         pub fn layout<W: Widget<TopMsg>>(&mut self, root: &mut W, max_w: i32, max_h: i32) -> usize {
             self.globals.window_size = [max_w as f32, max_h as f32];
             let rood_id = {
-                let mut lctx =
-                    LayoutCtx::new(&self.globals, &mut self.ctx, &mut self.text, &self.theme);
+                let mut lctx = LayoutCtx::new(
+                    &self.globals,
+                    &mut self.ctx.view_state,
+                    &mut self.text,
+                    &self.theme,
+                );
                 run_layout(&mut self.engine, &mut lctx, root, max_w, max_h)
             };
             let _ = self.paint(&mut *root);
@@ -187,7 +191,7 @@ mod harness {
     impl<M, W: Widget<M>> IntoElement for Probe<M, W> {}
 
     impl<M: 'static, W: Widget<M>> Widget<M> for Probe<M, W> {
-        fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a, M>) -> ui::layout::Node {
+        fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> ui::layout::Node {
             self.inner.layout(ctx)
         }
         fn child_count(&self) -> usize {
@@ -260,7 +264,7 @@ mod harness {
     impl<M> IntoElement for ClipBox<M> {}
 
     impl<M: 'static> Widget<M> for ClipBox<M> {
-        fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> ui::layout::Node {
+        fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> ui::layout::Node {
             ui::layout::Node {
                 size: self.size,
                 clip_children: self.clip,

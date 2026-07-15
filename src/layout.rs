@@ -39,7 +39,7 @@ fn color_for_depth(depth: usize) -> (u8, u8, u8, u8) {
 
 pub fn run_layout<'a, M>(
     layout_engine: &mut LayoutEngine,
-    ctx: &mut LayoutCtx<'a, M>,
+    ctx: &mut LayoutCtx<'a>,
     root: &mut dyn Widget<M>,
     max_w: i32,
     max_h: i32,
@@ -91,7 +91,7 @@ pub fn run_layout<'a, M>(
 
 fn build_tree<'a, M>(
     layout_engine: &mut LayoutEngine,
-    ctx: &mut LayoutCtx<'a, M>,
+    ctx: &mut LayoutCtx<'a>,
     w: &mut dyn Widget<M>,
     seed: u64,
     env: Env,
@@ -134,7 +134,7 @@ fn build_tree<'a, M>(
 fn post_width_query<'a, M>(
     w: &mut dyn Widget<M>,
     eng: &mut LayoutEngine,
-    ctx: &mut LayoutCtx<'a, M>,
+    ctx: &mut LayoutCtx<'a>,
     cursor: &mut usize,
 ) {
     let i = *cursor;

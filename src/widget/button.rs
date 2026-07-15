@@ -87,7 +87,7 @@ impl<M: Clone> Button<M> {
 impl<M> IntoElement for Button<M> {}
 
 impl<M: Clone> Widget<M> for Button<M> {
-    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a, M>) -> Node {
+    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
             min: self.min,

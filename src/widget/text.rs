@@ -297,11 +297,11 @@ impl<M> Widget<M> for Text {
         unreachable!()
     }
 
-    fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>) -> Node {
+    fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b>) -> Node {
         let rs = self.resolved_style(ctx.theme);
         let metrics = TextMetrics::new(rs.font_size, rs.line_height);
         let id = ctx.id();
-        let state = self.ensure_state(&mut ctx.ui.view_state, ctx.text, metrics, id);
+        let state = self.ensure_state(ctx.view_state, ctx.text, metrics, id);
         let (intrinsic_w, line_count) = state.ensure_layout(self, &rs);
 
         let line_px = (rs.font_size * rs.line_height).ceil() as i32;
@@ -318,12 +318,12 @@ impl<M> Widget<M> for Text {
         }
     }
 
-    fn min_height_for_width<'b>(&mut self, ctx: &mut LayoutCtx<'b, M>, width: i32) -> Option<i32> {
+    fn min_height_for_width<'b>(&mut self, ctx: &mut LayoutCtx<'b>, width: i32) -> Option<i32> {
         let rs = self.resolved_style(ctx.theme);
         let target_w = width.max(1) as f32;
         let metrics = TextMetrics::new(rs.font_size, rs.line_height);
         let id = ctx.id();
-        let state = self.ensure_state(&mut ctx.ui.view_state, ctx.text, metrics, id);
+        let state = self.ensure_state(ctx.view_state, ctx.text, metrics, id);
         state.ensure_shaped(self, target_w, &rs);
 
         let lines = state.buffer.line_count() as i32;
