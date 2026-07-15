@@ -238,6 +238,37 @@ mod layout {
     }
 
     #[test]
+    fn row_grow_fallback_distributes_the_whole_remainder() {
+        // Regression: 3 Grow children in a Fixed(101) row. The proportional
+        // pass gives 33 each (99px), leaving 2px whose per-child share floors to
+        // zero. The per-pixel fallback must hand out *both* leftover pixels, so
+        // the row fills exactly — a fallback that stops after 1px (missing
+        // `remaining -= 1; used = 1;`) would leave the row 1px short (100).
+        let mut h = Harness::default();
+
+        let (a, a_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::RED);
+        let (b, b_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::GREEN);
+        let (c, c_slot) = probed_rect(Length::Grow, Length::Fixed(20), Color::BLUE);
+        let mut row: Row<TopMsg> =
+            Row::new([a, b, c]).size(Size::new(Length::Fixed(101), Length::Fixed(20)));
+
+        h.layout(&mut row, 1000, 1000);
+
+        let (aw, bw, cw) = (read(&a_slot).2, read(&b_slot).2, read(&c_slot).2);
+        assert_eq!(
+            aw + bw + cw,
+            101,
+            "the whole remainder is distributed; row fills exactly"
+        );
+        let last = read(&c_slot);
+        assert_eq!(
+            last.0 + last.2,
+            101,
+            "last child's right edge meets the row edge"
+        );
+    }
+
+    #[test]
     fn row_weighted_grow_splits_by_weight() {
         // Weighted(2.0) takes twice the flexible space of Grow: 200 / 100.
         let mut h = Harness::default();
@@ -428,8 +459,16 @@ mod layout {
 
         h.layout(&mut root, 2000, 2000);
 
-        assert_eq!(read(&side_slot).2, 400, "sidebar grows to fit content past its max");
-        assert_eq!(read(&main_slot).0, 400, "main starts after the honest sidebar width");
+        assert_eq!(
+            read(&side_slot).2,
+            400,
+            "sidebar grows to fit content past its max"
+        );
+        assert_eq!(
+            read(&main_slot).0,
+            400,
+            "main starts after the honest sidebar width"
+        );
         assert_eq!(read(&main_slot).2, 600, "main gets the true remainder");
     }
 
@@ -470,7 +509,11 @@ mod layout {
         h.layout(&mut root, 2000, 2000);
 
         assert_eq!(read(&side_slot).2, 300, "clip sidebar hard-caps at its max");
-        assert_eq!(read(&content_slot).2, 400, "content overflows the clip box, clipped");
+        assert_eq!(
+            read(&content_slot).2,
+            400,
+            "content overflows the clip box, clipped"
+        );
     }
 
     #[test]

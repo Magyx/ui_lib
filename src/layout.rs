@@ -485,6 +485,230 @@ impl Default for LayoutEngine {
     }
 }
 
+macro_rules! impl_layout_pass {
+    (
+        measure_fn: $measure_fn:ident,
+        assign_fn: $assign_fn:ident,
+        dim: $dim:ident,
+        pad_start: $pad_start:ident,
+        pad_end: $pad_end:ident,
+        main_axis: $main_axis:pat,
+        cross_axis: $cross_axis:pat,
+        stretch_check: $stretch_check:ident
+    ) => {
+        // Phase 1 / 3: measure minimal size
+        fn $measure_fn(&mut self, id: usize) {
+            let base_val = match self.nodes[id].size.$dim {
+                Length::Fixed(v) => {
+                    self.nodes[id].min.$dim = max(self.nodes[id].min.$dim, v);
+                    self.nodes[id].max.$dim = min(self.nodes[id].max.$dim, v);
+                    v
+                }
+                _ => 0,
+            };
+
+            let min_val = if let Some(first) = self.nodes[id].first_child {
+                let layout_dir = self.nodes[id].layout_dir;
+                let pad = self.nodes[id].padding;
+                let spacing = self.nodes[id].spacing;
+
+                let (mut total, mut count, mut max_cross) = (0, 0, 0);
+                let mut idx = Some(first);
+                while let Some(child) = idx {
+                    self.$measure_fn(child);
+                    if !self.nodes[child].is_absolute {
+                        let cv = self.nodes[child].min.$dim;
+                        total += cv;
+                        max_cross = max(max_cross, cv);
+                        count += 1;
+                    }
+                    idx = self.nodes[child].next_sibling;
+                }
+
+                match layout_dir {
+                    $main_axis => {
+                        let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
+                        total + pad.$pad_start + pad.$pad_end + gaps
+                    }
+                    $cross_axis => max_cross + pad.$pad_start + pad.$pad_end,
+                }
+            } else {
+                self.nodes[id].min.$dim
+            };
+
+            let total_min = max(min_val, self.nodes[id].min.$dim);
+            let natural_val = max(total_min, base_val);
+            self.nodes[id].content_size.$dim = natural_val;
+            if self.nodes[id].clip_children {
+                self.nodes[id].current_size.$dim = natural_val.min(self.nodes[id].max.$dim);
+            } else {
+                self.nodes[id].current_size.$dim = natural_val;
+                self.nodes[id].min.$dim = total_min;
+            }
+        }
+
+        // Phase 2 / 4: assign sizes within available space
+        fn $assign_fn(&mut self, id: usize, parent_size: i32) {
+            let target_v = match self.nodes[id].size.$dim {
+                Length::Grow | Length::Weighted(_) => parent_size,
+                Length::Fixed(v) => v,
+                Length::Fit if self.$stretch_check(id) => parent_size,
+                Length::Fit => self.nodes[id].current_size.$dim,
+            };
+            let target_v = target_v
+                .min(self.nodes[id].max.$dim)
+                .max(self.nodes[id].min.$dim);
+            self.nodes[id].current_size.$dim = target_v;
+
+            let Some(first) = self.nodes[id].first_child else {
+                return;
+            };
+            let pad = self.nodes[id].padding;
+
+            // Cross axis: every child gets the full inner size; no distribution.
+            if let $cross_axis = self.nodes[id].layout_dir {
+                let inner_v = (target_v - pad.$pad_start - pad.$pad_end).max(0);
+                let mut idx = Some(first);
+                while let Some(child) = idx {
+                    self.$assign_fn(child, inner_v);
+                    idx = self.nodes[child].next_sibling;
+                }
+                return;
+            }
+
+            // Main axis: one walk for count + base sum.
+            let spacing = self.nodes[id].spacing;
+            let (mut count, mut total_base) = (0, 0);
+            let mut idx = Some(first);
+            while let Some(child) = idx {
+                if !self.nodes[child].is_absolute {
+                    count += 1;
+                    total_base += self.nodes[child].current_size.$dim;
+                }
+                idx = self.nodes[child].next_sibling;
+            }
+
+            let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
+            let inner_v = (target_v - pad.$pad_start - pad.$pad_end - gaps).max(0);
+            let mut remaining = inner_v - total_base;
+
+            if remaining < 0 {
+                // shrink flexible children toward min
+                let mut deficit = -remaining;
+                while deficit > 0 {
+                    let mut shrinkers = 0;
+                    let mut idx = Some(first);
+                    while let Some(child) = idx {
+                        let n = &self.nodes[child];
+                        if !n.is_absolute
+                            && n.current_size.$dim > n.min.$dim
+                            && !matches!(n.size.$dim, Length::Fixed(_))
+                        {
+                            shrinkers += 1;
+                        }
+                        idx = n.next_sibling;
+                    }
+                    if shrinkers == 0 {
+                        break;
+                    }
+                    let reduce_each = (deficit / shrinkers).max(1);
+                    let mut used = 0;
+                    let mut idx = Some(first);
+                    while let Some(child) = idx {
+                        let next = self.nodes[child].next_sibling;
+                        let n = &mut self.nodes[child];
+                        if deficit > 0 && !n.is_absolute && !matches!(n.size.$dim, Length::Fixed(_))
+                        {
+                            let reducible = n.current_size.$dim - n.min.$dim;
+                            let amt = min(reducible, reduce_each);
+                            if amt > 0 {
+                                n.current_size.$dim -= amt;
+                                used += amt;
+                                deficit -= amt;
+                            }
+                        }
+                        idx = next;
+                    }
+                    if used == 0 {
+                        break;
+                    }
+                }
+            } else if remaining > 0 {
+                // grow Grow children toward their max.
+                while remaining > 0 {
+                    let mut total_w = 0f32;
+                    let mut idx = Some(first);
+                    while let Some(child) = idx {
+                        let n = &self.nodes[child];
+                        if let Some(w) = n.size.$dim.weight()
+                            && n.current_size.$dim < n.max.$dim
+                        {
+                            total_w += w;
+                        }
+                        idx = n.next_sibling;
+                    }
+                    if total_w <= 0.0 {
+                        break;
+                    }
+                    let budget = remaining;
+                    let mut used = 0;
+                    let mut idx = Some(first);
+                    while let Some(child) = idx {
+                        let next = self.nodes[child].next_sibling;
+                        let n = &mut self.nodes[child];
+                        if remaining > 0
+                            && let Some(w) = n.size.$dim.weight()
+                        {
+                            let addable = n.max.$dim - n.current_size.$dim;
+                            if addable > 0 {
+                                let share = (budget as f32 * (w / total_w)).floor() as i32;
+                                let amt = min(addable, share);
+                                if amt > 0 {
+                                    n.current_size.$dim += amt;
+                                    used += amt;
+                                    remaining -= amt;
+                                }
+                            }
+                        }
+                        idx = next;
+                    }
+                    if used == 0 {
+                        let mut idx = Some(first);
+                        while let Some(child) = idx {
+                            let next = self.nodes[child].next_sibling;
+                            let n = &mut self.nodes[child];
+                            if n.size.$dim.weight().is_some() && n.current_size.$dim < n.max.$dim {
+                                n.current_size.$dim += 1;
+                                remaining -= 1; // You added this to height, but not width in your original snippet!
+                                used = 1; // Keeping it here makes both passes safer and mathematically correct.
+                                break;
+                            }
+                            idx = next;
+                        }
+                        if used == 0 {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Recurse: flow children into their resolved size, absolute children
+            // into the full inner size.
+            let mut idx = Some(first);
+            while let Some(child) = idx {
+                let next = self.nodes[child].next_sibling;
+                let v = if self.nodes[child].is_absolute {
+                    inner_v
+                } else {
+                    self.nodes[child].current_size.$dim
+                };
+                self.$assign_fn(child, v);
+                idx = next;
+            }
+        }
+    };
+}
+
 impl LayoutEngine {
     pub fn new() -> Self {
         LayoutEngine {
@@ -560,426 +784,27 @@ impl LayoutEngine {
         }
     }
 
-    // Phase 1: measure minimal widths
-    fn measure_width(&mut self, id: usize) {
-        let base_w = match self.nodes[id].size.width {
-            Length::Fixed(w) => {
-                self.nodes[id].min.width = max(self.nodes[id].min.width, w);
-                self.nodes[id].max.width = min(self.nodes[id].max.width, w);
-                w
-            }
-            _ => 0,
-        };
+    impl_layout_pass!(
+        measure_fn: measure_width,
+        assign_fn: assign_width,
+        dim: width,
+        pad_start: left,
+        pad_end: right,
+        main_axis: Axis::Horizontal,
+        cross_axis: Axis::Vertical,
+        stretch_check: stretched_by_vertical_parent
+    );
 
-        let min_w = if let Some(first) = self.nodes[id].first_child {
-            let layout_dir = self.nodes[id].layout_dir;
-            let pad = self.nodes[id].padding;
-            let spacing = self.nodes[id].spacing;
-
-            let (mut total, mut count, mut widest) = (0, 0, 0);
-            let mut idx = Some(first);
-            while let Some(child) = idx {
-                self.measure_width(child);
-                if !self.nodes[child].is_absolute {
-                    let cw = self.nodes[child].min.width;
-                    total += cw;
-                    widest = max(widest, cw);
-                    count += 1;
-                }
-                idx = self.nodes[child].next_sibling;
-            }
-            match layout_dir {
-                Axis::Horizontal => {
-                    let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
-                    total + pad.left + pad.right + gaps
-                }
-                Axis::Vertical => widest + pad.left + pad.right,
-            }
-        } else {
-            self.nodes[id].min.width
-        };
-
-        let total_min_w = max(min_w, self.nodes[id].min.width);
-        let natural_w = max(total_min_w, base_w);
-        self.nodes[id].content_size.width = natural_w;
-        if self.nodes[id].clip_children {
-            self.nodes[id].current_size.width = natural_w.min(self.nodes[id].max.width);
-        } else {
-            self.nodes[id].current_size.width = natural_w;
-            self.nodes[id].min.width = total_min_w;
-        }
-    }
-
-    // Phase 2: assign widths with available space
-    fn assign_width(&mut self, id: usize, parent_width: i32) {
-        // Resolve this node's own width (shared by leaf and container).
-        let target_w = match self.nodes[id].size.width {
-            Length::Grow | Length::Weighted(_) => parent_width,
-            Length::Fixed(w) => w,
-            Length::Fit if self.stretched_by_vertical_parent(id) => parent_width,
-            Length::Fit => self.nodes[id].current_size.width,
-        };
-        let target_w = target_w
-            .min(self.nodes[id].max.width)
-            .max(self.nodes[id].min.width);
-        self.nodes[id].current_size.width = target_w;
-
-        let Some(first) = self.nodes[id].first_child else {
-            return;
-        };
-        let pad = self.nodes[id].padding;
-
-        // Cross axis: every child gets the full inner width; no distribution.
-        if let Axis::Vertical = self.nodes[id].layout_dir {
-            let inner_w = (target_w - pad.left - pad.right).max(0);
-            let mut idx = Some(first);
-            while let Some(child) = idx {
-                self.assign_width(child, inner_w);
-                idx = self.nodes[child].next_sibling;
-            }
-            return;
-        }
-
-        // Main axis: one walk for count + base sum.
-        let spacing = self.nodes[id].spacing;
-        let (mut count, mut total_base) = (0, 0);
-        let mut idx = Some(first);
-        while let Some(child) = idx {
-            if !self.nodes[child].is_absolute {
-                count += 1;
-                total_base += self.nodes[child].current_size.width;
-            }
-            idx = self.nodes[child].next_sibling;
-        }
-        let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
-        let inner_w = (target_w - pad.left - pad.right - gaps).max(0);
-        let mut remaining = inner_w - total_base;
-
-        if remaining < 0 {
-            // shrink flexible children toward min
-            let mut deficit = -remaining;
-            while deficit > 0 {
-                let mut shrinkers = 0;
-                let mut idx = Some(first);
-                while let Some(child) = idx {
-                    let n = &self.nodes[child];
-                    if !n.is_absolute
-                        && n.current_size.width > n.min.width
-                        && !matches!(n.size.width, Length::Fixed(_))
-                    {
-                        shrinkers += 1;
-                    }
-                    idx = n.next_sibling;
-                }
-                if shrinkers == 0 {
-                    break;
-                }
-                let reduce_each = (deficit / shrinkers).max(1);
-                let mut used = 0;
-                let mut idx = Some(first);
-                while let Some(child) = idx {
-                    let next = self.nodes[child].next_sibling;
-                    let n = &mut self.nodes[child];
-                    if deficit > 0 && !n.is_absolute && !matches!(n.size.width, Length::Fixed(_)) {
-                        let reducible = n.current_size.width - n.min.width;
-                        let amt = min(reducible, reduce_each);
-                        if amt > 0 {
-                            n.current_size.width -= amt;
-                            used += amt;
-                            deficit -= amt;
-                        }
-                    }
-                    idx = next;
-                }
-                if used == 0 {
-                    break;
-                }
-            }
-        } else if remaining > 0 {
-            // grow Grow children toward their max.
-            while remaining > 0 {
-                let mut total_w = 0f32;
-                let mut idx = Some(first);
-                while let Some(child) = idx {
-                    let n = &self.nodes[child];
-                    if let Some(w) = n.size.width.weight()
-                        && n.current_size.width < n.max.width
-                    {
-                        total_w += w;
-                    }
-                    idx = n.next_sibling;
-                }
-                if total_w <= 0.0 {
-                    break;
-                }
-                let budget = remaining;
-                let mut used = 0;
-                let mut idx = Some(first);
-                while let Some(child) = idx {
-                    let next = self.nodes[child].next_sibling;
-                    let n = &mut self.nodes[child];
-                    if remaining > 0
-                        && let Some(w) = n.size.width.weight()
-                    {
-                        let addable = n.max.width - n.current_size.width;
-                        if addable > 0 {
-                            let share = (budget as f32 * (w / total_w)).floor() as i32;
-                            let amt = min(addable, share);
-                            if amt > 0 {
-                                n.current_size.width += amt;
-                                used += amt;
-                                remaining -= amt;
-                            }
-                        }
-                    }
-                    idx = next;
-                }
-                if used == 0 {
-                    let mut idx = Some(first);
-                    while let Some(child) = idx {
-                        let next = self.nodes[child].next_sibling;
-                        let n = &mut self.nodes[child];
-                        if n.size.width.weight().is_some() && n.current_size.width < n.max.width {
-                            n.current_size.width += 1;
-                            break;
-                        }
-                        idx = next;
-                    }
-                    if used == 0 {
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Recurse: flow children into their resolved width, absolute children
-        // into the full inner width.
-        let mut idx = Some(first);
-        while let Some(child) = idx {
-            let next = self.nodes[child].next_sibling;
-            let w = if self.nodes[child].is_absolute {
-                inner_w
-            } else {
-                self.nodes[child].current_size.width
-            };
-            self.assign_width(child, w);
-            idx = next;
-        }
-    }
-
-    // Phase 3: measure minimal heights (after widths are set)
-    fn measure_height(&mut self, id: usize) {
-        let base_h = match self.nodes[id].size.height {
-            Length::Fixed(h) => {
-                self.nodes[id].min.height = max(self.nodes[id].min.height, h);
-                self.nodes[id].max.height = min(self.nodes[id].max.height, h);
-                h
-            }
-            _ => 0,
-        };
-
-        let min_h = if let Some(first) = self.nodes[id].first_child {
-            let layout_dir = self.nodes[id].layout_dir;
-            let pad = self.nodes[id].padding;
-            let spacing = self.nodes[id].spacing;
-
-            let (mut total, mut count, mut tallest) = (0, 0, 0);
-            let mut idx = Some(first);
-            while let Some(child) = idx {
-                self.measure_height(child);
-                if !self.nodes[child].is_absolute {
-                    let ch = self.nodes[child].min.height;
-                    tallest = max(tallest, ch);
-                    total += ch;
-                    count += 1;
-                }
-                idx = self.nodes[child].next_sibling;
-            }
-            match layout_dir {
-                Axis::Horizontal => tallest + pad.top + pad.bottom,
-                Axis::Vertical => {
-                    let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
-                    total + pad.top + pad.bottom + gaps
-                }
-            }
-        } else {
-            self.nodes[id].min.height
-        };
-
-        let total_min_h = max(min_h, self.nodes[id].min.height);
-        let natural_h = max(total_min_h, base_h);
-        self.nodes[id].content_size.height = natural_h;
-        if self.nodes[id].clip_children {
-            self.nodes[id].current_size.height = natural_h.min(self.nodes[id].max.height);
-        } else {
-            self.nodes[id].current_size.height = natural_h;
-            self.nodes[id].min.height = total_min_h;
-        }
-    }
-
-    // Phase 4: assign heights within available space
-    fn assign_height(&mut self, id: usize, parent_height: i32) {
-        // Resolve this node's own height (shared by leaf and container).
-        let target_h = match self.nodes[id].size.height {
-            Length::Grow | Length::Weighted(_) => parent_height,
-            Length::Fixed(h) => h,
-            Length::Fit if self.stretched_by_horizontal_parent(id) => parent_height,
-            Length::Fit => self.nodes[id].current_size.height,
-        };
-        let target_h = target_h
-            .min(self.nodes[id].max.height)
-            .max(self.nodes[id].min.height);
-        self.nodes[id].current_size.height = target_h;
-
-        let Some(first) = self.nodes[id].first_child else {
-            return;
-        };
-        let pad = self.nodes[id].padding;
-
-        // Cross axis: every child gets the full inner height; no distribution.
-        if let Axis::Horizontal = self.nodes[id].layout_dir {
-            let inner_h = (target_h - pad.top - pad.bottom).max(0);
-            let mut idx = Some(first);
-            while let Some(child) = idx {
-                self.assign_height(child, inner_h);
-                idx = self.nodes[child].next_sibling;
-            }
-            return;
-        }
-
-        // Main axis: one walk for count + base sum.
-        let spacing = self.nodes[id].spacing;
-        let (mut count, mut total_base) = (0, 0);
-        let mut idx = Some(first);
-        while let Some(child) = idx {
-            if !self.nodes[child].is_absolute {
-                count += 1;
-                total_base += self.nodes[child].current_size.height;
-            }
-            idx = self.nodes[child].next_sibling;
-        }
-        let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
-        let inner_h = (target_h - pad.top - pad.bottom - gaps).max(0);
-        let mut remaining = inner_h - total_base;
-
-        if remaining < 0 {
-            // Overflow: shrink flexible (non-Fixed) children toward their min.
-            let mut deficit = -remaining;
-            while deficit > 0 {
-                let mut shrinkers = 0;
-                let mut idx = Some(first);
-                while let Some(child) = idx {
-                    let n = &self.nodes[child];
-                    if !n.is_absolute
-                        && n.current_size.height > n.min.height
-                        && !matches!(n.size.height, Length::Fixed(_))
-                    {
-                        shrinkers += 1;
-                    }
-
-                    idx = n.next_sibling;
-                }
-                if shrinkers == 0 {
-                    break;
-                }
-                let reduce_each = (deficit / shrinkers).max(1);
-                let mut used = 0;
-                let mut idx = Some(first);
-                while let Some(child) = idx {
-                    let next = self.nodes[child].next_sibling;
-                    let n = &mut self.nodes[child];
-                    if deficit > 0 && !n.is_absolute && !matches!(n.size.height, Length::Fixed(_)) {
-                        let reducible = n.current_size.height - n.min.height;
-                        let amt = min(reducible, reduce_each);
-                        if amt > 0 {
-                            n.current_size.height -= amt;
-                            used += amt;
-                            deficit -= amt;
-                        }
-                    }
-
-                    idx = next;
-                }
-                if used == 0 {
-                    break;
-                }
-            }
-        } else if remaining > 0 {
-            // Slack: grow Grow children toward their max.
-            while remaining > 0 {
-                let mut total_h = 0f32;
-                let mut idx = Some(first);
-                while let Some(child) = idx {
-                    let n = &self.nodes[child];
-                    if let Some(h) = n.size.height.weight()
-                        && n.current_size.height < n.max.height
-                    {
-                        total_h += h;
-                    }
-                    idx = n.next_sibling;
-                }
-                if total_h <= 0.0 {
-                    break;
-                }
-                let budget = remaining;
-                let mut used = 0;
-                let mut idx = Some(first);
-                while let Some(child) = idx {
-                    let next = self.nodes[child].next_sibling;
-                    let n = &mut self.nodes[child];
-                    if let Some(h) = n.size.height.weight()
-                        && remaining > 0
-                    {
-                        let addable = n.max.height - n.current_size.height;
-                        if addable > 0 {
-                            let share = (budget as f32 * (h / total_h)).floor() as i32;
-                            let amt = min(addable, share);
-                            if amt > 0 {
-                                n.current_size.height += amt;
-                                used += amt;
-                                remaining -= amt;
-                            }
-                        }
-                    }
-                    idx = next;
-                }
-                if used == 0 {
-                    let mut idx = Some(first);
-                    while let Some(child) = idx {
-                        let next = self.nodes[child].next_sibling;
-                        let n = &mut self.nodes[child];
-                        if n.size.height.weight().is_some() && n.current_size.height < n.max.height
-                        {
-                            n.current_size.height += 1;
-                            remaining -= 1;
-                            used = 1;
-                            break;
-                        }
-                        idx = next;
-                    }
-
-                    if used == 0 {
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Recurse: flow children into their resolved height, absolute children
-        // into the full inner height.
-        let mut idx = Some(first);
-        while let Some(child) = idx {
-            let next = self.nodes[child].next_sibling;
-            let h = if self.nodes[child].is_absolute {
-                inner_h
-            } else {
-                self.nodes[child].current_size.height
-            };
-
-            self.assign_height(child, h);
-            idx = next;
-        }
-    }
+    impl_layout_pass!(
+        measure_fn: measure_height,
+        assign_fn: assign_height,
+        dim: height,
+        pad_start: top,
+        pad_end: bottom,
+        main_axis: Axis::Vertical,
+        cross_axis: Axis::Horizontal,
+        stretch_check: stretched_by_horizontal_parent
+    );
 
     // Phase 5: place all nodes (compute positions)
     fn place(&mut self, id: usize, x: i32, y: i32) -> (i32, i32) {
