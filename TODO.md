@@ -40,7 +40,7 @@ Priorities:
 
 - [x] **Atlas has no eviction.** `render/texture.rs:5946` TODO. Once full, glyph upload silently returns `None` and `Text::paint` skips those glyphs — text just disappears. Add LRU eviction or grow-on-full.
 - [x] **No HiDPI / scale-factor handling.** `Target::scale` is set to `1` (`graphics.rs:2921`) and never read. Layout, fonts, and mouse coords all run in physical pixels — UI looks tiny on 2× displays. Pick a model (logical-px throughout, scale at render) and apply consistently.
-- [ ] **`Modifiers` snapshot has no home.** `event.rs:2530` plumbs `ModifiersChanged` through `UiEventRef`, but `Context` (`context.rs:2066`) has no `modifiers` field. Any widget that wants Shift+Arrow, Ctrl+C, etc. has nowhere to read modifier state from. Add `pub modifiers: Modifiers` to `Context`.
+- [x] **`Modifiers` snapshot has no home.** `event.rs:2530` plumbs `ModifiersChanged` through `UiEventRef`, but `Context` (`context.rs:2066`) has no `modifiers` field. Any widget that wants Shift+Arrow, Ctrl+C, etc. has nowhere to read modifier state from. Add `pub modifiers: Modifiers` to `Context`.
 - [x] **No keyed children / stable identity across reorder.** Identity comes from `mix64(parent, idx)` (`layout.rs:3411, 3648`), which is purely positional. Sort, filter, or reorder a list and state attaches to the wrong items. Add an explicit `key` mechanism (à la React) or accept `supplied_id` more broadly.
 - [x] **`Scrollable` mouse-y compensation is incomplete.** `scroll.rs:10596–10609` shifts `ctx.ui.mouse_pos.y` for the child's `handle()` but leaves `ctx.event` untouched, so widgets reading `Ui::CursorMoved` from `ctx.event` see unshifted coords. Also one-axis only — won't generalize when horizontal scroll is added. Drop entirely once #1 (offset-aware `write_back`) lands.
 - [x] **Slider value pinned at edges.** `slider.rs:10797` maps cursor across `[self.x, self.x + self.w]` without accounting for knob radius. Click at the very left edge → knob center is forced inside the track but value is `lo`; the knob jumps off the cursor. Either subtract half the knob width on both sides for the value calculation, or document that the track is the value range.
@@ -53,12 +53,12 @@ Priorities:
 - [x] **`Text` reshapes on every layout, prepare, and `min_height_for_width`.** `text.rs:11385–11424, 11447, 11489` — three full `set_text` + `shape_until_scroll` cycles per frame per text node. TODO at `text.rs:11483` acknowledges it. Cache shaped output keyed on `(text, attrs, wrap, width)`.
 - [ ] **`Text` min-width uses `split_whitespace`.** `text.rs:11405` — wrong for CJK / Thai / any script without whitespace word boundaries. Returns the whole string as one "word," producing a min-width that prevents wrapping. Use cosmic-text's Unicode line-break opportunities.
 - [ ] **No event consumption.** `Button::handle` (`button.rs:9375`) sets `active_item = self.id` on press regardless of whether another widget already claimed it. Overlapping widgets all set themselves; the last in iteration order wins. Works by accident for overlays because handle order ≈ paint order, but fragile. Add explicit "topmost hit consumes the event."
-- [ ] **`Scrollable` HIT_SLOP overlaps content.** `scroll.rs:10495` — 4px slop on a 6px track produces a ~14px hit zone that overlaps surrounding content. Outside-bounds clicks just inside the right edge accidentally start scroll drags. Tighten or differentiate thumb vs track slop.
+- [x] **`Scrollable` HIT_SLOP overlaps content.** `scroll.rs:10495` — 4px slop on a 6px track produces a ~14px hit zone that overlaps surrounding content. Outside-bounds clicks just inside the right edge accidentally start scroll drags. Tighten or differentiate thumb vs track slop.
 - [x] **`Scrollable` redraws every drag-frame even without movement.** `scroll.rs:10571` recomputes and `request_redraw`s whether or not `my` changed. Cheap fix: only redraw if `st.y` actually changed.
 - [x] **`Grid::new` uses `cells.remove(0)` in a loop.** `grid.rs:9550` — O(n²). Use `drain(..take)` or chunk a slice.
-- [ ] **Texture-handle generation miss returns blue.** `ui_shader.wgsl:1927` returns `vec4(0, 0, 1, 0)`. Alpha=0 hides it under premultiplied compositing but bleeds blue under straight alpha. Return `vec4(0)`.
 - [x] **Texture-handle generation miss returns blue.** `ui_shader.wgsl:1927` returns `vec4(0, 0, 1, 0)`. Alpha=0 hides it under premultiplied compositing but bleeds blue under straight alpha. Return `vec4(0)`.
-- [ ] **`Text::layout` uses unwrapped intrinsic for line count.** `text.rs:11425` — `lines` always 1 for any text that fits unwrapped; `Length::Fit` text wraps maximally aggressively as a result. Either document or use a smarter intrinsic.
+- [x] **Texture-handle generation miss returns blue.** `ui_shader.wgsl:1927` returns `vec4(0, 0, 1, 0)`. Alpha=0 hides it under premultiplied compositing but bleeds blue under straight alpha. Return `vec4(0)`.
+- [x] **`Text::layout` uses unwrapped intrinsic for line count.** `text.rs:11425` — `lines` always 1 for any text that fits unwrapped; `Length::Fit` text wraps maximally aggressively as a result. Either document or use a smarter intrinsic.
 
 ### P3 — polish
 
@@ -77,20 +77,20 @@ Priorities:
 
 ### P1 — table-stakes for "semi-feature-complete"
 
-- [ ] **Border-radius, borders, shadows, gradients in the shader.** Currently `ui_shader.wgsl` only does flat-color or texture-sample — no rounded corners, no borders (despite `TextColors` declaring `border` / `focus_border` fields that go nowhere), no shadows, no gradients, no analytic AA. The `Primitive` already has spare slots in `data1`/`data2`. Single highest-leverage feature in the library — every widget gets nicer visuals for free.
+- [x] **Border-radius, borders, shadows, gradients in the shader.** Currently `ui_shader.wgsl` only does flat-color or texture-sample — no rounded corners, no borders (despite `TextColors` declaring `border` / `focus_border` fields that go nowhere), no shadows, no gradients, no analytic AA. The `Primitive` already has spare slots in `data1`/`data2`. Single highest-leverage feature in the library — every widget gets nicer visuals for free.
 - [ ] **Text selection.** No shift+arrow, no click-drag, no double-click word, no triple-click line. Without this, the text widget feels broken within seconds.
 - [ ] **Clipboard.** Ctrl/Cmd+C/X/V; primary selection on Linux. Pairs with selection.
 - [ ] **IME / preedit.** `TextInput` only carries committed `text`; no preedit/composition string. CJK and dead-key composition won't render correctly. Both winit and SCTK (`text-input-v3`) expose this.
 - [ ] **Dropdown / Select / Combobox.** Uses your existing overlay layer + a popup positioner. Real apps need this constantly.
 - [ ] **Modal / Dialog.** Scrim layer, focus trap, escape-to-dismiss. Once this and dropdown work, the overlay/positioning code is properly exercised.
-- [ ] **Tab focus traversal.** Currently `TextField` *unfocuses* on Tab — placeholder, not real behavior. Need `focusable` + `tab_index` on `Node`, focus order built during layout, Tab/Shift+Tab cycling at root.
-- [ ] **Keyboard activation of buttons.** Space/Enter when focused. Trivially small once focus traversal is in.
+- [x] **Tab focus traversal.** Currently `TextField` *unfocuses* on Tab — placeholder, not real behavior. Need `focusable` + `tab_index` on `Node`, focus order built during layout, Tab/Shift+Tab cycling at root.
+- [x] **Keyboard activation of buttons.** Space/Enter when focused. Trivially small once focus traversal is in.
 - [ ] **Focus-visible ring.** Visual indicator when a widget is keyboard-focused. Needs the borders work above.
 - [ ] **Checkbox, Radio (group), Switch, Tooltip, Tabs, ProgressBar, Spinner.** Mechanical once theme + borders + focus are in. Group as one milestone.
 
 ### P2 — meaningful additions
 
-- [ ] **Theme struct.** Palette + spacing + typography + radii, threaded through `LayoutCtx`/`PaintCtx`. Widgets default-read from theme, override per-instance. Do this *before* adding the widget batch above so they can use it. Light/dark variants out of the box.
+- [x] **Theme struct.** Palette + spacing + typography + radii, threaded through `LayoutCtx`/`PaintCtx`. Widgets default-read from theme, override per-instance. Do this *before* adding the widget batch above so they can use it. Light/dark variants out of the box.
 - [ ] **Animation primitives.** Spring or ease-curve tweens, register-and-tick mechanism, integration with redraw loop. Without this every interaction is instant-snap. Hover fades, popover enter/exit, scroll inertia.
 - [ ] **Undo/redo in text input.** Ctrl+Z / Ctrl+Shift+Z. Standard ring buffer per `TextInputViewState`.
 - [ ] **Password mode (`is_secret`).** Bullet-glyph rendering in `TextInput`.
@@ -101,24 +101,7 @@ Priorities:
 
 - [ ] **AccessKit integration.** Build a parallel `accesskit::Node` tree during paint with role/name/bounds/state. Drives screen readers across all three platforms. One-time integration, unblocks "production-ready" claims.
 - [ ] **Tree view / expandable list.**
-- [ ] **`prelude` module.** Public re-exports are scattered across `model`, `widget`, `event`. A curated prelude saves users from spelunking.
-- [ ] **Column-builder helpers.** `Column::new().push(x).push(y)` alongside the existing `el!` macro form.
+- [x] **`prelude` module.** Public re-exports are scattered across `model`, `widget`, `event`. A curated prelude saves users from spelunking.
+- [x] **Column-builder helpers.** `Column::new().push(x).push(y)` alongside the existing `el!` macro form.
 - [ ] **Multiple winit targets** (subsumed by `winit.rs:12498` TODO).
-- [ ] Sound!
-
----
-
-## Suggested execution order
-
-1. P0 bugs (#1–5) as one or two PRs. Library is not trustworthy until these are gone.
-2. P1 bugs that don't depend on layout rework: atlas eviction, modifiers field, double-click fix.
-3. Border-radius / borders / shadows in the shader. This unblocks visual quality across every widget at once.
-4. Theme struct.
-5. Text selection + clipboard + IME (the text widget is the most-touched widget in any app).
-6. Tab focus traversal + focus ring.
-7. Dropdown + Modal + Tooltip.
-8. The widget batch (Checkbox, Radio, Switch, Tabs, ProgressBar).
-9. Animation.
-10. AccessKit.
-
-Steps 1–2 turn the library from "demo" into "I can trust this." Steps 3–7 turn it into "I could plausibly build a real app with this." 8+ is filling out the surface.
+- [ ] **Sound!**
