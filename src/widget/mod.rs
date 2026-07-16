@@ -188,7 +188,7 @@ pub use text_input::{TextArea, TextField};
 mod scroll;
 #[doc(hidden)]
 pub use scroll::ScrollViewState;
-pub use scroll::Scrollable;
+pub use scroll::{ScrollBarBehavior, ScrollTo, Scrollable};
 
 #[cfg(feature = "svg")]
 mod svg;

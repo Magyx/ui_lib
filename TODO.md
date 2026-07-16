@@ -87,7 +87,7 @@ Priorities:
 - [x] **Keyboard activation of buttons.** Space/Enter when focused. Trivially small once focus traversal is in.
 - [x] **Focus-visible ring.** Visual indicator when a widget is keyboard-focused. Needs the borders work above.
 - [ ] **Checkbox, Radio (group), Switch, Tooltip, Tabs, ProgressBar, Spinner.** Mechanical once theme + borders + focus are in. Group as one milestone.
-- [ ] **Scrollable:** scroll-into-view on focus + programmatic scroll position.
+- [x] **Scrollable:** scroll-into-view on focus + programmatic scroll position.
 
 ### P2 — meaningful additions
 

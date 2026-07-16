@@ -11,6 +11,16 @@ pub enum ScrollBarBehavior {
     Hide,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScrollTo {
+    /// Scroll to the very top (offset `0`).
+    Top,
+    /// Scroll to the very bottom (max offset).
+    Bottom,
+    /// Scroll to an absolute pixel offset (clamped into range).
+    Offset(i32),
+}
+
 #[doc(hidden)]
 pub struct ScrollViewState {
     pub y: i32,
@@ -20,6 +30,9 @@ pub struct ScrollViewState {
     /// (which only sees `ViewState`) can compute max-scroll without the
     /// removed `self.h` field.
     viewport_h: i32,
+    /// Last focused id seen while `follow_focus` is on, so we only reveal on a
+    /// focus *change* and never fight manual scrolling.
+    last_focus: Option<Id>,
 }
 
 pub struct Scrollable {
@@ -33,6 +46,9 @@ pub struct Scrollable {
     bar_color: Option<Color>,
     thumb_color: Option<Color>,
     bg: Option<Color>,
+
+    scroll_to: Option<ScrollTo>,
+    follow_focus: bool,
 }
 
 impl Scrollable {
@@ -46,6 +62,8 @@ impl Scrollable {
             bar_color: None,
             thumb_color: None,
             bg: None,
+            scroll_to: None,
+            follow_focus: true,
         }
     }
 
@@ -72,6 +90,14 @@ impl Scrollable {
     pub fn scrollbar_color(mut self, bar: Color, thumb: Color) -> Self {
         self.bar_color = Some(bar);
         self.thumb_color = Some(thumb);
+        self
+    }
+    pub fn scroll_to(mut self, to: ScrollTo) -> Self {
+        self.scroll_to = Some(to);
+        self
+    }
+    pub fn follow_focus(mut self, follow: bool) -> Self {
+        self.follow_focus = follow;
         self
     }
 
@@ -123,11 +149,40 @@ impl Scrollable {
             grab: None,
             content_h: 0,
             viewport_h: 0,
+            last_focus: None,
         })
     }
 }
 
 impl IntoElement for Scrollable {}
+
+fn focused_reveal(ctx: &EventCtx, self_idx: usize) -> Option<(i32, i32)> {
+    let focused = ctx.ui.focus.focused()?;
+    let nodes = &ctx.layout.nodes;
+    // `nodes` is reused across frames without truncation (only `node_count` is
+    // reset), so bound the search to the live prefix.
+    let live = ctx.layout.node_count;
+    let fidx = nodes[..live].iter().position(|n| n.id == focused)?;
+
+    // Walk from the focused node up to `self_idx`, summing the scroll offset of
+    // every intermediate scrollable (strictly between the two).
+    let mut idx = fidx;
+    let mut inner_scroll = 0;
+    loop {
+        let parent = nodes[idx].parent?;
+        if parent == self_idx {
+            break;
+        }
+        if let Some(sv) = ctx.ui.view_state.get::<ScrollViewState>(&nodes[parent].id) {
+            inner_scroll += sv.y;
+        }
+        idx = parent;
+    }
+
+    let top = nodes[fidx].pos.y - nodes[self_idx].pos.y - inner_scroll;
+    let height = nodes[fidx].current_size.height;
+    Some((top, height))
+}
 
 impl Widget for Scrollable {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
@@ -205,6 +260,22 @@ impl Widget for Scrollable {
             st.content_h = content_h;
             st.viewport_h = r.h;
             st.y = st.y.clamp(0, max);
+        }
+
+        // App-driven imperative scroll. Applied before user input so a
+        // same-frame wheel/drag still adjusts from the commanded position.
+        if let Some(to) = self.scroll_to {
+            let target = match to {
+                ScrollTo::Top => 0,
+                ScrollTo::Bottom => max,
+                ScrollTo::Offset(o) => o,
+            };
+            let st = self.ensure_state(&mut ctx.ui.view_state, id);
+            let old = st.y;
+            st.y = target.clamp(0, max);
+            if st.y != old {
+                ctx.ui.request_redraw();
+            }
         }
 
         let pressed = ctx.is_mouse_pressed(MouseButton::Left);
@@ -298,5 +369,35 @@ impl Widget for Scrollable {
             let st = self.ensure_state(&mut ctx.ui.view_state, id);
             st.grab = None;
         }
+    }
+
+    fn handle_after(&mut self, ctx: &mut EventCtx) {
+        if !self.follow_focus {
+            return;
+        }
+        let r = ctx.rect();
+        let id = ctx.id();
+        let content_h = ctx.child_content_height();
+        let max = (content_h - r.h).max(0);
+
+        let cur = ctx.ui.focus.focused();
+        let changed = self.ensure_state(&mut ctx.ui.view_state, id).last_focus != cur;
+        if !changed {
+            return;
+        }
+        if let Some((top, h)) = focused_reveal(ctx, ctx.current_node_id()) {
+            let st = self.ensure_state(&mut ctx.ui.view_state, id);
+            let old = st.y;
+            if top < st.y {
+                st.y = top;
+            } else if top + h > st.y + r.h {
+                st.y = top + h - r.h;
+            }
+            st.y = st.y.clamp(0, max);
+            if st.y != old {
+                ctx.ui.request_redraw();
+            }
+        }
+        self.ensure_state(&mut ctx.ui.view_state, id).last_focus = cur;
     }
 }
