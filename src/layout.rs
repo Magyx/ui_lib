@@ -211,7 +211,7 @@ pub fn handle_tree(
         ctx.ui.request_redraw();
     }
 
-    __handle_tree(w, ctx, cursor, 0, 0, ROOT_SEED);
+    __handle_tree(w, ctx, cursor, 0, 0, ROOT_SEED, None);
 
     ctx.ui.focus.end_walk();
 }
@@ -223,9 +223,29 @@ fn __handle_tree(
     acc_tx: i32,
     acc_ty: i32,
     scope: ScopeId,
+    parent_clip: Option<[i32; 4]>,
 ) {
     let id = *cursor;
-    ctx.__set_data(id, acc_tx, acc_ty, scope);
+
+    let n = ctx.layout.nodes[id];
+    let mut clip = parent_clip;
+    if n.clip_children {
+        let mut r = [
+            n.pos.x + acc_tx,
+            n.pos.y + acc_ty,
+            n.current_size.width,
+            n.current_size.height,
+        ];
+        if let Some([px, py, pw, ph]) = clip {
+            let x0 = px.max(r[0]);
+            let y0 = py.max(r[1]);
+            let x1 = (px + pw).min(r[0] + r[2]);
+            let y1 = (py + ph).min(r[1] + r[3]);
+            r = [x0, y0, (x1 - x0).max(0), (y1 - y0).max(0)];
+        }
+        clip = Some(r);
+    }
+    ctx.__set_data(id, acc_tx, acc_ty, scope, clip);
 
     let node_id = ctx.id();
 
@@ -246,10 +266,18 @@ fn __handle_tree(
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
-        __handle_tree(child, ctx, cursor, acc_tx + dx, acc_ty + dy, child_scope);
+        __handle_tree(
+            child,
+            ctx,
+            cursor,
+            acc_tx + dx,
+            acc_ty + dy,
+            child_scope,
+            clip,
+        );
     }
 
-    ctx.__set_data(id, acc_tx, acc_ty, scope);
+    ctx.__set_data(id, acc_tx, acc_ty, scope, clip);
     w.handle_after(ctx);
 }
 

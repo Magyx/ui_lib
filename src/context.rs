@@ -475,6 +475,7 @@ pub struct EventCtx<'a> {
     pub(crate) current_node: usize,
     pub(crate) offset: Position<i32>,
     pub(crate) focus_scope: ScopeId,
+    pub(crate) clip: Option<Rect>,
 
     sink: &'a mut MessageSink,
 }
@@ -497,6 +498,7 @@ impl<'a> EventCtx<'a> {
             current_node: 0usize,
             offset: Position::splat(0),
             focus_scope: ROOT_SEED,
+            clip: None,
 
             sink,
         }
@@ -507,10 +509,12 @@ impl<'a> EventCtx<'a> {
         acc_tx: i32,
         acc_ty: i32,
         focus_scope: ScopeId,
+        clip: Option<[i32; 4]>,
     ) {
         self.current_node = current_node;
         self.offset = Position::new(acc_tx, acc_ty);
         self.focus_scope = focus_scope;
+        self.clip = clip.map(|[x, y, w, h]| Rect::new(x, y, w, h));
     }
     pub fn current_node_id(&self) -> usize {
         self.current_node
@@ -566,10 +570,14 @@ impl<'a> EventCtx<'a> {
     pub fn is_pressed(&self) -> bool {
         self.ui.focus.is_pressed(self.id())
     }
-    /// Whether pointer input should reach this node given any active trap.
+    /// Whether pointer input should reach this node given any active trap or clip.
     #[inline]
     pub fn pointer_available(&self) -> bool {
         self.ui.focus.pointer_available(self.focus_scope)
+            && self
+                .clip
+                .as_ref()
+                .is_none_or(|c| c.contains(self.ui.mouse_pos))
     }
     /// Convenience: pointer is over this node *and* reaches it.
     #[inline]
