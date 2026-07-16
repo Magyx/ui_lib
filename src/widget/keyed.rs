@@ -53,8 +53,8 @@ impl<W: Widget> Widget for Keyed<W> {
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         self.inner.paint(ctx, instances)
     }
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instancess: &mut Vec<Instance>) {
-        self.inner.paint_overlay(ctx, instancess)
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        self.inner.paint_overlay(ctx, instances)
     }
 
     fn handle(&mut self, ctx: &mut EventCtx) {

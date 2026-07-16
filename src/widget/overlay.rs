@@ -53,8 +53,8 @@ impl Widget for Absolute {
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
         self.inner.as_mut().paint(ctx, out);
     }
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instancess: &mut Vec<Instance>) {
-        self.inner.as_mut().paint_overlay(ctx, instancess);
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        self.inner.as_mut().paint_overlay(ctx, instances);
     }
     fn handle(&mut self, ctx: &mut EventCtx) {
         self.inner.as_mut().handle(ctx);

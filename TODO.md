@@ -62,7 +62,7 @@ Priorities:
 
 ### P3 — polish
 
-- [ ] Typo: `instancess` in `widget/mod.rs:9837` and `tests/common.rs:12940–12941`.
+- [x] Typo: `instancess` in `widget/mod.rs:9837` and `tests/common.rs:12940–12941`.
 - [ ] `DEFAULT_MAX_TEXTURES` (`consts.rs`) is a hard cap with no graceful "create another atlas" fallback. Document or fix.
 - [ ] `widget/svg.rs` rasterizes via resvg into the same atlas as glyphs — combined with the no-eviction issue, dynamically-sized SVGs will exhaust it. Subsumed by P1 atlas eviction.
 - [ ] Resolve the controlled/uncontrolled inconsistency: `Slider` value lives in app state, everything else in `view_state`. Pick one or document both.

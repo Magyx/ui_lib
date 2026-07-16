@@ -227,8 +227,8 @@ mod harness {
             self.slot.set(Some(r.xywh()));
             self.inner.paint(ctx, out);
         }
-        fn paint_overlay(&mut self, ctx: &mut PaintCtx, instancess: &mut Vec<Instance>) {
-            self.inner.paint_overlay(ctx, instancess);
+        fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+            self.inner.paint_overlay(ctx, instances);
         }
         fn handle(&mut self, ctx: &mut ui::context::EventCtx) {
             self.inner.handle(ctx);
