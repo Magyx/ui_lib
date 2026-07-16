@@ -553,22 +553,29 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
 
     fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         let r = ctx.rect();
-        let id = ctx.id();
         let theme = ctx.theme;
-        let focused = self.state(ctx.view_state, id).is_some_and(|s| s.focused);
         let fill = self.bg.unwrap_or(theme.surface_variant);
-        let border = if focused {
-            theme.focus_outline
-        } else {
-            theme.outline
-        };
         instances.push(Instance::ui_rounded(
             Position::new(r.x as f32, r.y as f32),
             Size::new(r.w as f32, r.h as f32),
             fill,
             theme.corner_radius,
             theme.border_width,
-            border,
+            theme.outline,
+        ));
+    }
+
+    fn paint_focus_ring(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        const FOCUS_BORDER: i32 = 2;
+        let r = ctx.rect();
+        let theme = ctx.theme;
+        instances.push(Instance::ui_rounded(
+            Position::new(r.x as f32, r.y as f32),
+            Size::new(r.w as f32, r.h as f32),
+            Color::TRANSPARENT,
+            theme.corner_radius,
+            FOCUS_BORDER,
+            theme.focus_outline,
         ));
     }
 

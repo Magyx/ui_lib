@@ -94,6 +94,9 @@ pub trait Widget: IntoElement {
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
         let _ = (ctx, instances);
     }
+    fn paint_focus_ring(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+        ctx.focus_ring(instances, ctx.rect().xywh());
+    }
 
     fn handle(&mut self, ctx: &mut EventCtx) {
         let _ = ctx;

@@ -305,6 +305,9 @@ fn __paint_tree(
 
     let self_begin = out.len();
     w.paint(ctx, out);
+    if w.focusable() && ctx.is_focused() {
+        w.paint_focus_ring(ctx, out);
+    }
     if let Some([cx, cy, cw, ch]) = clip {
         for inst in &mut out[self_begin..] {
             inst.add_clip(cx, cy, cw, ch);

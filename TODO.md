@@ -85,8 +85,9 @@ Priorities:
 - [ ] **Modal / Dialog.** Scrim layer, focus trap, escape-to-dismiss. Once this and dropdown work, the overlay/positioning code is properly exercised.
 - [x] **Tab focus traversal.** Currently `TextField` *unfocuses* on Tab — placeholder, not real behavior. Need `focusable` + `tab_index` on `Node`, focus order built during layout, Tab/Shift+Tab cycling at root.
 - [x] **Keyboard activation of buttons.** Space/Enter when focused. Trivially small once focus traversal is in.
-- [ ] **Focus-visible ring.** Visual indicator when a widget is keyboard-focused. Needs the borders work above.
+- [x] **Focus-visible ring.** Visual indicator when a widget is keyboard-focused. Needs the borders work above.
 - [ ] **Checkbox, Radio (group), Switch, Tooltip, Tabs, ProgressBar, Spinner.** Mechanical once theme + borders + focus are in. Group as one milestone.
+- [ ] **Scrollable:** scroll-into-view on focus + programmatic scroll position.
 
 ### P2 — meaningful additions
 
