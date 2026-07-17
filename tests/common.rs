@@ -1,3 +1,4 @@
+#[allow(unused)] // This is only used during tests.
 #[cfg(test)]
 pub use harness::*;
 
