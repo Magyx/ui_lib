@@ -1,6 +1,7 @@
 # UI Library — TODO
 
 <!--toc:start-->
+
 - [UI Library — TODO](#ui-library-todo)
   - [Bugs & fixes](#bugs-fixes)
     - [P0 — correctness blockers](#p0-correctness-blockers)
@@ -12,6 +13,7 @@
     - [P2 — meaningful additions](#p2-meaningful-additions)
     - [P3 — eventually](#p3-eventually)
   - [Suggested execution order](#suggested-execution-order)
+
 <!--toc:end-->
 
 Priorities:
@@ -30,8 +32,8 @@ Priorities:
 - [x] **Scrollable is fundamentally broken.** Three interlocking issues; fix as a single PR.
   - `__Node.content_size.height` is set to `current_size.height` in `measure_height` (`layout.rs:4044, 4057`), so `Scrollable::content_h` always equals viewport height and the wheel handler's `max > 0` guard is never true. `content_size` must track the unconstrained natural size separately.
   - `write_back` (`layout.rs:3627`) writes the layout engine's unscrolled `pos` into widgets via `set_layout`. Visual paint applies `children_offset` (`layout.rs:3556, 3574–3578`) but widget `self.x/self.y` stay unscrolled, so hit-testing inside scrolled regions is wrong. Thread the cumulative offset into `write_back` or store the post-offset position on the node.
-  - `Scrollable::handle` reads `self.content_h` but `prepare()` (which sets it) runs *after* `handle()` in `Engine::poll`. On frame N, scroll uses frame N−1's content height; on frame 0 it's zero.
-- [x] **Double-click / double-emit bug.** `Engine::poll` (`graphics.rs:3101`) and `render_if_needed` (`graphics.rs:3166`) both run `root.handle(event: None)`, but `mouse_buttons_pressed`/`released` are only cleared at the *start* of `handle_platform_event` (`graphics.rs:3246–3247`). Released bits leak into redraw frames; buttons re-fire `on_press`. Clear pressed/released after the render pass too, or make widgets only consult them when `ctx.event` is `Some(MouseButton)`.
+  - `Scrollable::handle` reads `self.content_h` but `prepare()` (which sets it) runs _after_ `handle()` in `Engine::poll`. On frame N, scroll uses frame N−1's content height; on frame 0 it's zero.
+- [x] **Double-click / double-emit bug.** `Engine::poll` (`graphics.rs:3101`) and `render_if_needed` (`graphics.rs:3166`) both run `root.handle(event: None)`, but `mouse_buttons_pressed`/`released` are only cleared at the _start_ of `handle_platform_event` (`graphics.rs:3246–3247`). Released bits leak into redraw frames; buttons re-fire `on_press`. Clear pressed/released after the render pass too, or make widgets only consult them when `ctx.event` is `Some(MouseButton)`.
 - [x] **Two `handle` passes per frame.** `Engine::poll` and `Engine::render_if_needed` both call `root.handle()` with `event: None`. Wasted traversal and the proximate cause of #2 above. The TODO at `graphics.rs:3159` acknowledges this. Split into `update` (per-frame mouse-state-derived hover/active) vs `handle_event` (only when there's a discrete event).
 - [x] **`ViewState` is never invalidated.** `graphics.rs:3127` notes this. Removed widgets leak entries forever, and a list that shrinks then grows will hand stale state to new widgets at the same indices. Mark touched IDs during the frame and sweep unreferenced ones at end-of-frame.
 - [x] **Hard 1024-node panic.** `layout.rs:3333`'s `MAX_NODES = 1024` plus `assert!` in `create_node` is a runtime crash for users with moderately-sized trees. Switch to `Vec` or return `Result`.
@@ -83,7 +85,7 @@ Priorities:
 - [ ] **IME / preedit.** `TextInput` only carries committed `text`; no preedit/composition string. CJK and dead-key composition won't render correctly. Both winit and SCTK (`text-input-v3`) expose this.
 - [ ] **Dropdown / Select / Combobox.** Uses your existing overlay layer + a popup positioner. Real apps need this constantly.
 - [ ] **Modal / Dialog.** Scrim layer, focus trap, escape-to-dismiss. Once this and dropdown work, the overlay/positioning code is properly exercised.
-- [x] **Tab focus traversal.** Currently `TextField` *unfocuses* on Tab — placeholder, not real behavior. Need `focusable` + `tab_index` on `Node`, focus order built during layout, Tab/Shift+Tab cycling at root.
+- [x] **Tab focus traversal.** Currently `TextField` _unfocuses_ on Tab — placeholder, not real behavior. Need `focusable` + `tab_index` on `Node`, focus order built during layout, Tab/Shift+Tab cycling at root.
 - [x] **Keyboard activation of buttons.** Space/Enter when focused. Trivially small once focus traversal is in.
 - [x] **Focus-visible ring.** Visual indicator when a widget is keyboard-focused. Needs the borders work above.
 - [ ] **Checkbox, Radio (group), Switch, Tooltip, Tabs, ProgressBar, Spinner.** Mechanical once theme + borders + focus are in. Group as one milestone.
@@ -91,7 +93,7 @@ Priorities:
 
 ### P2 — meaningful additions
 
-- [x] **Theme struct.** Palette + spacing + typography + radii, threaded through `LayoutCtx`/`PaintCtx`. Widgets default-read from theme, override per-instance. Do this *before* adding the widget batch above so they can use it. Light/dark variants out of the box.
+- [x] **Theme struct.** Palette + spacing + typography + radii, threaded through `LayoutCtx`/`PaintCtx`. Widgets default-read from theme, override per-instance. Do this _before_ adding the widget batch above so they can use it. Light/dark variants out of the box.
 - [ ] **Animation primitives.** Spring or ease-curve tweens, register-and-tick mechanism, integration with redraw loop. Without this every interaction is instant-snap. Hover fades, popover enter/exit, scroll inertia.
 - [ ] **Undo/redo in text input.** Ctrl+Z / Ctrl+Shift+Z. Standard ring buffer per `TextInputViewState`.
 - [ ] **Password mode (`is_secret`).** Bullet-glyph rendering in `TextInput`.
