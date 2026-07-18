@@ -209,3 +209,6 @@ pub use switch::Switch;
 
 mod progress;
 pub use progress::ProgressBar;
+
+mod spinner;
+pub use spinner::Spinner;
