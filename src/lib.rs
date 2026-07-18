@@ -35,7 +35,7 @@ pub mod prelude {
     pub use crate::widget::{
         Align, Axis, Button, Center, CheckState, Checkbox, Column, ContentFit, Element, Image,
         Keyed, Length, Mark, Overlay, Padding, Rectangle, Row, Scrollable, SimpleCanvas, Slider,
-        Spacer, Text, TextArea, TextField, TextRole, WrappingRows,
+        Spacer, Switch, Text, TextArea, TextField, TextRole, WrappingRows,
     };
 
     pub use crate::graphics::{Engine, TargetId};

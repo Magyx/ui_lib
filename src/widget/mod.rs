@@ -203,3 +203,6 @@ pub use card::Card;
 
 mod checkbox;
 pub use checkbox::{CheckState, Checkbox, Mark};
+
+mod switch;
+pub use switch::Switch;
