@@ -68,6 +68,7 @@ impl TextInputViewState {
         self.selection_range(value).is_some()
     }
 
+    #[allow(unused)]
     /// The currently selected text, if any.
     fn selected_text(&self, value: &str) -> Option<String> {
         let (s, e) = self.selection_range(value)?;
@@ -117,7 +118,7 @@ impl TextInputViewState {
     }
 }
 
-pub type Handler<M> = dyn Fn(&str) -> M + Send + Sync + 'static;
+pub type Handler<M> = dyn Fn(&str) -> M + 'static;
 
 fn cursor_byte_offset(value: &str, cursor: TextCursor) -> usize {
     let mut offset = 0usize;
@@ -272,7 +273,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
     pub fn on_change<F>(mut self, f: F) -> Self
     where
-        F: Fn(&str) -> M + Send + Sync + 'static,
+        F: Fn(&str) -> M + 'static,
     {
         self.on_change = Some(Box::new(f));
         self
