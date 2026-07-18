@@ -1,5 +1,8 @@
 use crate::{context::Id, layout::ROOT_SEED};
 
+pub const GAP: i32 = 2;
+pub const RING_WIDTH: i32 = 2;
+
 /// A focus scope is identified by the path-hash [`Id`] of the widget that
 /// introduces it. Scopes are therefore stable across frames for free. The root
 /// scope is [`ROOT_SEED`].

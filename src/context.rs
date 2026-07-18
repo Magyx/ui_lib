@@ -452,8 +452,7 @@ impl<'a> PaintCtx<'a> {
     }
 
     pub fn focus_ring(&self, out: &mut Vec<Instance>, (x, y, w, h): (i32, i32, i32, i32)) {
-        const GAP: i32 = 2;
-        const RING_WIDTH: i32 = 2;
+        use crate::focus::{GAP, RING_WIDTH};
         out.push(Instance::ui_rounded(
             Position::new((x - GAP) as f32, (y - GAP) as f32),
             Size::new((w + GAP * 2) as f32, (h + GAP * 2) as f32),

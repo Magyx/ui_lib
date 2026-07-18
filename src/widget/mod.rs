@@ -200,3 +200,6 @@ pub use keyed::Keyed;
 
 mod card;
 pub use card::Card;
+
+mod checkbox;
+pub use checkbox::{CheckState, Checkbox, Mark};
