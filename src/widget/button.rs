@@ -93,12 +93,14 @@ impl<M: Clone + 'static> Widget for Button<M> {
             min: self.min,
             max: self.max,
             layout_dir: Axis::Horizontal,
+            cross_align: Align::Center,
+            main_align: Align::Center,
             ..Default::default()
         }
     }
 
     fn child_count(&self) -> usize {
-        if self.content.is_some() { 1 } else { 0 }
+        self.content.is_some() as usize
     }
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         self.content.as_mut().unwrap().as_mut()
