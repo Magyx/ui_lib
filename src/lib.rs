@@ -34,7 +34,7 @@ pub mod prelude {
 
     pub use crate::widget::{
         Align, Axis, Button, Center, CheckState, Checkbox, Column, ContentFit, Element, Image,
-        Keyed, Length, Mark, Overlay, Padding, ProgressBar, Rectangle, Row, Scrollable,
+        Keyed, Length, Mark, Overlay, Padding, ProgressBar, RadioGroup, Rectangle, Row, Scrollable,
         SimpleCanvas, Slider, Spacer, Spinner, Switch, Text, TextArea, TextField, TextRole,
         WrappingRows,
     };
