@@ -9,8 +9,8 @@ use crate::{
     },
 };
 
-struct DrawCommand<'a> {
-    pipe: &'a PipelineKey,
+struct DrawCommand {
+    id: u16,
     base: u32,
     amount: u32,
     clip: [u32; 4],
@@ -24,6 +24,8 @@ pub(crate) struct Renderer {
     instance_capacity: u64,
 
     pub(crate) textures: TextureRegistry,
+
+    draw_buf: Vec<DrawCommand>,
 }
 
 impl Renderer {
@@ -56,6 +58,7 @@ impl Renderer {
             instance_capacity: max_instances,
             instance_buffer,
             textures: TextureRegistry::new(device),
+            draw_buf: Vec::new(),
         }
     }
 
@@ -115,8 +118,7 @@ impl Renderer {
         let lh = globals.window_size[1].ceil() as u32;
         let default_clip = [0, 0, lw, lh];
 
-        let mut draw_commands = Vec::new();
-
+        self.draw_buf.clear();
         let mut base = 0u32;
         let mut current_key: Option<&PipelineKey> = None;
         let mut current_clip = default_clip;
@@ -135,8 +137,8 @@ impl Renderer {
                     && current_clip[2] > 0
                     && current_clip[3] > 0
                 {
-                    draw_commands.push(DrawCommand {
-                        pipe: key,
+                    self.draw_buf.push(DrawCommand {
+                        id: pipeline_registry.get_id(key),
                         base,
                         amount: i as u32 - base,
                         clip: current_clip,
@@ -148,8 +150,8 @@ impl Renderer {
             }
         }
         if let Some(key) = current_key {
-            draw_commands.push(DrawCommand {
-                pipe: key,
+            self.draw_buf.push(DrawCommand {
+                id: pipeline_registry.get_id(key),
                 base,
                 amount: instances.len() as u32 - base,
                 clip: current_clip,
@@ -181,9 +183,9 @@ impl Renderer {
             pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
-            for command in &draw_commands {
+            for command in &self.draw_buf {
                 pipeline_registry.apply_pipeline(
-                    command.pipe,
+                    command.id,
                     globals,
                     self.textures.bind_group(),
                     &mut pass,
@@ -203,7 +205,7 @@ impl Renderer {
             }
         }
 
-        crate::plot!("ui.draw_commands", draw_commands.len() as f64);
+        crate::plot!("ui.draw_commands", self.draw_buf.len() as f64);
         gpu.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
