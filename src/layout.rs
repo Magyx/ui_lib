@@ -23,16 +23,16 @@ pub fn mix64(parent: Id, idx: usize) -> Id {
 }
 
 #[inline]
-fn color_for_depth(depth: usize) -> (u8, u8, u8, u8) {
-    const P: &[(u8, u8, u8, u8)] = &[
-        (255, 66, 66, 220),  // red
-        (255, 159, 28, 220), // orange
-        (255, 214, 10, 220), // yellow
-        (52, 199, 89, 220),  // green
-        (48, 176, 199, 220), // teal
-        (10, 132, 255, 220), // blue
-        (94, 92, 230, 220),  // indigo
-        (191, 90, 242, 220), // purple
+fn color_for_depth(depth: usize) -> Color {
+    const P: &[Color] = &[
+        Color::rgba(255, 66, 66, 220),  // red
+        Color::rgba(255, 159, 28, 220), // orange
+        Color::rgba(255, 214, 10, 220), // yellow
+        Color::rgba(52, 199, 89, 220),  // green
+        Color::rgba(48, 176, 199, 220), // teal
+        Color::rgba(10, 132, 255, 220), // blue
+        Color::rgba(94, 92, 230, 220),  // indigo
+        Color::rgba(191, 90, 242, 220), // purple
     ];
     P[depth % P.len()]
 }
@@ -367,36 +367,20 @@ fn __paint_tree(
     w.paint_overlay(ctx, out);
 
     if eng.debug {
-        let (r, g, b, a) = color_for_depth(depth);
-        let col = Color::rgba(r, g, b, a);
-        let w = n.current_size.width.max(1) as f32;
-        let h = n.current_size.height.max(1) as f32;
-        let x = n.pos.x as f32;
-        let y = n.pos.y as f32;
-        let thickness = 1.0;
+        let r = ctx.rect();
+        let x = r.x as f32;
+        let y = r.y as f32;
+        let w = r.w as f32;
+        let h = r.h as f32;
+        let col = color_for_depth(depth);
+        let thickness = 1;
 
-        // top
-        out.push(Instance::ui(
+        out.push(Instance::ui_rounded(
             Position::new(x, y),
-            Size::new(w, thickness),
-            col,
-        ));
-        // bottom
-        out.push(Instance::ui(
-            Position::new(x, y + h - thickness),
-            Size::new(w, thickness),
-            col,
-        ));
-        // left
-        out.push(Instance::ui(
-            Position::new(x, y),
-            Size::new(thickness, h),
-            col,
-        ));
-        // right
-        out.push(Instance::ui(
-            Position::new(x + w - thickness, y),
-            Size::new(thickness, h),
+            Size::new(w, h),
+            Color::TRANSPARENT,
+            1.0,
+            thickness,
             col,
         ));
     }
