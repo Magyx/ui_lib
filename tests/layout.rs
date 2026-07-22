@@ -14,6 +14,7 @@ mod layout {
     use ui::el;
     use ui::layout::Node;
     use ui::model::{Color, Size, Vec4};
+    use ui::primitive::InstanceStore;
     use ui::widget::{
         Align, Center, Column, Element, IntoElement, Length, Overlay, Rectangle, Row, Spacer,
         Widget,
@@ -1007,11 +1008,7 @@ mod layout {
         ) -> Option<i32> {
             Some((self.height_for_width)(width))
         }
-        fn paint(
-            &mut self,
-            ctx: &mut ui::context::PaintCtx,
-            _out: &mut Vec<ui::primitive::Instance>,
-        ) {
+        fn paint(&mut self, ctx: &mut ui::context::PaintCtx, _out: &mut InstanceStore) {
             let r = ctx.rect();
             self.slot.set(Some(r.xywh()));
         }
@@ -1099,11 +1096,7 @@ mod layout {
             ) -> Option<i32> {
                 Some(0) // would shrink if post_width_query didn't clamp
             }
-            fn paint(
-                &mut self,
-                ctx: &mut ui::context::PaintCtx,
-                _out: &mut Vec<ui::primitive::Instance>,
-            ) {
+            fn paint(&mut self, ctx: &mut ui::context::PaintCtx, _out: &mut InstanceStore) {
                 let r = ctx.rect();
                 self.slot.set(Some(r.xywh()));
             }
@@ -1153,11 +1146,7 @@ mod layout {
             ) -> Option<i32> {
                 Some(1000)
             }
-            fn paint(
-                &mut self,
-                ctx: &mut ui::context::PaintCtx,
-                _out: &mut Vec<ui::primitive::Instance>,
-            ) {
+            fn paint(&mut self, ctx: &mut ui::context::PaintCtx, _out: &mut InstanceStore) {
                 let r = ctx.rect();
                 self.slot.set(Some(r.xywh()));
             }
@@ -1209,12 +1198,7 @@ mod layout {
             ) -> Option<i32> {
                 panic!("post_width_query called min_height_for_width on a non-leaf");
             }
-            fn paint(
-                &mut self,
-                _ctx: &mut ui::context::PaintCtx,
-                _out: &mut Vec<ui::primitive::Instance>,
-            ) {
-            }
+            fn paint(&mut self, _ctx: &mut ui::context::PaintCtx, _out: &mut InstanceStore) {}
             fn handle(&mut self, _ctx: &mut ui::context::EventCtx) {}
         }
 

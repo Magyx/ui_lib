@@ -76,7 +76,7 @@ impl Widget for ProgressBar {
         unreachable!()
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
         let theme = ctx.theme;
         let radius = self.height as f32 / 2.0;

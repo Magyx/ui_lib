@@ -340,7 +340,7 @@ impl Widget for Text {
         }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
         let id = ctx.id();
         let base_color = ctx.env.foreground;
@@ -351,7 +351,7 @@ impl Widget for Text {
 
         for glyph in state.buffer.glyphs() {
             let tint = glyph.color.unwrap_or(base_color);
-            instances.push(Instance::ui_tex(
+            out.push(Instance::ui_tex(
                 Position::new(glyph.pos.x + r.x as f32, glyph.pos.y + r.y as f32),
                 glyph.size,
                 tint,

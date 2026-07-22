@@ -210,7 +210,7 @@ impl Widget for Scrollable {
         (0, -st.y)
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
         let id = ctx.id();
         self.ensure_state(ctx.view_state, id).viewport_h = r.h;
@@ -219,7 +219,7 @@ impl Widget for Scrollable {
         }
     }
 
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
         let id = ctx.id();
         let content_h = ctx.child_content_height();

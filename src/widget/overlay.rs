@@ -50,11 +50,11 @@ impl Widget for Absolute {
     fn prepare_overlay(&mut self, ctx: &mut PrepareCtx) {
         self.inner.as_mut().prepare_overlay(ctx);
     }
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         self.inner.as_mut().paint(ctx, out);
     }
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        self.inner.as_mut().paint_overlay(ctx, instances);
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        self.inner.as_mut().paint_overlay(ctx, out);
     }
     fn handle(&mut self, ctx: &mut EventCtx) {
         self.inner.as_mut().handle(ctx);
@@ -163,7 +163,7 @@ impl Widget for Overlay {
         self.modal
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         if self.color.a() > 0 {
             let r = ctx.rect();
             out.push(Instance::ui(

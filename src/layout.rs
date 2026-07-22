@@ -6,7 +6,7 @@ use crate::{
     event::{KeyState, LogicalKey, UiEventRef},
     focus::{Dir, ScopeId},
     model::{Color, Position, Size},
-    primitive::Instance,
+    primitive::{Instance, InstanceStore},
     theme::Env,
     widget::{Align, Axis, Length, Padding, Widget},
 };
@@ -286,7 +286,7 @@ pub fn paint_tree(
     ctx: &mut PaintCtx,
     eng: &crate::layout::LayoutEngine,
     cursor: &mut usize,
-    out: &mut Vec<Instance>,
+    out: &mut InstanceStore,
     parent_clip: Option<[i32; 4]>,
 ) {
     crate::scope!("layout::paint_tree");
@@ -299,7 +299,7 @@ fn __paint_tree(
     ctx: &mut PaintCtx,
     eng: &crate::layout::LayoutEngine,
     cursor: &mut usize,
-    out: &mut Vec<Instance>,
+    out: &mut InstanceStore,
     parent_clip: Option<[i32; 4]>,
     acc_tx: i32,
     acc_ty: i32,
@@ -336,10 +336,8 @@ fn __paint_tree(
     if w.focusable() && ctx.is_focused() {
         w.paint_focus_ring(ctx, out);
     }
-    if let Some([cx, cy, cw, ch]) = clip {
-        for inst in &mut out[self_begin..] {
-            inst.add_clip(cx, cy, cw, ch);
-        }
+    if let Some(c) = clip {
+        out.add_clip_for(c, self_begin..);
     }
 
     *cursor += 1;
@@ -406,10 +404,8 @@ fn __paint_tree(
         ));
     }
 
-    if let Some([cx, cy, cw, ch]) = clip {
-        for inst in &mut out[overlay_begin..] {
-            inst.add_clip(cx, cy, cw, ch);
-        }
+    if let Some(c) = clip {
+        out.add_clip_for(c, overlay_begin..);
     }
 }
 

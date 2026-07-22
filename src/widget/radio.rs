@@ -83,7 +83,7 @@ impl<M: Clone + 'static> Widget for Radio<M> {
         true
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
         let theme = ctx.theme;
 
@@ -123,7 +123,7 @@ impl<M: Clone + 'static> Widget for Radio<M> {
         }
     }
 
-    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         use crate::focus::{GAP, RING_WIDTH};
         let r = ctx.rect();
         out.push(Instance::ui_rounded(
@@ -269,5 +269,5 @@ impl<M: Clone + 'static> Widget for RadioGroup<M> {
         &mut self.rows[i]
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx, _instances: &mut Vec<Instance>) {}
+    fn paint(&mut self, _ctx: &mut PaintCtx, _out: &mut InstanceStore) {}
 }

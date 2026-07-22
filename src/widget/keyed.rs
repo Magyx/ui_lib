@@ -50,11 +50,11 @@ impl<W: Widget> Widget for Keyed<W> {
     fn prepare_overlay(&mut self, ctx: &mut PrepareCtx) {
         self.inner.prepare_overlay(ctx)
     }
-    fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        self.inner.paint(ctx, instances)
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        self.inner.paint(ctx, out)
     }
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        self.inner.paint_overlay(ctx, instances)
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        self.inner.paint_overlay(ctx, out)
     }
 
     fn handle(&mut self, ctx: &mut EventCtx) {

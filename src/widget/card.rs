@@ -82,7 +82,7 @@ impl Widget for Card {
         }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
         let elevation = ctx.env.elevation.saturating_add(1);
         ctx.surface(

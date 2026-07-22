@@ -116,7 +116,7 @@ impl<M: Clone + 'static> Widget for Button<M> {
         true
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let ctx_rect = ctx.rect();
         let id = ctx.id();
         let st = ctx.view_state.get::<ButtonState>(&id);
@@ -136,7 +136,7 @@ impl<M: Clone + 'static> Widget for Button<M> {
         } else {
             Color::TRANSPARENT
         };
-        ctx.surface(instances, ctx_rect.xywh(), fill, border);
+        ctx.surface(out, ctx_rect.xywh(), fill, border);
     }
 
     fn handle_after(&mut self, ctx: &mut EventCtx) {

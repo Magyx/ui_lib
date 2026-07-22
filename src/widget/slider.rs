@@ -164,7 +164,7 @@ impl<M: 'static> Widget for Slider<M> {
         unreachable!()
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let theme = ctx.theme;
         let r = ctx.rect();
         let track = self.track_color.unwrap_or(theme.surface_variant);

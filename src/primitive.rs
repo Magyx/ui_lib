@@ -202,7 +202,6 @@ pub struct Instance {
     pub(crate) kind: PipelineKey,
     clip: Option<[u32; 4]>,
 }
-
 impl Instance {
     pub fn new(
         kind: PipelineKey,
@@ -319,22 +318,70 @@ impl Instance {
             clip: None,
         }
     }
+}
 
-    #[inline]
-    pub(crate) fn add_clip(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        if w > 0 && h > 0 {
-            self.clip = Some([x.max(0) as u32, y.max(0) as u32, w as u32, h as u32]);
+pub struct InstanceMeta {
+    pub kind: PipelineKey,
+    pub clip: Option<[u32; 4]>,
+}
+
+pub struct InstanceStore {
+    primitives: Vec<Primitive>,
+    meta: Vec<InstanceMeta>,
+}
+impl Default for InstanceStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl InstanceStore {
+    pub fn new() -> Self {
+        Self {
+            primitives: Vec::new(),
+            meta: Vec::new(),
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.primitives.len()
+    }
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn primitives(&self) -> &[Primitive] {
+        &self.primitives
+    }
+    pub fn meta(&self) -> &[InstanceMeta] {
+        &self.meta
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.primitives.clear();
+        self.meta.clear();
+    }
+
+    pub(crate) fn add_clip_for<R>(&mut self, [x, y, w, h]: [i32; 4], range: R)
+    where
+        R: std::slice::SliceIndex<[InstanceMeta], Output = [InstanceMeta]>,
+    {
+        let clip_u32 = if w > 0 && h > 0 {
+            Some([x.max(0) as u32, y.max(0) as u32, w as u32, h as u32])
         } else {
-            self.clip = Some([0, 0, 0, 0]);
+            Some([0, 0, 0, 0])
+        };
+
+        for m in &mut self.meta[range] {
+            m.clip = clip_u32;
         }
     }
 
-    pub fn scissor(&self) -> Option<[u32; 4]> {
-        self.clip
-    }
-
-    pub fn primitive(&self) -> &Primitive {
-        &self.primitive
+    pub fn push(&mut self, i: Instance) {
+        self.primitives.push(i.primitive);
+        self.meta.push(InstanceMeta {
+            kind: i.kind,
+            clip: i.clip,
+        });
     }
 }
 
@@ -362,40 +409,65 @@ mod tests {
 
     #[test]
     fn add_clip_normal_rect_sets_scissor() {
-        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
-        inst.add_clip(5, 10, 100, 200);
-        assert_eq!(inst.scissor(), Some([5, 10, 100, 200]));
+        let mut store = InstanceStore::new();
+        store.push(Instance::ui(
+            Position::new(0.0, 0.0),
+            Size::new(1.0, 1.0),
+            Color::WHITE,
+        ));
+        store.add_clip_for([5, 10, 100, 200], 0..1);
+        assert_eq!(store.meta()[0].clip, Some([5, 10, 100, 200]));
     }
 
     #[test]
     fn add_clip_zero_width_becomes_null_clip() {
-        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
+        let mut store = InstanceStore::new();
+        store.push(Instance::ui(
+            Position::new(0.0, 0.0),
+            Size::new(1.0, 1.0),
+            Color::WHITE,
+        ));
         // Implementation uses `w > 0 && h > 0`; non-positive means [0;4].
-        inst.add_clip(5, 10, 0, 200);
-        assert_eq!(inst.scissor(), Some([0, 0, 0, 0]));
+        store.add_clip_for([5, 10, 0, 200], 0..1);
+        assert_eq!(store.meta()[0].clip, Some([0, 0, 0, 0]));
     }
 
     #[test]
     fn add_clip_negative_height_becomes_null_clip() {
-        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
-        inst.add_clip(5, 10, 100, -1);
-        assert_eq!(inst.scissor(), Some([0, 0, 0, 0]));
+        let mut store = InstanceStore::new();
+        store.push(Instance::ui(
+            Position::new(0.0, 0.0),
+            Size::new(1.0, 1.0),
+            Color::WHITE,
+        ));
+        store.add_clip_for([5, 10, 100, -1], 0..1);
+        assert_eq!(store.meta()[0].clip, Some([0, 0, 0, 0]));
     }
 
     #[test]
     fn add_clip_negative_origin_clamps_to_zero() {
-        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
-        inst.add_clip(-10, -20, 100, 50);
+        let mut store = InstanceStore::new();
+        store.push(Instance::ui(
+            Position::new(0.0, 0.0),
+            Size::new(1.0, 1.0),
+            Color::WHITE,
+        ));
+        store.add_clip_for([-10, -20, 100, 50], 0..1);
         // x and y are clamped via `.max(0)` before the u32 cast.
-        assert_eq!(inst.scissor(), Some([0, 0, 100, 50]));
+        assert_eq!(store.meta()[0].clip, Some([0, 0, 100, 50]));
     }
 
     #[test]
     fn add_clip_overwrites_previous_clip() {
-        let mut inst = Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE);
-        inst.add_clip(1, 1, 10, 10);
-        inst.add_clip(5, 5, 20, 20);
-        assert_eq!(inst.scissor(), Some([5, 5, 20, 20]));
+        let mut store = InstanceStore::new();
+        store.push(Instance::ui(
+            Position::new(0.0, 0.0),
+            Size::new(1.0, 1.0),
+            Color::WHITE,
+        ));
+        store.add_clip_for([1, 1, 10, 10], 0..1);
+        store.add_clip_for([5, 5, 20, 20], 0..1);
+        assert_eq!(store.meta()[0].clip, Some([5, 5, 20, 20]));
     }
 
     #[test]

@@ -9,7 +9,7 @@ use crate::{
     graphics::{Globals, Gpu},
     layout::{LayoutEngine, ROOT_SEED},
     model::{Color, Position, Rect, Size},
-    primitive::Instance,
+    primitive::{Instance, InstanceStore},
     render::texture::TextureRegistry,
     text::TextBackend,
     theme::{Env, Theme},
@@ -424,7 +424,7 @@ impl<'a> PaintCtx<'a> {
         self.focus.is_pressed(self.id())
     }
 
-    pub fn fill(&self, out: &mut Vec<Instance>, (x, y, w, h): (i32, i32, i32, i32), color: Color) {
+    pub fn fill(&self, out: &mut InstanceStore, (x, y, w, h): (i32, i32, i32, i32), color: Color) {
         if color.a() == 0 {
             return;
         }
@@ -436,7 +436,7 @@ impl<'a> PaintCtx<'a> {
     }
     pub fn surface(
         &self,
-        out: &mut Vec<Instance>,
+        out: &mut InstanceStore,
         (x, y, w, h): (i32, i32, i32, i32),
         fill: Color,
         border: Color,
@@ -451,7 +451,7 @@ impl<'a> PaintCtx<'a> {
         ));
     }
 
-    pub fn focus_ring(&self, out: &mut Vec<Instance>, (x, y, w, h): (i32, i32, i32, i32)) {
+    pub fn focus_ring(&self, out: &mut InstanceStore, (x, y, w, h): (i32, i32, i32, i32)) {
         use crate::focus::{GAP, RING_WIDTH};
         out.push(Instance::ui_rounded(
             Position::new((x - GAP) as f32, (y - GAP) as f32),

@@ -2,7 +2,7 @@ use crate::{
     context::*,
     layout::Node,
     model::*,
-    primitive::Instance,
+    primitive::{Instance, InstanceStore},
     theme::{Env, Theme},
 };
 
@@ -90,12 +90,12 @@ pub trait Widget: IntoElement {
     fn prepare_overlay(&mut self, ctx: &mut PrepareCtx) {
         let _ = ctx;
     }
-    fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>);
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        let _ = (ctx, instances);
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore);
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        let _ = (ctx, out);
     }
-    fn paint_focus_ring(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-        ctx.focus_ring(instances, ctx.rect().xywh());
+    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        ctx.focus_ring(out, ctx.rect().xywh());
     }
 
     fn handle(&mut self, ctx: &mut EventCtx) {

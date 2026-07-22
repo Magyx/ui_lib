@@ -56,7 +56,7 @@ impl Widget for Rectangle {
         unreachable!()
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         if self.color.a() != 0 {
             let r = ctx.rect();
             out.push(Instance::ui(

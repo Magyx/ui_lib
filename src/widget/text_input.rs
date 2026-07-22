@@ -552,11 +552,11 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
         }
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
         let theme = ctx.theme;
         let fill = self.bg.unwrap_or(theme.surface_variant);
-        instances.push(Instance::ui_rounded(
+        out.push(Instance::ui_rounded(
             Position::new(r.x as f32, r.y as f32),
             Size::new(r.w as f32, r.h as f32),
             fill,
@@ -566,11 +566,11 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
         ));
     }
 
-    fn paint_focus_ring(&self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         const FOCUS_BORDER: i32 = 2;
         let r = ctx.rect();
         let theme = ctx.theme;
-        instances.push(Instance::ui_rounded(
+        out.push(Instance::ui_rounded(
             Position::new(r.x as f32, r.y as f32),
             Size::new(r.w as f32, r.h as f32),
             Color::TRANSPARENT,
@@ -580,7 +580,7 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
         ));
     }
 
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
+    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         const SELECTION_ALPHA: u8 = 96;
         const SELECTION_PAD_X: f32 = 1.5;
         const SELECTION_PAD_Y: f32 = 1.0;
@@ -618,7 +618,7 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
                     if w <= 0.0 {
                         continue;
                     }
-                    instances.push(Instance::ui(
+                    out.push(Instance::ui(
                         Position::new(x0, t as f32 + r.top - SELECTION_PAD_Y),
                         Size::new(w, r.height + 2.0 * SELECTION_PAD_Y),
                         sel_color,
@@ -633,7 +633,7 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
                 return;
             }
             let caret = self.caret.unwrap_or(ctx.theme.on_surface);
-            instances.push(Instance::ui(
+            out.push(Instance::ui(
                 Position::new(cx, cy),
                 Size::new(1.0, ch),
                 caret,

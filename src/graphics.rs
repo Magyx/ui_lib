@@ -7,7 +7,7 @@ use crate::{
     event::{Event, KeyState, ScrollDelta, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
-    primitive::{Instance, Primitive, Vertex},
+    primitive::{Instance, InstanceStore, Primitive, Vertex},
     render::{
         AllocatorKind, PipelineFactoryFn,
         pipeline::{PipelineKey, PipelineRegistry},
@@ -82,8 +82,7 @@ pub struct Target<'a> {
 pub struct TargetId(u32);
 
 pub struct Engine<'a> {
-    instance_buf: Vec<Instance>,
-    primitive_buf: Vec<Primitive>,
+    instance_buf: InstanceStore,
     layout_engine: LayoutEngine,
     theme: Theme,
 
@@ -229,8 +228,7 @@ impl<'a> Engine<'a> {
 
         Ok(Self {
             layout_engine: LayoutEngine::new(),
-            instance_buf: Vec::new(),
-            primitive_buf: Vec::new(),
+            instance_buf: InstanceStore::new(),
             theme,
 
             gpu: Arc::new(gpu),
@@ -748,10 +746,6 @@ impl<'a> Engine<'a> {
                 &mut self.instance_buf,
                 screen_clip,
             );
-
-            self.primitive_buf.clear();
-            self.primitive_buf
-                .extend(self.instance_buf.iter().map(|i| i.primitive));
         }
 
         {
@@ -775,7 +769,6 @@ impl<'a> Engine<'a> {
             &mut self.pipeline_registry,
             &target.globals,
             &self.instance_buf,
-            &self.primitive_buf,
         ) {
             Ok(()) => Ok(RenderOutcome::Rendered),
             Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {

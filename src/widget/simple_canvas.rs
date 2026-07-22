@@ -52,7 +52,7 @@ impl Widget for SimpleCanvas {
         unreachable!()
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
         out.push(Instance::new(
             PipelineKey::Other(self.key),

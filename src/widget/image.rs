@@ -68,7 +68,7 @@ impl Widget for Image {
         unreachable!()
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         if self.tint.a() == 0 {
             return;
         }

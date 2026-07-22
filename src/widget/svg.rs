@@ -240,7 +240,7 @@ impl Widget for Svg {
         state.draw_rect = Some((dx, dy, dw, dh));
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let id = ctx.id();
         let Some(state) = ctx.view_state.get::<SvgState>(&id) else {
             return;

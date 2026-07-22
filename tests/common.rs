@@ -14,7 +14,7 @@ mod harness {
         graphics::Globals,
         layout::{LayoutEngine, handle_tree, paint_tree, run_layout},
         model::{Color, Size},
-        primitive::Instance,
+        primitive::{Instance, InstanceStore},
         render::text_cosmic::TextCosmic,
         theme::Theme,
         widget::{Element, IntoElement, Length, Rectangle, Widget},
@@ -127,8 +127,8 @@ mod harness {
             handle_tree(root, &mut ectx, &mut cursor);
         }
 
-        pub fn paint<W: Widget>(&mut self, root: &mut W) -> Vec<Instance> {
-            let mut out = Vec::new();
+        pub fn paint<W: Widget>(&mut self, root: &mut W) -> InstanceStore {
+            let mut out = InstanceStore::new();
             let mut cursor = 0;
             let mut pctx = PaintCtx::new(
                 &self.globals,
@@ -219,17 +219,13 @@ mod harness {
         fn prepare_overlay(&mut self, ctx: &mut ui::context::PrepareCtx) {
             self.inner.prepare_overlay(ctx);
         }
-        fn paint(
-            &mut self,
-            ctx: &mut ui::context::PaintCtx,
-            out: &mut Vec<ui::primitive::Instance>,
-        ) {
+        fn paint(&mut self, ctx: &mut ui::context::PaintCtx, out: &mut InstanceStore) {
             let r = ctx.rect();
             self.slot.set(Some(r.xywh()));
             self.inner.paint(ctx, out);
         }
-        fn paint_overlay(&mut self, ctx: &mut PaintCtx, instances: &mut Vec<Instance>) {
-            self.inner.paint_overlay(ctx, instances);
+        fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+            self.inner.paint_overlay(ctx, out);
         }
         fn handle(&mut self, ctx: &mut ui::context::EventCtx) {
             self.inner.handle(ctx);
@@ -291,6 +287,6 @@ mod harness {
         fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
             self.child.as_mut()
         }
-        fn paint(&mut self, _ctx: &mut PaintCtx, _out: &mut Vec<Instance>) {}
+        fn paint(&mut self, _ctx: &mut PaintCtx, _out: &mut InstanceStore) {}
     }
 }

@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     graphics::{Globals, Gpu, Target},
-    primitive::{Instance, Primitive, QUAD_INDICES, QUAD_VERTICES},
+    primitive::{InstanceStore, Primitive, QUAD_INDICES, QUAD_VERTICES},
     render::{
         pipeline::{PipelineKey, PipelineRegistry},
         texture::TextureRegistry,
@@ -88,8 +88,7 @@ impl Renderer {
         target: &Target<'a>,
         pipeline_registry: &mut PipelineRegistry,
         globals: &Globals,
-        instances: &[Instance],
-        primitives: &[Primitive],
+        store: &InstanceStore,
     ) -> Result<(), wgpu::SurfaceError> {
         let output = {
             crate::scope!("wgpu:get_current_texture");
@@ -122,8 +121,8 @@ impl Renderer {
         let mut base = 0u32;
         let mut current_key: Option<&PipelineKey> = None;
         let mut current_clip = default_clip;
-        for (i, instance) in instances.iter().enumerate() {
-            let mut clip = instance.scissor().unwrap_or(default_clip);
+        for (i, instance) in store.meta().iter().enumerate() {
+            let mut clip = instance.clip.unwrap_or(default_clip);
             clip[0] = clip[0].min(lw.saturating_sub(1));
             clip[1] = clip[1].min(lh.saturating_sub(1));
             clip[2] = clip[2].min(lw.saturating_sub(clip[0]));
@@ -153,15 +152,18 @@ impl Renderer {
             self.draw_buf.push(DrawCommand {
                 id: pipeline_registry.get_id(key),
                 base,
-                amount: instances.len() as u32 - base,
+                amount: store.len() as u32 - base,
                 clip: current_clip,
             });
         }
 
-        self.ensure_instance_capacity(&gpu.device, primitives.len() as u64);
+        self.ensure_instance_capacity(&gpu.device, store.len() as u64);
 
-        gpu.queue
-            .write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(primitives));
+        gpu.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(store.primitives()),
+        );
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

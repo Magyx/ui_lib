@@ -57,7 +57,7 @@ impl Widget for Spinner {
         unreachable!()
     }
 
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut Vec<Instance>) {
+    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
         let base = self.color.unwrap_or(ctx.theme.primary);
 

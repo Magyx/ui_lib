@@ -43,5 +43,5 @@ impl Widget for Spacer {
         unreachable!()
     }
 
-    fn paint(&mut self, _ctx: &mut PaintCtx, _out: &mut Vec<Instance>) {}
+    fn paint(&mut self, _ctx: &mut PaintCtx, _out: &mut InstanceStore) {}
 }
