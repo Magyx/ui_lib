@@ -47,9 +47,6 @@ impl Widget for Absolute {
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         self.inner.as_mut().prepare(ctx);
     }
-    fn prepare_overlay(&mut self, ctx: &mut PrepareCtx) {
-        self.inner.as_mut().prepare_overlay(ctx);
-    }
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         self.inner.as_mut().paint(ctx, out);
     }

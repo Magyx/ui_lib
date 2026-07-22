@@ -182,9 +182,6 @@ fn __prepare_tree(
         let child = w.child_mut(i);
         __prepare_tree(child, ctx, cursor, acc_tx + dx, acc_ty + dy, child_env);
     }
-
-    ctx.__set_data(id, acc_tx, acc_ty, env);
-    w.prepare_overlay(ctx);
 }
 
 pub fn handle_tree(

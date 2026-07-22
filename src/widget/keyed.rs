@@ -47,9 +47,6 @@ impl<W: Widget> Widget for Keyed<W> {
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         self.inner.prepare(ctx)
     }
-    fn prepare_overlay(&mut self, ctx: &mut PrepareCtx) {
-        self.inner.prepare_overlay(ctx)
-    }
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         self.inner.paint(ctx, out)
     }

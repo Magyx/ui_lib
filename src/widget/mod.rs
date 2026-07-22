@@ -87,9 +87,6 @@ pub trait Widget: IntoElement {
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         let _ = ctx;
     }
-    fn prepare_overlay(&mut self, ctx: &mut PrepareCtx) {
-        let _ = ctx;
-    }
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore);
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let _ = (ctx, out);

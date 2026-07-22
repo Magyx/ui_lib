@@ -216,9 +216,6 @@ mod harness {
         fn prepare(&mut self, ctx: &mut ui::context::PrepareCtx) {
             self.inner.prepare(ctx);
         }
-        fn prepare_overlay(&mut self, ctx: &mut ui::context::PrepareCtx) {
-            self.inner.prepare_overlay(ctx);
-        }
         fn paint(&mut self, ctx: &mut ui::context::PaintCtx, out: &mut InstanceStore) {
             let r = ctx.rect();
             self.slot.set(Some(r.xywh()));
