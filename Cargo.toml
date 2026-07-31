@@ -23,7 +23,7 @@ tracing = { version = "0.1.41", default-features = false, optional = true }
 tracy-client = { version = "0.18.4", default-features = false, optional = true }
 
 # Winit dependencies
-winit = { version = "0.30.12", default-features = false, optional = true }
+winit = { version = "0.30.12", optional = true }
 
 # SCTK dependencies
 smithay-client-toolkit = { version = "0.20.0", default-features = false, features = [
@@ -75,7 +75,6 @@ svg = [
 ]
 
 [dev-dependencies]
-winit = "0.30.12"
 image = { version = "0.25.8", features = ["jpeg"] }
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
 tracing-log = "0.2.0"

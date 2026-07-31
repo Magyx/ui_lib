@@ -5,13 +5,19 @@ use std::{
 };
 
 use smol_str::ToSmolStr;
-use winit::{
+
+pub use ::winit;
+pub use ::winit::{application, dpi, error, keyboard, monitor, platform, window};
+pub use ::winit::{
     application::ApplicationHandler,
+    event::{StartCause, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
+    window::{CursorIcon, Fullscreen, Icon, Window, WindowAttributes, WindowButtons, WindowLevel},
+};
+use winit::{
     dpi::PhysicalSize,
-    event::{MouseButton as WMouseButton, MouseScrollDelta, WindowEvent},
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event::{MouseButton as WMouseButton, MouseScrollDelta},
     keyboard::{Key as WKey, KeyLocation as WLoc, PhysicalKey as WPhys},
-    window::{Window, WindowAttributes},
 };
 
 use crate::{
@@ -32,7 +38,7 @@ impl<P> From<PhysicalSize<P>> for Size<P> {
 }
 
 fn map_winit_logical(k: &WKey) -> LogicalKey {
-    use winit::keyboard::NamedKey;
+    use ::winit::keyboard::NamedKey;
     match k {
         WKey::Character(s) => LogicalKey::Character(s.to_smolstr()),
         WKey::Named(n) => match n {
@@ -97,9 +103,9 @@ fn map_winit_location(l: WLoc) -> KeyLocation {
     }
 }
 
-impl<M> ToEvent<M, winit::event::WindowEvent> for winit::event::WindowEvent {
+impl<M> ToEvent<M, ::winit::event::WindowEvent> for ::winit::event::WindowEvent {
     fn to_event(&self) -> Event<M, Self> {
-        use winit::event::{ElementState, WindowEvent as WE};
+        use ::winit::event::{ElementState, WindowEvent as WE};
 
         match self {
             WE::RedrawRequested => Event::RedrawRequested,
@@ -186,7 +192,7 @@ fn frame_interval_from_monitor(window: &Window) -> Duration {
     Duration::from_nanos(ns as u64)
 }
 
-// TODO: winit can only have 1 target
+// TODO: ::winit can only have 1 target
 pub struct WinitApp<'a, M, S, V, U>
 where
     V: Fn(&TargetId, &S) -> Element + 'static,
@@ -292,7 +298,7 @@ where
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
-        _window_id: winit::window::WindowId,
+        _window_id: ::winit::window::WindowId,
         event: WindowEvent,
     ) {
         let update = &mut self.update;
