@@ -3,7 +3,9 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 use crate::{
     builder::{EngineBuilder, GpuSource, TargetConfig},
     consts::*,
-    context::{Context, EventCtx, LayoutCtx, MessageSink, PaintCtx, PrepareCtx, SweepCtx},
+    context::{
+        BasicMessageSink, Context, EventCtx, LayoutCtx, MessageSink, PaintCtx, PrepareCtx, SweepCtx,
+    },
     event::{Event, KeyState, ScrollDelta, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
@@ -94,7 +96,7 @@ pub struct Engine<'a> {
     pipeline_registry: PipelineRegistry,
     renderer: Renderer,
     text: Box<dyn TextBackend>,
-    message_sink: MessageSink,
+    message_sink: Box<dyn MessageSink>,
 
     target_defaults: TargetConfig,
     pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
@@ -120,6 +122,7 @@ impl<'a> Engine<'a> {
             gpu_source,
             pending_pipelines,
             text_backend,
+            message_sink,
             _marker,
         } = builder;
 
@@ -211,9 +214,7 @@ impl<'a> Engine<'a> {
         let pipeline_registry = PipelineRegistry::new();
         let renderer = Renderer::with_capacity(&gpu.device, max_instances);
 
-        let text = if let Some(tb) = text_backend {
-            tb
-        } else {
+        let text = text_backend.unwrap_or_else(|| {
             #[cfg(feature = "text_cosmic")]
             {
                 Box::new(crate::render::text_cosmic::TextCosmic::new(allocator))
@@ -224,7 +225,8 @@ impl<'a> Engine<'a> {
                 tracing::error!("No text backend enabled or selected!");
                 unimplemented!()
             }
-        };
+        });
+        let message_sink = message_sink.unwrap_or_else(|| Box::new(BasicMessageSink::new()));
 
         Ok(Self {
             layout_engine: LayoutEngine::new(),
@@ -239,7 +241,7 @@ impl<'a> Engine<'a> {
             pipeline_registry,
             renderer,
             text,
-            message_sink: MessageSink::new(),
+            message_sink,
 
             target_defaults,
             pending_pipelines,
@@ -630,7 +632,7 @@ impl<'a> Engine<'a> {
                 &mut target.ctx,
                 None,
                 &self.layout_engine,
-                &mut self.message_sink,
+                &mut *self.message_sink,
             );
             let mut cursor = 0usize;
             layout::handle_tree(root.as_mut(), &mut event_cx, &mut cursor);
@@ -897,7 +899,7 @@ impl<'a> Engine<'a> {
                     &mut target.ctx,
                     ev_view,
                     &self.layout_engine,
-                    &mut self.message_sink,
+                    &mut *self.message_sink,
                 );
                 let mut cursor = 0usize;
                 layout::handle_tree(root.as_mut(), &mut ctx, &mut cursor);

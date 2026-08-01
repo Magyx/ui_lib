@@ -135,20 +135,30 @@ impl ViewState {
     }
 }
 
-pub struct MessageSink {
+/// A drain-able queue of type-erased app messages.
+pub trait MessageSink {
+    /// Push a type-erased message onto the queue.
+    fn emit(&mut self, msg: Box<dyn Any>);
+    /// Take everything queued so far, leaving the queue empty.
+    fn drain(&mut self) -> Vec<Box<dyn Any>>;
+}
+
+#[derive(Default)]
+pub struct BasicMessageSink {
     messages: Vec<Box<dyn Any>>,
 }
-impl MessageSink {
-    #[doc(hidden)]
+
+impl BasicMessageSink {
     pub fn new() -> Self {
-        Self {
-            messages: Vec::new(),
-        }
+        Self::default()
     }
-    pub fn emit(&mut self, msg: Box<dyn Any>) {
+}
+
+impl MessageSink for BasicMessageSink {
+    fn emit(&mut self, msg: Box<dyn Any>) {
         self.messages.push(msg);
     }
-    pub fn drain(&mut self) -> Vec<Box<dyn Any>> {
+    fn drain(&mut self) -> Vec<Box<dyn Any>> {
         std::mem::take(&mut self.messages)
     }
 }
@@ -476,7 +486,7 @@ pub struct EventCtx<'a> {
     pub(crate) focus_scope: ScopeId,
     pub(crate) clip: Option<Rect>,
 
-    sink: &'a mut MessageSink,
+    sink: &'a mut dyn MessageSink,
 }
 
 impl<'a> EventCtx<'a> {
@@ -486,7 +496,7 @@ impl<'a> EventCtx<'a> {
         ui: &'a mut Context,
         event: Option<UiEventRef<'a>>,
         layout: &'a LayoutEngine,
-        sink: &'a mut MessageSink,
+        sink: &'a mut dyn MessageSink,
     ) -> Self {
         Self {
             globals,
@@ -700,7 +710,7 @@ mod tests {
 
     #[test]
     fn emit_and_take_round_trips_messages_in_order() {
-        let mut sink: Box<MessageSink> = Box::new(MessageSink::new());
+        let mut sink = BasicMessageSink::new();
         sink.emit(Box::new(Msg::A));
         sink.emit(Box::new(Msg::B(42)));
         sink.emit(Box::new(Msg::A));
@@ -716,7 +726,7 @@ mod tests {
 
     #[test]
     fn take_on_empty_returns_empty_vec() {
-        let mut sink = MessageSink::new();
+        let mut sink = BasicMessageSink::new();
         assert!(sink.drain().is_empty());
     }
 

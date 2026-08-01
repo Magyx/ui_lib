@@ -9,7 +9,7 @@ mod harness {
     use std::{any::Any, cell::Cell, rc::Rc, sync::Arc};
 
     use ui::{
-        context::{Context, EventCtx, LayoutCtx, MessageSink, PaintCtx},
+        context::{BasicMessageSink, Context, EventCtx, LayoutCtx, MessageSink, PaintCtx},
         event::UiEventRef,
         graphics::Globals,
         layout::{LayoutEngine, handle_tree, paint_tree, run_layout},
@@ -72,7 +72,7 @@ mod harness {
         pub globals: Globals,
         pub ctx: Context,
         pub text: TextCosmic,
-        pub message_sink: MessageSink,
+        pub message_sink: Box<dyn MessageSink>,
         pub engine: LayoutEngine,
         pub theme: Theme,
     }
@@ -109,7 +109,7 @@ mod harness {
                 &mut self.ctx,
                 None,
                 &self.engine,
-                &mut self.message_sink,
+                &mut *self.message_sink,
             );
             let mut cursor = 0usize;
             handle_tree(root, &mut ectx, &mut cursor);
@@ -121,7 +121,7 @@ mod harness {
                 &mut self.ctx,
                 Some(event),
                 &self.engine,
-                &mut self.message_sink,
+                &mut *self.message_sink,
             );
             let mut cursor = 0usize;
             handle_tree(root, &mut ectx, &mut cursor);
@@ -170,7 +170,7 @@ mod harness {
                 },
                 ctx: Context::new(),
                 text: TextCosmic::default(),
-                message_sink: MessageSink::new(),
+                message_sink: Box::new(BasicMessageSink::new()),
                 engine: LayoutEngine::new(),
                 theme: Theme::dark(),
             }

@@ -182,6 +182,7 @@ pub enum SctkError {
     Flush(BoxError),
     Roundtrip(BoxError),
     SessionLock(BoxError),
+    EventLoop(BoxError),
 }
 #[cfg(feature = "sctk")]
 impl From<SctkError> for Error {
@@ -201,6 +202,7 @@ impl fmt::Display for SctkError {
             Self::Flush(_) => write!(f, "wayland flush failed"),
             Self::Roundtrip(_) => write!(f, "wayland roundtrip failed"),
             Self::SessionLock(_) => write!(f, "wayland session lock failed"),
+            Self::EventLoop(_) => write!(f, "event loop error"),
         }
     }
 }
@@ -214,7 +216,8 @@ impl std::error::Error for SctkError {
             | Self::Dispatch(e)
             | Self::Flush(e)
             | Self::Roundtrip(e)
-            | Self::SessionLock(e) => Some(e.as_ref()),
+            | Self::SessionLock(e)
+            | Self::EventLoop(e) => Some(e.as_ref()),
 
             Self::SurfaceSetup => None,
         }
@@ -269,6 +272,13 @@ impl SctkError {
         E: std::error::Error + Send + Sync + 'static,
     {
         Self::SessionLock(Box::new(e))
+    }
+
+    pub fn event_loop<E>(e: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self::EventLoop(Box::new(e))
     }
 }
 

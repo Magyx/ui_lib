@@ -1,12 +1,15 @@
 use std::{
     any::Any,
+    cell::RefCell,
     collections::HashMap,
     fmt::Debug,
     ptr::NonNull,
-    sync::{Arc, Mutex, atomic::AtomicBool},
+    rc::Rc,
+    sync::{Arc, atomic::AtomicBool},
 };
 
 use crate::{
+    context::MessageSink,
     event::{
         Event, KeyEvent, KeyLocation, KeyState, Modifiers, MouseButton, PhysicalKey, ScrollDelta,
         ScrollUnits, ToEvent,
@@ -16,12 +19,16 @@ use crate::{
     render::PipelineFactoryFn,
     widget::Element,
 };
+use calloop::EventLoop;
 use smithay_client_toolkit::{
     compositor::CompositorState,
     output::OutputState,
-    reexports::client::{
-        Connection, Proxy, QueueHandle, globals::registry_queue_init,
-        protocol::wl_surface::WlSurface,
+    reexports::{
+        calloop_wayland_source::WaylandSource,
+        client::{
+            Connection, Proxy, QueueHandle, globals::registry_queue_init,
+            protocol::wl_surface::WlSurface,
+        },
     },
     registry::RegistryState,
     seat::SeatState,
@@ -176,14 +183,9 @@ pub enum SctkEvent {
 
     Modifiers(SurfaceId, smithay_client_toolkit::seat::keyboard::Modifiers),
     Closed,
-    Message(Arc<Mutex<Option<Box<dyn Any + Send>>>>),
 }
 
 impl SctkEvent {
-    pub fn message<M: Send + 'static>(m: M) -> Self {
-        SctkEvent::Message(Arc::new(Mutex::new(Some(Box::new(m)))))
-    }
-
     pub fn surface_id(&self) -> Option<SurfaceId> {
         match self {
             SctkEvent::Resized { surface, .. }
@@ -198,7 +200,7 @@ impl SctkEvent {
     }
 }
 
-impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
+impl<M> ToEvent<M, SctkEvent> for SctkEvent {
     fn to_event(&self) -> Event<M, SctkEvent> {
         match self {
             SctkEvent::Redraw => Event::RedrawRequested,
@@ -271,18 +273,6 @@ impl<M: 'static + Send> ToEvent<M, SctkEvent> for SctkEvent {
             }),
 
             SctkEvent::Closed => Event::Platform(SctkEvent::Closed),
-
-            SctkEvent::Message(slot) => {
-                if let Some(m) = slot.lock().unwrap().take() {
-                    if let Ok(m) = m.downcast::<M>() {
-                        Event::Message(*m)
-                    } else {
-                        Event::Platform(SctkEvent::Message(slot.clone()))
-                    }
-                } else {
-                    Event::Platform(SctkEvent::Message(slot.clone()))
-                }
-            }
         }
     }
 }
@@ -394,6 +384,18 @@ impl handler::SctkHandler<RunnerEvent> for RunnerHandler {
     }
 }
 
+#[derive(Clone, Default)]
+pub struct SctkMessageSink(Rc<RefCell<Vec<Box<dyn Any>>>>);
+
+impl MessageSink for SctkMessageSink {
+    fn emit(&mut self, msg: Box<dyn Any>) {
+        self.0.borrow_mut().push(msg);
+    }
+    fn drain(&mut self) -> Vec<Box<dyn Any>> {
+        std::mem::take(&mut *self.0.borrow_mut())
+    }
+}
+
 #[derive(Clone)]
 enum OutputHotplugCfg {
     Layer(LayerOptions),
@@ -409,7 +411,7 @@ fn run_app_core<'a, M, S, V, U, H, F>(
     post_engine_init: F,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone + Send,
+    M: 'static + std::fmt::Debug + Clone,
     V: Fn(&TargetId, &S) -> Element + 'static,
     U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
     H: handler::SctkHandler<M> + 'static,
@@ -417,7 +419,7 @@ where
 {
     // 1) Wayland connection + queue
     let conn = Connection::connect_to_env().map_err(crate::error::SctkError::connect)?;
-    let (globals, mut event_queue) =
+    let (globals, event_queue) =
         registry_queue_init(&conn).map_err(crate::error::SctkError::registry_init)?;
 
     let qh: QueueHandle<state::SctkState> = event_queue.handle();
@@ -433,12 +435,10 @@ where
 
     let (tx_sctk, rx_sctk) = calloop::channel::channel::<SctkEvent>();
     let (tx_runner, rx_runner) = calloop::channel::channel::<RunnerEvent>();
+    let (tx_msg, rx_msg) = calloop::channel::channel::<Box<dyn Any>>();
     let sctk_handler = erased::erase_with_runner::<H, M, _, _>(
-        {
-            let t = tx_sctk.clone();
-            move |m| {
-                let _ = t.send(SctkEvent::message(m));
-            }
+        move |m| {
+            let _ = tx_msg.send(Box::new(m));
         },
         move |re| {
             let _ = tx_runner.send(re);
@@ -506,11 +506,18 @@ where
     };
 
     // 4) Create engine and attach surfaces
+    let mut sink = SctkMessageSink::default();
+
     let mut sid_to_tid = HashMap::new();
     let mut engine = {
         let Some(sid) = st.surfaces.keys().next() else {
             return Err(crate::error::SctkError::SurfaceSetup.into());
         };
+
+        let mut engine = Engine::<'a>::builder::<M>()
+            .with_message_sink(Box::new(sink.clone()))
+            .build()?;
+
         let rec = &st.surfaces[sid];
         let sf = rec.scale_factor.max(1) as f64;
         let phys = Size::new(
@@ -518,9 +525,9 @@ where
             rec.size.height * rec.scale_factor.max(1) as u32,
         );
         let target = Arc::new(RawWaylandHandles::new(&conn, &rec.wl_surface));
-        let (tid, mut engine) = Engine::new_for::<M, _>(target, phys, sf);
-        post_engine_init(&mut engine);
+        let tid = engine.attach_target(target, phys, sf);
         sid_to_tid.insert(*sid, tid);
+        post_engine_init(&mut engine);
 
         for (&sid, rec) in st.surfaces.iter().skip(1) {
             let sf = rec.scale_factor.max(1) as f64;
@@ -538,9 +545,25 @@ where
     let loop_ctl = SctkLoop::default();
 
     // 5) Main loop
+    let mut event_loop: EventLoop<state::SctkState> =
+        EventLoop::try_new().map_err(crate::error::SctkError::event_loop)?;
+
+    WaylandSource::new(conn.clone(), event_queue)
+        .insert(event_loop.handle())
+        .map_err(|e| crate::error::SctkError::event_loop(e.error))?;
+
+    event_loop
+        .handle()
+        .insert_source(rx_msg, move |event, _, _st| {
+            if let calloop::channel::Event::Msg(msg) = event {
+                sink.emit(msg);
+            }
+        })
+        .map_err(|e| crate::error::SctkError::event_loop(e.error))?;
+
     while !loop_ctl.should_exit() {
-        event_queue
-            .blocking_dispatch(&mut st)
+        event_loop
+            .dispatch(None, &mut st)
             .map_err(crate::error::SctkError::dispatch)?;
 
         let mut any_rendered = false;
@@ -643,11 +666,7 @@ where
     }
 
     st.unlock_session();
-    conn.flush().map_err(crate::error::SctkError::flush)?;
-
-    event_queue
-        .roundtrip(&mut st)
-        .map_err(crate::error::SctkError::roundtrip)?;
+    let _ = conn.flush();
 
     Ok(())
 }
@@ -659,7 +678,7 @@ pub fn run_layer<'a, M, S, H, V, U>(
     opts: LayerOptions,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone + Send,
+    M: 'static + std::fmt::Debug + Clone,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
     U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
@@ -675,7 +694,7 @@ pub fn run_layer_with<'a, M, S, H, V, U, I>(
     extra_pipelines: I,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone + Send,
+    M: 'static + std::fmt::Debug + Clone,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
     U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
@@ -697,7 +716,7 @@ pub fn run_app<'a, M, S, H, V, U>(
     opts: XdgOptions,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone + Send,
+    M: 'static + std::fmt::Debug + Clone,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
     U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
@@ -713,7 +732,7 @@ pub fn run_app_with<'a, M, S, H, V, U, I>(
     extra_pipelines: I,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone + Send,
+    M: 'static + std::fmt::Debug + Clone,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
     U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
@@ -735,7 +754,7 @@ pub fn run_lock<'a, M, S, H, V, U>(
     opts: LockOptions,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone + Send,
+    M: 'static + std::fmt::Debug + Clone,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
     U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
@@ -751,7 +770,7 @@ pub fn run_lock_with<'a, M, S, H, V, U, I>(
     extra_pipelines: I,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone + Send,
+    M: 'static + std::fmt::Debug + Clone,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
     U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,

@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use crate::{
     consts::DEFAULT_MAX_INSTANCES,
+    context::MessageSink,
     graphics::Engine,
     render::{AllocatorKind, PipelineFactoryFn, pipeline::PipelineKey},
     text::TextBackend,
@@ -97,6 +98,7 @@ pub struct EngineBuilder<M> {
     pub(crate) gpu_source: GpuSource,
     pub(crate) pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
     pub(crate) text_backend: Option<Box<dyn TextBackend>>,
+    pub(crate) message_sink: Option<Box<dyn MessageSink>>,
     pub(crate) _marker: PhantomData<fn() -> M>,
 }
 
@@ -121,6 +123,7 @@ impl<M: 'static> EngineBuilder<M> {
             gpu_source: GpuSource::Create,
             pending_pipelines: Vec::new(),
             text_backend: None,
+            message_sink: None,
             _marker: PhantomData,
         }
     }
@@ -228,6 +231,18 @@ impl<M: 'static> EngineBuilder<M> {
 
     /// Consume the builder and create the engine. Fallible: surfaces
     /// adapter/device acquisition errors and unimplemented feature profiles.
+    /// Provide a custom [`MessageSink`] for the engine to own and drain each
+    /// `poll`. If unset, the engine uses a default
+    /// [`BasicMessageSink`](crate::context::BasicMessageSink).
+    ///
+    /// A backend that injects messages from outside the widget tree provides a
+    /// sink over shared storage and keeps a clone to write into (the engine
+    /// drains the copy it owns here); see the sctk backend.
+    pub fn with_message_sink(mut self, sink: Box<dyn MessageSink>) -> Self {
+        self.message_sink = Some(sink);
+        self
+    }
+
     pub fn build<'a>(self) -> crate::Result<Engine<'a>> {
         Engine::<'a>::from_builder(self)
     }
