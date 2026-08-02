@@ -557,7 +557,7 @@ where
 pub(super) fn erase_with_runner<H, M, FU, FR>(user_sink: FU, runner_sink: FR) -> Box<dyn SctkErased>
 where
     H: SctkHandler<M> + 'static,
-    M: 'static + std::fmt::Debug,
+    M: 'static,
     FU: FnMut(M) + 'static,
     FR: FnMut(super::RunnerEvent) + 'static,
 {

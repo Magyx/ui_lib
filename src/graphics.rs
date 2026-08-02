@@ -16,6 +16,7 @@ use crate::{
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
     },
+    task::{Payload, Task, TaskId, TaskRunner, ThreadRunner, UploadCtx},
     text::TextBackend,
     theme::Theme,
     widget::Element,
@@ -98,6 +99,9 @@ pub struct Engine<'a> {
     text: Box<dyn TextBackend>,
     message_sink: Box<dyn MessageSink>,
 
+    runner: Box<dyn TaskRunner>,
+    landings: Vec<(TargetId, TaskId, Payload)>,
+
     target_defaults: TargetConfig,
     pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
 }
@@ -123,6 +127,7 @@ impl<'a> Engine<'a> {
             pending_pipelines,
             text_backend,
             message_sink,
+            task_runner,
             _marker,
         } = builder;
 
@@ -227,6 +232,7 @@ impl<'a> Engine<'a> {
             }
         });
         let message_sink = message_sink.unwrap_or_else(|| Box::new(BasicMessageSink::new()));
+        let runner = task_runner.unwrap_or_else(|| Box::new(ThreadRunner::new()));
 
         Ok(Self {
             layout_engine: LayoutEngine::new(),
@@ -242,6 +248,8 @@ impl<'a> Engine<'a> {
             renderer,
             text,
             message_sink,
+            runner,
+            landings: Vec::new(),
 
             target_defaults,
             pending_pipelines,
@@ -443,6 +451,30 @@ impl<'a> Engine<'a> {
             .and_then(|id| self.targets.get(&id))
     }
 
+    fn spawn_task<M: 'static>(&mut self, tid: &TargetId, task: Task<M>, redraw: &mut bool) {
+        match task {
+            Task::None => (),
+            Task::Redraw => *redraw = true,
+            Task::Batch(tasks) => {
+                for t in tasks {
+                    self.spawn_task(tid, t, redraw);
+                }
+            }
+            Task::Work { run, finish } => {
+                let Some(target) = self.targets.get_mut(tid) else {
+                    return;
+                };
+                let id = target.ctx.tasks.alloc_id();
+                target
+                    .ctx
+                    .tasks
+                    .finishers
+                    .insert(id, crate::task::erase(finish));
+                self.runner.spawn(*tid, id, run);
+            }
+        }
+    }
+
     pub fn reload_all(&mut self) {
         let fmt = if let Some(t) = self.primary_target() {
             t.config.format
@@ -597,10 +629,20 @@ impl<'a> Engine<'a> {
         self.renderer.textures.destroy_atlas(&self.gpu, atlas)
     }
 
+    /// Spawn a [`Task`] against a target from outside `poll`. This is the
+    /// imperative escape hatch (e.g. kick off a load at startup).
+    pub fn spawn<M: 'static>(&mut self, tid: &TargetId, task: Task<M>) {
+        let mut redraw = false;
+        self.spawn_task(tid, task, &mut redraw);
+        if redraw && let Some(t) = self.targets.get_mut(tid) {
+            t.ctx.request_redraw();
+        }
+    }
+
     pub fn poll<S, P, M: 'static, E: ToEvent<M, E> + std::fmt::Debug>(
         &mut self,
         tid: &TargetId,
-        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
+        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> Task<M>,
         state: &mut S,
         params: &P,
     ) -> bool {
@@ -644,12 +686,47 @@ impl<'a> Engine<'a> {
 
         require_redraw |= target.ctx.take_redraw();
 
-        for message in self.message_sink.drain() {
-            let msg = message.downcast::<M>().unwrap();
-            require_redraw |= update(self, &Event::Message(*msg), state, params);
+        self.landings.clear();
+        self.runner.drain(&mut self.landings);
+        for (tid, id, payload) in self.landings.drain(..) {
+            if let Some(t) = self.targets.get_mut(&tid) {
+                t.ctx.tasks.inbox.push_back((id, payload));
+            }
         }
 
-        require_redraw |= update(self, &Event::RedrawRequested, state, params);
+        // TODO: bound the wall-clock time spent here. Take a start
+        // Instant and, after each finisher, break once a budget is exceeded,
+        // leaving the remaining (id, payload) entries in `inbox` for next frame.
+        // Uploading many large textures in one poll otherwise spikes frame time.
+        loop {
+            let Some((finish, payload)) = self.targets.get_mut(tid).and_then(|t| {
+                let (id, payload) = t.ctx.tasks.inbox.pop_front()?;
+                t.ctx.tasks.finishers.remove(&id).map(|f| (f, payload))
+            }) else {
+                break;
+            };
+
+            let msg_any = {
+                let mut up = UploadCtx {
+                    gpu: &self.gpu,
+                    textures: &mut self.renderer.textures,
+                };
+                finish(payload, &mut up)
+            };
+            if let Ok(msg) = msg_any.downcast::<M>() {
+                let task = update(self, &Event::Message(*msg), state, params);
+                self.spawn_task(tid, task, &mut require_redraw);
+            }
+        }
+
+        for message in self.message_sink.drain() {
+            let msg = message.downcast::<M>().unwrap();
+            let task = update(self, &Event::Message(*msg), state, params);
+            self.spawn_task(tid, task, &mut require_redraw);
+        }
+
+        let task = update(self, &Event::RedrawRequested, state, params);
+        self.spawn_task(tid, task, &mut require_redraw);
 
         require_redraw
     }
@@ -784,11 +861,11 @@ impl<'a> Engine<'a> {
             Err(_) => Err(crate::error::EngineError::OutOfMemory.into()),
         }
     }
-    pub fn handle_platform_event<S, P, M, E: ToEvent<M, E> + std::fmt::Debug>(
+    pub fn handle_platform_event<S, P, M: 'static, E: ToEvent<M, E> + std::fmt::Debug>(
         &mut self,
         target_id: &TargetId,
         event: &E,
-        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> bool,
+        update: &mut impl FnMut(&mut Self, &Event<M, E>, &mut S, &P) -> Task<M>,
         state: &mut S,
         params: &P,
     ) {
@@ -906,12 +983,13 @@ impl<'a> Engine<'a> {
             }
         }
 
-        let had_target = self.targets.contains_key(target_id);
-        if had_target
-            && update(self, &event, state, params)
-            && let Some(target) = self.targets.get_mut(target_id)
-        {
-            target.ctx.request_redraw();
+        if self.targets.contains_key(target_id) {
+            let task = update(self, &event, state, params);
+            let mut redraw = false;
+            self.spawn_task(target_id, task, &mut redraw);
+            if redraw && let Some(target) = self.targets.get_mut(target_id) {
+                target.ctx.request_redraw();
+            }
         }
     }
 }

@@ -2,6 +2,7 @@ use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
     pipeline_factories,
+    task::Task,
 };
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::WindowAttributes};
 
@@ -15,11 +16,11 @@ fn update<'a>(
     event: &Event<Message, WindowEvent>,
     state: &mut State,
     event_loop: &ActiveEventLoop,
-) -> bool {
+) -> Task<Message> {
     match event {
         Event::Platform(WindowEvent::CloseRequested) => {
             event_loop.exit();
-            false
+            Task::None
         }
         Event::Key(KeyEvent {
             state: KeyState::Pressed,
@@ -27,7 +28,7 @@ fn update<'a>(
             ..
         }) if k == &LogicalKey::Escape => {
             event_loop.exit();
-            false
+            Task::None
         }
         _ => common::update(target, engine, event, state),
     }

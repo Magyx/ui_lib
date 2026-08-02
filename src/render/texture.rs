@@ -206,6 +206,13 @@ impl TextureRegistry {
         reg
     }
 
+    // FIX: this recreates the ENTIRE texture-array bind
+    // group over every slot, and it is called from load_rgba8 / load_into_atlas
+    // / unload on every single upload. Now that the task runtime can drain many
+    // image finishers in one `poll`, that is N full rebuilds per frame. Replace
+    // the eager calls with a `dirty: bool` flag set here, and rebuild exactly
+    // once per frame — after the finisher-drain loop in `Engine::poll`, or at
+    // the top of `render_if_needed`. Turns O(uploads * slots) into O(slots).
     fn update_bind_group(&mut self, device: &wgpu::Device) {
         let mut slice: Vec<&wgpu::TextureView> = Vec::with_capacity(self.views.len());
         for v in &self.views {

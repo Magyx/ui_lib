@@ -17,6 +17,7 @@ pub mod profile;
 pub mod render;
 #[cfg(feature = "sctk")]
 pub mod sctk;
+pub mod task;
 pub mod text;
 pub mod theme;
 pub mod widget;
@@ -40,6 +41,7 @@ pub mod prelude {
     };
 
     pub use crate::graphics::{Engine, TargetId};
+    pub use crate::task::{RawImage, Task, TaskRunner, UploadCtx};
 
     #[cfg(feature = "svg")]
     pub use crate::widget::Svg;

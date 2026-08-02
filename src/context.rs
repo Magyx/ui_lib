@@ -1,6 +1,6 @@
 use std::{
     any::Any,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
 };
 
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
     model::{Color, Position, Rect, Size},
     primitive::{Instance, InstanceStore},
     render::texture::TextureRegistry,
+    task::{ErasedFinish, Payload, TaskId},
     text::TextBackend,
     theme::{Env, Theme},
 };
@@ -163,6 +164,21 @@ impl MessageSink for BasicMessageSink {
     }
 }
 
+#[derive(Default)]
+pub(crate) struct TaskStore {
+    pub(crate) inbox: VecDeque<(TaskId, Payload)>,
+    pub(crate) finishers: HashMap<TaskId, ErasedFinish>,
+    next_id: TaskId,
+}
+
+impl TaskStore {
+    pub(crate) fn alloc_id(&mut self) -> TaskId {
+        let id = self.next_id;
+        self.next_id = self.next_id.wrapping_add(1);
+        id
+    }
+}
+
 pub struct Context {
     pub mouse_pos: Position<f32>,
     pub mouse_buttons_down: u32,
@@ -172,6 +188,7 @@ pub struct Context {
     pub focus: Focus,
     pub view_state: ViewState,
 
+    pub(crate) tasks: TaskStore,
     redraw_requested: bool,
 }
 
@@ -192,6 +209,7 @@ impl Context {
             focus: Focus::new(),
             view_state: ViewState::default(),
 
+            tasks: TaskStore::default(),
             redraw_requested: false,
         }
     }

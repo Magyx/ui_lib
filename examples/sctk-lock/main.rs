@@ -3,6 +3,7 @@ use ui::{
     graphics::{Engine, TargetId},
     pipeline_factories,
     sctk::{DefaultHandler, LockOptions, OutputSet, SctkEvent, SctkLoop},
+    task::Task,
 };
 
 #[path = "../common/mod.rs"]
@@ -15,11 +16,11 @@ fn update<'a>(
     event: &Event<Message, SctkEvent>,
     state: &mut State,
     loop_ctl: &SctkLoop,
-) -> bool {
+) -> Task<Message> {
     match event {
         Event::Platform(SctkEvent::Closed) => {
             loop_ctl.exit();
-            false
+            Task::None
         }
         Event::Key(KeyEvent {
             state: KeyState::Pressed,
@@ -27,7 +28,7 @@ fn update<'a>(
             ..
         }) if k == &LogicalKey::Escape => {
             loop_ctl.exit();
-            false
+            Task::None
         }
         _ => common::update(target, engine, event, state),
     }

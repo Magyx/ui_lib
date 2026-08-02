@@ -1,7 +1,7 @@
 use std::{
     any::Any,
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     fmt::Debug,
     ptr::NonNull,
     rc::Rc,
@@ -17,6 +17,7 @@ use crate::{
     graphics::{Engine, TargetId},
     model::{Position, Size},
     render::PipelineFactoryFn,
+    task::{BoxWork, Payload, Task, TaskId, TaskRunner},
     widget::Element,
 };
 use calloop::EventLoop;
@@ -396,6 +397,40 @@ impl MessageSink for SctkMessageSink {
     }
 }
 
+pub struct CalloopRunner {
+    tx: calloop::channel::Sender<(TargetId, TaskId, Payload)>,
+    inbox: Rc<RefCell<VecDeque<(TargetId, TaskId, Payload)>>>,
+}
+impl CalloopRunner {
+    pub fn new() -> (Self, calloop::channel::Channel<(TargetId, TaskId, Payload)>) {
+        let (tx, rx) = calloop::channel::channel();
+        let inbox = Rc::new(RefCell::new(VecDeque::new()));
+        (Self { tx, inbox }, rx)
+    }
+
+    pub fn inbox(&self) -> Rc<RefCell<VecDeque<(TargetId, TaskId, Payload)>>> {
+        self.inbox.clone()
+    }
+}
+impl TaskRunner for CalloopRunner {
+    fn spawn(&self, target: TargetId, id: TaskId, run: BoxWork) {
+        let tx = self.tx.clone();
+        std::thread::Builder::new()
+            .name("ui-task".into())
+            .spawn(move || {
+                let payload = pollster::block_on(run);
+                // Sending wakes the loop; an error means the loop/receiver is
+                // gone (shutting down), so dropping the payload is correct.
+                let _ = tx.send((target, id, payload));
+            })
+            .expect("spawn ui-task thread");
+    }
+
+    fn drain(&self, out: &mut Vec<(TargetId, TaskId, Payload)>) {
+        out.extend(self.inbox.borrow_mut().drain(..));
+    }
+}
+
 #[derive(Clone)]
 enum OutputHotplugCfg {
     Layer(LayerOptions),
@@ -411,9 +446,10 @@ fn run_app_core<'a, M, S, V, U, H, F>(
     post_engine_init: F,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone,
+    M: 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+        + 'static,
     H: handler::SctkHandler<M> + 'static,
     F: FnOnce(&mut Engine<'a>),
 {
@@ -436,6 +472,10 @@ where
     let (tx_sctk, rx_sctk) = calloop::channel::channel::<SctkEvent>();
     let (tx_runner, rx_runner) = calloop::channel::channel::<RunnerEvent>();
     let (tx_msg, rx_msg) = calloop::channel::channel::<Box<dyn Any>>();
+
+    let (task_runner, rx_task) = CalloopRunner::new();
+    let task_inbox = task_runner.inbox();
+
     let sctk_handler = erased::erase_with_runner::<H, M, _, _>(
         move |m| {
             let _ = tx_msg.send(Box::new(m));
@@ -516,6 +556,7 @@ where
 
         let mut engine = Engine::<'a>::builder::<M>()
             .with_message_sink(Box::new(sink.clone()))
+            .with_task_runner(Box::new(task_runner))
             .build()?;
 
         let rec = &st.surfaces[sid];
@@ -557,6 +598,15 @@ where
         .insert_source(rx_msg, move |event, _, _st| {
             if let calloop::channel::Event::Msg(msg) = event {
                 sink.emit(msg);
+            }
+        })
+        .map_err(|e| crate::error::SctkError::event_loop(e.error))?;
+
+    event_loop
+        .handle()
+        .insert_source(rx_task, move |event, _, _st| {
+            if let calloop::channel::Event::Msg(item) = event {
+                task_inbox.borrow_mut().push_back(item);
             }
         })
         .map_err(|e| crate::error::SctkError::event_loop(e.error))?;
@@ -681,7 +731,8 @@ where
     M: 'static + std::fmt::Debug + Clone,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+        + 'static,
 {
     run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Layer(opts), |_| {})
 }
@@ -694,10 +745,11 @@ pub fn run_layer_with<'a, M, S, H, V, U, I>(
     extra_pipelines: I,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone,
+    M: 'static,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+        + 'static,
     I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
 {
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
@@ -716,10 +768,11 @@ pub fn run_app<'a, M, S, H, V, U>(
     opts: XdgOptions,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone,
+    M: 'static,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+        + 'static,
 {
     run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Xdg(opts), |_| {})
 }
@@ -732,10 +785,11 @@ pub fn run_app_with<'a, M, S, H, V, U, I>(
     extra_pipelines: I,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone,
+    M: 'static,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+        + 'static,
     I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
 {
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
@@ -754,10 +808,11 @@ pub fn run_lock<'a, M, S, H, V, U>(
     opts: LockOptions,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone,
+    M: 'static,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+        + 'static,
 {
     run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Lock(opts), |_| {})
 }
@@ -770,10 +825,11 @@ pub fn run_lock_with<'a, M, S, H, V, U, I>(
     extra_pipelines: I,
 ) -> crate::Result<()>
 where
-    M: 'static + std::fmt::Debug + Clone,
+    M: 'static,
     H: handler::SctkHandler<M> + 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> bool + 'static,
+    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+        + 'static,
     I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
 {
     let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();

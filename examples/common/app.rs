@@ -96,8 +96,12 @@ mod update {
     use ui::{
         graphics::{Engine, TargetId},
         render::AllocatorKind,
+        task::Task,
     };
 
+    use crate::common::Message;
+
+    // TODO: use tasks to load the image
     pub fn ensure_icons_loaded<'a>(engine: &mut Engine<'a>, state: &mut super::State, scale: f32) {
         if state.icon_atlas.is_some() {
             return;
@@ -177,6 +181,7 @@ mod update {
         state.svg_icons = svg_paths;
     }
 
+    // TODO: use tasks to load the image
     fn ensure_background_loaded<'a>(engine: &mut Engine<'a>, state: &mut super::State) {
         if state.background.is_some() {
             return;
@@ -204,10 +209,10 @@ mod update {
         engine: &mut Engine<'a>,
         state: &mut super::State,
         dir: bool,
-    ) -> bool {
+    ) -> Task<Message> {
         let target = match state.per_target.get_mut(&tid) {
             Some(t) => t,
-            None => return false,
+            None => return Task::None,
         };
         if dir {
             target.view = target.view.next();
@@ -221,30 +226,30 @@ mod update {
             ensure_icons_loaded(engine, state, scale);
         }
 
-        true
+        Task::Redraw
     }
 
-    pub fn increment_counter(target: &mut super::Target) -> bool {
+    pub fn increment_counter(target: &mut super::Target) -> Task<Message> {
         target.counter += 1;
-        true
+        Task::Redraw
     }
 
-    pub fn toggle_debug<'a>(engine: &mut Engine<'a>) -> bool {
+    pub fn toggle_debug<'a>(engine: &mut Engine<'a>) -> Task<Message> {
         engine.toggle_debug();
-        true
+        Task::Redraw
     }
 
-    pub fn set_slider(target: &mut super::Target, v: f32) -> bool {
+    pub fn set_slider(target: &mut super::Target, v: f32) -> Task<Message> {
         target.slider = v;
-        true
+        Task::Redraw
     }
-    pub fn submit_name(target: &mut super::Target, s: String) -> bool {
+    pub fn submit_name(target: &mut super::Target, s: String) -> Task<Message> {
         target.name = s;
-        true
+        Task::Redraw
     }
-    pub fn submit_text_area(target: &mut super::Target, s: String) -> bool {
+    pub fn submit_text_area(target: &mut super::Target, s: String) -> Task<Message> {
         target.text_area_content = s;
-        true
+        Task::Redraw
     }
 }
 
@@ -253,14 +258,14 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
     engine: &mut Engine<'a>,
     event: &crate::Event<Message, E>,
     state: &mut State,
-) -> bool {
+) -> Task<Message> {
     let target = state.per_target.entry(tid).or_default();
     match event {
         crate::Event::RedrawRequested => {
             let dt = engine.globals(&tid).unwrap().delta_time;
             target.fps[target.fps_idx] = 1.0 / dt;
             target.fps_idx = (target.fps_idx + 1) % 5;
-            false
+            Task::None
         }
         crate::Event::Key(KeyEvent {
             state: KeyState::Pressed,
@@ -271,9 +276,9 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
             LogicalKey::Character(s) => match s.as_str() {
                 "n" => update::cycle_view(tid, engine, state, true),
                 "p" => update::cycle_view(tid, engine, state, false),
-                _ => false,
+                _ => Task::None,
             },
-            _ => false,
+            _ => Task::None,
         },
         crate::Event::Message(Message::ButtonPressed) => update::increment_counter(target),
         crate::Event::Message(Message::SliderChanged(v)) => update::set_slider(target, *v),
@@ -284,24 +289,24 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
         crate::Event::Message(Message::ThemeSetDark) => {
             state.theme = Theme::dark();
             engine.set_theme(state.theme);
-            true
+            Task::Redraw
         }
         crate::Event::Message(Message::ThemeSetLight) => {
             state.theme = Theme::light();
             engine.set_theme(state.theme);
-            true
+            Task::Redraw
         }
         crate::Event::Message(Message::ThemeCornerRadius(r)) => {
             state.theme.corner_radius = *r;
             engine.set_theme(state.theme);
-            true
+            Task::Redraw
         }
         crate::Event::Message(Message::ThemeBorderWidth(w)) => {
             state.theme.border_width = *w as i32;
             engine.set_theme(state.theme);
-            true
+            Task::Redraw
         }
-        _ => false,
+        _ => Task::None,
     }
 }
 

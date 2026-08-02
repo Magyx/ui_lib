@@ -99,6 +99,7 @@ pub struct EngineBuilder<M> {
     pub(crate) pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
     pub(crate) text_backend: Option<Box<dyn TextBackend>>,
     pub(crate) message_sink: Option<Box<dyn MessageSink>>,
+    pub(crate) task_runner: Option<Box<dyn crate::task::TaskRunner>>,
     pub(crate) _marker: PhantomData<fn() -> M>,
 }
 
@@ -124,6 +125,7 @@ impl<M: 'static> EngineBuilder<M> {
             pending_pipelines: Vec::new(),
             text_backend: None,
             message_sink: None,
+            task_runner: None,
             _marker: PhantomData,
         }
     }
@@ -240,6 +242,16 @@ impl<M: 'static> EngineBuilder<M> {
     /// drains the copy it owns here); see the sctk backend.
     pub fn with_message_sink(mut self, sink: Box<dyn MessageSink>) -> Self {
         self.message_sink = Some(sink);
+        self
+    }
+
+    /// Provide a custom [`TaskRunner`](crate::task::TaskRunner) to drive the
+    /// async half of [`Task`](crate::task::Task)s. If unset, the engine uses a
+    /// thread-per-task [`ThreadRunner`](crate::task::ThreadRunner), which is
+    /// fine for frame-polled loops (winit). A backend with a *blocking* event
+    /// loop should supply a runner whose delivery wakes the loop.
+    pub fn with_task_runner(mut self, runner: Box<dyn crate::task::TaskRunner>) -> Self {
+        self.task_runner = Some(runner);
         self
     }
 
