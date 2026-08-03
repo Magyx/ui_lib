@@ -42,6 +42,30 @@ impl View {
     }
 }
 
+#[derive(Clone)]
+pub struct DecodedPng {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+}
+
+impl std::fmt::Debug for DecodedPng {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DecodedPng")
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("bytes", &self.rgba.len())
+            .finish()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct DecodedIcons {
+    pub atlas_phys: u32,
+    pub pngs: Vec<DecodedPng>,
+    pub svg_paths: Vec<PathBuf>,
+}
+
 #[derive(Clone, Debug)]
 pub enum Message {
     ButtonPressed,
@@ -52,6 +76,8 @@ pub enum Message {
     ThemeSetLight,
     ThemeCornerRadius(f32),
     ThemeBorderWidth(f32),
+    BackgroundLoaded(ui::render::texture::TextureHandle),
+    IconsDecoded(DecodedIcons),
 }
 
 #[derive(Clone)]
@@ -87,8 +113,10 @@ pub struct State {
 
     pub theme: Theme,
     pub background: Option<ui::render::texture::TextureHandle>,
+    pub bg_loading: bool,
     pub icon_atlas: Option<ui::render::texture::Atlas>,
     pub icons: Vec<ui::render::texture::TextureHandle>,
+    pub icons_loading: bool,
     pub svg_icons: Vec<PathBuf>,
 }
 
@@ -96,23 +124,17 @@ mod update {
     use ui::{
         graphics::{Engine, TargetId},
         render::AllocatorKind,
-        task::Task,
+        task::{RawImage, Task},
     };
 
     use crate::common::Message;
 
-    // TODO: use tasks to load the image
-    pub fn ensure_icons_loaded<'a>(engine: &mut Engine<'a>, state: &mut super::State, scale: f32) {
-        if state.icon_atlas.is_some() {
-            return;
-        }
-
+    fn decode_icons(scale: f32) -> super::DecodedIcons {
         const MAX_DEMO_ICONS: usize = 16;
 
         let icon_phys = (48.0 * scale).round() as u32;
         let atlas_phys = (512.0 * scale).round() as u32;
-        let mut atlas = engine.create_atlas(atlas_phys, atlas_phys, AllocatorKind::Shelf);
-        let mut handles = Vec::new();
+        let mut pngs = Vec::new();
         let mut svg_paths = Vec::with_capacity(MAX_DEMO_ICONS);
 
         if let Ok(entries) = std::fs::read_dir("assets/open-iconic/png/") {
@@ -136,23 +158,14 @@ mod update {
                         image::imageops::FilterType::Triangle,
                     );
                     let rgba = img.to_rgba8();
-                    let (w, h) = rgba.dimensions();
-                    #[cfg(feature = "tracing")]
-                    tracing::info!(
-                        "Loaded png icon '{}' with dimensions: {}x{}",
-                        path.display(),
-                        w,
-                        h
-                    );
-
-                    if let Some(handle) = engine.load_texture_into_atlas(&mut atlas, w, h, &rgba) {
-                        handles.push(handle);
-                        if handles.len() >= MAX_DEMO_ICONS {
-                            break;
-                        }
-                    } else {
-                        #[cfg(feature = "tracing")]
-                        tracing::warn!("Atlas is full, cannot add icon '{}'", path.display());
+                    let (width, height) = rgba.dimensions();
+                    pngs.push(super::DecodedPng {
+                        width,
+                        height,
+                        rgba: rgba.into_raw(),
+                    });
+                    if pngs.len() >= MAX_DEMO_ICONS {
+                        break;
                     }
                 } else {
                     #[cfg(feature = "tracing")]
@@ -167,8 +180,6 @@ mod update {
                 if path.extension().and_then(|e| e.to_str()) != Some("svg") {
                     continue;
                 }
-                #[cfg(feature = "tracing")]
-                tracing::info!("Loaded svg icon '{}'", path.display(),);
                 svg_paths.push(path);
                 if svg_paths.len() >= MAX_DEMO_ICONS {
                     break;
@@ -176,32 +187,77 @@ mod update {
             }
         }
 
-        state.icon_atlas = Some(atlas);
-        state.icons = handles;
-        state.svg_icons = svg_paths;
+        super::DecodedIcons {
+            atlas_phys,
+            pngs,
+            svg_paths,
+        }
     }
 
-    // TODO: use tasks to load the image
-    fn ensure_background_loaded<'a>(engine: &mut Engine<'a>, state: &mut super::State) {
-        if state.background.is_some() {
-            return;
+    fn load_icons_task(scale: f32) -> Task<Message> {
+        Task::blocking(move || decode_icons(scale), Message::IconsDecoded)
+    }
+
+    pub fn apply_icons<'a>(
+        engine: &mut Engine<'a>,
+        state: &mut super::State,
+        decoded: &super::DecodedIcons,
+    ) -> Task<Message> {
+        let mut atlas =
+            engine.create_atlas(decoded.atlas_phys, decoded.atlas_phys, AllocatorKind::Shelf);
+        let mut handles = Vec::new();
+
+        for png in &decoded.pngs {
+            if let Some(handle) =
+                engine.load_texture_into_atlas(&mut atlas, png.width, png.height, &png.rgba)
+            {
+                handles.push(handle);
+            } else {
+                #[cfg(feature = "tracing")]
+                tracing::warn!("Atlas is full, cannot add icon");
+            }
         }
-        if let Ok(reader) = image::ImageReader::open("assets/background.jpg")
-            && let Ok(img) = reader.decode()
-        {
-            let rgba = img.to_rgba8();
-            let (w, h) = rgba.dimensions();
 
-            #[cfg(feature = "tracing")]
-            tracing::info!("Loaded image with dimensions: {}x{}", w, h);
+        state.icon_atlas = Some(atlas);
+        state.icons = handles;
+        state.svg_icons = decoded.svg_paths.clone();
+        state.icons_loading = false;
+        Task::Redraw
+    }
 
-            let handle = engine.load_texture_rgba8(w, h, rgba.as_raw());
+    fn load_background_task() -> Task<Message> {
+        Task::load_image(
+            || {
+                let decoded = image::ImageReader::open("assets/background.jpg")
+                    .ok()
+                    .and_then(|reader| reader.decode().ok());
 
-            state.background = Some(handle);
-        } else {
-            #[cfg(feature = "tracing")]
-            tracing::warn!("Couldn't load image!");
-        }
+                match decoded {
+                    Some(img) => {
+                        let rgba = img.to_rgba8();
+                        let (width, height) = rgba.dimensions();
+                        #[cfg(feature = "tracing")]
+                        tracing::info!("Loaded background with dimensions: {}x{}", width, height);
+                        RawImage {
+                            width,
+                            height,
+                            rgba: rgba.into_raw(),
+                        }
+                    }
+                    None => {
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!("Couldn't load background image!");
+                        // 1x1 transparent fallback so the upload still succeeds.
+                        RawImage {
+                            width: 1,
+                            height: 1,
+                            rgba: vec![0, 0, 0, 0],
+                        }
+                    }
+                }
+            },
+            Message::BackgroundLoaded,
+        )
     }
 
     pub fn cycle_view<'a>(
@@ -210,20 +266,31 @@ mod update {
         state: &mut super::State,
         dir: bool,
     ) -> Task<Message> {
-        let target = match state.per_target.get_mut(&tid) {
-            Some(t) => t,
-            None => return Task::None,
+        let view = {
+            let Some(target) = state.per_target.get_mut(&tid) else {
+                return Task::None;
+            };
+            target.view = if dir {
+                target.view.next()
+            } else {
+                target.view.prev()
+            };
+            target.view
         };
-        if dir {
-            target.view = target.view.next();
-        } else {
-            target.view = target.view.prev();
-        }
 
-        if let super::View::Texture = target.view {
+        if let super::View::Texture = view {
             let scale = engine.globals(&tid).map(|g| g.scale).unwrap_or(1.0);
-            ensure_background_loaded(engine, state);
-            ensure_icons_loaded(engine, state, scale);
+
+            let mut tasks = vec![Task::Redraw];
+            if state.background.is_none() && !state.bg_loading {
+                state.bg_loading = true;
+                tasks.push(load_background_task());
+            }
+            if state.icon_atlas.is_none() && !state.icons_loading {
+                state.icons_loading = true;
+                tasks.push(load_icons_task(scale));
+            }
+            return Task::batch(tasks);
         }
 
         Task::Redraw
@@ -305,6 +372,14 @@ pub fn update<'a, E: ui::event::ToEvent<Message, E>>(
             state.theme.border_width = *w as i32;
             engine.set_theme(state.theme);
             Task::Redraw
+        }
+        crate::Event::Message(Message::BackgroundLoaded(handle)) => {
+            state.background = Some(*handle);
+            state.bg_loading = false;
+            Task::Redraw
+        }
+        crate::Event::Message(Message::IconsDecoded(decoded)) => {
+            update::apply_icons(engine, state, decoded)
         }
         _ => Task::None,
     }
