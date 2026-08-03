@@ -4,7 +4,7 @@ use ui::{
     graphics::{Engine, TargetId},
     model::Size,
     pipeline_factories,
-    sctk::{DefaultHandler, LayerOptions, SctkEvent, SctkLoop},
+    sctk::{LayerOptions, SctkApp, SctkEvent, SctkLoop},
     task::Task,
 };
 
@@ -53,11 +53,7 @@ fn main() -> ui::Result<()> {
         output: Some(ui::sctk::OutputSet::All),
     };
 
-    ui::sctk::run_layer_with::<Message, State, DefaultHandler, _, _, _>(
-        State::default(),
-        view,
-        update,
-        opts,
-        pipeline_factories!["planet" => PlanetPipeline],
-    )
+    SctkApp::layer(State::default(), view, update, opts)
+        .pipelines(pipeline_factories!["planet" => PlanetPipeline])
+        .run()
 }

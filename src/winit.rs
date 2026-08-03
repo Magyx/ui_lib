@@ -193,7 +193,6 @@ fn frame_interval_from_monitor(window: &Window) -> Duration {
     Duration::from_nanos(ns as u64)
 }
 
-// TODO: ::winit can only have 1 target
 pub struct WinitApp<'a, M, S, V, U>
 where
     V: Fn(&TargetId, &S) -> Element + 'static,
@@ -235,7 +234,7 @@ where
         ) -> Task<M>
         + 'static,
 {
-    pub fn new(
+    fn new(
         state: S,
         view: V,
         update: U,
@@ -258,6 +257,11 @@ where
 
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// See [`WinitAppBuilder::new`] for details.
+    pub fn builder(state: S, view: V, update: U) -> WinitAppBuilder<'a, M, S, V, U> {
+        WinitAppBuilder::new(state, view, update)
     }
 }
 
@@ -399,34 +403,16 @@ where
     Ok(())
 }
 
-pub fn run_app<'a, M, S, V, U>(
+#[allow(clippy::type_complexity)]
+pub struct WinitAppBuilder<'a, M, S, V, U> {
     state: S,
     view: V,
     update: U,
     window_attrs: WindowAttributes,
-) -> crate::Result<()>
-where
-    M: 'static,
-    V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(
-            TargetId,
-            &mut Engine<'a>,
-            &Event<M, WindowEvent>,
-            &mut S,
-            &ActiveEventLoop,
-        ) -> Task<M>
-        + 'static,
-{
-    run_app_core(state, view, update, window_attrs, None)
+    extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
+    _marker: std::marker::PhantomData<(fn() -> M, &'a ())>,
 }
-
-pub fn run_app_with<'a, M, S, V, U, I>(
-    state: S,
-    view: V,
-    update: U,
-    window_attrs: WindowAttributes,
-    extra_pipelines: I,
-) -> crate::Result<()>
+impl<'a, M, S, V, U> WinitAppBuilder<'a, M, S, V, U>
 where
     M: 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
@@ -438,9 +424,56 @@ where
             &ActiveEventLoop,
         ) -> Task<M>
         + 'static,
-    I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
 {
-    let extra_pipelines: HashMap<&'static str, PipelineFactoryFn> =
-        extra_pipelines.into_iter().collect();
-    run_app_core(state, view, update, window_attrs, Some(extra_pipelines))
+    /// Start building an application from its initial `state`, `view`, and
+    /// `update` functions. The window defaults to [`WindowAttributes::default`]
+    /// and no extra pipelines are registered.
+    pub fn new(state: S, view: V, update: U) -> Self {
+        Self {
+            state,
+            view,
+            update,
+            window_attrs: WindowAttributes::default(),
+            extra_pipelines: None,
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Set the [`WindowAttributes`] used to create the window.
+    pub fn window_attributes(mut self, window_attrs: WindowAttributes) -> Self {
+        self.window_attrs = window_attrs;
+        self
+    }
+
+    /// Register a single extra render pipeline factory under `name`.
+    pub fn pipeline(mut self, name: &'static str, factory: PipelineFactoryFn) -> Self {
+        self.extra_pipelines
+            .get_or_insert_with(HashMap::new)
+            .insert(name, factory);
+        self
+    }
+
+    /// Register extra render pipeline factories, e.g. from the
+    /// [`pipeline_factories!`](crate::pipeline_factories) macro. Can be called
+    /// more than once; later entries override earlier ones with the same name.
+    pub fn pipelines<I>(mut self, pipelines: I) -> Self
+    where
+        I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
+    {
+        self.extra_pipelines
+            .get_or_insert_with(HashMap::new)
+            .extend(pipelines);
+        self
+    }
+
+    /// Run the application. Blocks until the event loop exits.
+    pub fn run(self) -> crate::Result<()> {
+        run_app_core::<M, S, V, U>(
+            self.state,
+            self.view,
+            self.update,
+            self.window_attrs,
+            self.extra_pipelines,
+        )
+    }
 }

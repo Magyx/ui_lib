@@ -2,7 +2,7 @@ use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
     pipeline_factories,
-    sctk::{DefaultHandler, LockOptions, OutputSet, SctkEvent, SctkLoop},
+    sctk::{LockOptions, OutputSet, SctkApp, SctkEvent, SctkLoop},
     task::Task,
 };
 
@@ -45,11 +45,8 @@ fn main() -> ui::Result<()> {
         output: Some(OutputSet::All),
         ..Default::default()
     };
-    ui::sctk::run_lock_with::<Message, State, DefaultHandler, _, _, _>(
-        State::default(),
-        view,
-        update,
-        opts,
-        pipeline_factories!["planet" => PlanetPipeline],
-    )
+
+    SctkApp::lock(State::default(), view, update, opts)
+        .pipelines(pipeline_factories!["planet" => PlanetPipeline])
+        .run()
 }

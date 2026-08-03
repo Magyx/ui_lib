@@ -721,122 +721,99 @@ where
     Ok(())
 }
 
-pub fn run_layer<'a, M, S, H, V, U>(
+#[allow(clippy::type_complexity)]
+pub struct SctkApp<'a, M, S, V, U, H = DefaultHandler> {
     state: S,
     view: V,
     update: U,
-    opts: LayerOptions,
-) -> crate::Result<()>
-where
-    M: 'static + std::fmt::Debug + Clone,
-    H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
-        + 'static,
-{
-    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Layer(opts), |_| {})
+    opts: Options,
+    extra_pipelines: Vec<(&'static str, PipelineFactoryFn)>,
+    _marker: std::marker::PhantomData<(fn() -> M, fn() -> H, &'a ())>,
 }
 
-pub fn run_layer_with<'a, M, S, H, V, U, I>(
-    state: S,
-    view: V,
-    update: U,
-    opts: LayerOptions,
-    extra_pipelines: I,
-) -> crate::Result<()>
-where
-    M: 'static,
-    H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
-        + 'static,
-    I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
-{
-    let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
+impl<'a, M, S, V, U> SctkApp<'a, M, S, V, U, DefaultHandler> {
+    /// Build a `wlr-layer-shell` surface application (bars, overlays, wallpapers).
+    pub fn layer(state: S, view: V, update: U, opts: LayerOptions) -> Self {
+        Self::with_options(state, view, update, Options::Layer(opts))
+    }
 
-    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Layer(opts), move |engine| {
-        for (key, factory) in pipelines {
-            engine.register_pipeline(crate::render::pipeline::PipelineKey::Other(key), factory);
+    /// Build an XDG toplevel (regular window) application.
+    pub fn window(state: S, view: V, update: U, opts: XdgOptions) -> Self {
+        Self::with_options(state, view, update, Options::Xdg(opts))
+    }
+
+    /// Build a `session-lock` surface application (lock screens).
+    pub fn lock(state: S, view: V, update: U, opts: LockOptions) -> Self {
+        Self::with_options(state, view, update, Options::Lock(opts))
+    }
+
+    fn with_options(state: S, view: V, update: U, opts: Options) -> Self {
+        Self {
+            state,
+            view,
+            update,
+            opts,
+            extra_pipelines: Vec::new(),
+            _marker: std::marker::PhantomData,
         }
-    })
+    }
 }
 
-pub fn run_app<'a, M, S, H, V, U>(
-    state: S,
-    view: V,
-    update: U,
-    opts: XdgOptions,
-) -> crate::Result<()>
-where
-    M: 'static,
-    H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
-        + 'static,
-{
-    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Xdg(opts), |_| {})
-}
-
-pub fn run_app_with<'a, M, S, H, V, U, I>(
-    state: S,
-    view: V,
-    update: U,
-    opts: XdgOptions,
-    extra_pipelines: I,
-) -> crate::Result<()>
-where
-    M: 'static,
-    H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
-        + 'static,
-    I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
-{
-    let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
-
-    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Xdg(opts), move |engine| {
-        for (key, factory) in pipelines.iter().copied() {
-            engine.register_pipeline(crate::render::pipeline::PipelineKey::Other(key), factory);
+impl<'a, M, S, V, U, H> SctkApp<'a, M, S, V, U, H> {
+    /// Use a custom [`SctkHandler`](handler::SctkHandler) type instead of the
+    /// [`DefaultHandler`]. This only changes the handler *type*; there is no
+    /// value to pass since handlers are zero-sized markers.
+    pub fn handler<H2>(self) -> SctkApp<'a, M, S, V, U, H2> {
+        SctkApp {
+            state: self.state,
+            view: self.view,
+            update: self.update,
+            opts: self.opts,
+            extra_pipelines: self.extra_pipelines,
+            _marker: std::marker::PhantomData,
         }
-    })
-}
+    }
 
-pub fn run_lock<'a, M, S, H, V, U>(
-    state: S,
-    view: V,
-    update: U,
-    opts: LockOptions,
-) -> crate::Result<()>
-where
-    M: 'static,
-    H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
-        + 'static,
-{
-    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Lock(opts), |_| {})
-}
+    /// Register a single extra render pipeline factory under `name`.
+    pub fn pipeline(mut self, name: &'static str, factory: PipelineFactoryFn) -> Self {
+        self.extra_pipelines.push((name, factory));
+        self
+    }
 
-pub fn run_lock_with<'a, M, S, H, V, U, I>(
-    state: S,
-    view: V,
-    update: U,
-    opts: LockOptions,
-    extra_pipelines: I,
-) -> crate::Result<()>
-where
-    M: 'static,
-    H: handler::SctkHandler<M> + 'static,
-    V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
-        + 'static,
-    I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
-{
-    let pipelines: Vec<(&'static str, PipelineFactoryFn)> = extra_pipelines.into_iter().collect();
+    /// Register extra render pipeline factories, e.g. from the
+    /// [`pipeline_factories!`](crate::pipeline_factories) macro. Can be called
+    /// more than once to accumulate factories.
+    pub fn pipelines<I>(mut self, pipelines: I) -> Self
+    where
+        I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
+    {
+        self.extra_pipelines.extend(pipelines);
+        self
+    }
 
-    run_app_core::<M, S, V, U, H, _>(state, view, update, Options::Lock(opts), move |engine| {
-        for (key, factory) in pipelines.iter().copied() {
-            engine.register_pipeline(crate::render::pipeline::PipelineKey::Other(key), factory);
-        }
-    })
+    /// Run the application. Blocks until the event loop exits.
+    pub fn run(self) -> crate::Result<()>
+    where
+        M: 'static,
+        H: handler::SctkHandler<M> + 'static,
+        V: Fn(&TargetId, &S) -> Element + 'static,
+        U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+            + 'static,
+    {
+        let pipelines = self.extra_pipelines;
+        run_app_core::<M, S, V, U, H, _>(
+            self.state,
+            self.view,
+            self.update,
+            self.opts,
+            move |engine| {
+                for (key, factory) in pipelines {
+                    engine.register_pipeline(
+                        crate::render::pipeline::PipelineKey::Other(key),
+                        factory,
+                    );
+                }
+            },
+        )
+    }
 }

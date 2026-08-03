@@ -2,7 +2,7 @@ use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
     pipeline_factories,
-    sctk::{DefaultHandler, SctkEvent, SctkLoop, XdgOptions},
+    sctk::{SctkApp, SctkEvent, SctkLoop, XdgOptions},
     task::Task,
 };
 
@@ -46,11 +46,8 @@ fn main() -> ui::Result<()> {
         app_id: Some("ui-example".into()),
         ..Default::default()
     };
-    ui::sctk::run_app_with::<Message, State, DefaultHandler, _, _, _>(
-        State::default(),
-        view,
-        update,
-        opts,
-        pipeline_factories!["planet" => PlanetPipeline],
-    )
+
+    SctkApp::window(State::default(), view, update, opts)
+        .pipelines(pipeline_factories!["planet" => PlanetPipeline])
+        .run()
 }

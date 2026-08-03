@@ -3,6 +3,7 @@ use ui::{
     graphics::{Engine, TargetId},
     pipeline_factories,
     task::Task,
+    winit::WinitApp,
 };
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::WindowAttributes};
 
@@ -34,7 +35,7 @@ fn update<'a>(
     }
 }
 
-fn main() {
+fn main() -> ui::Result<()> {
     #[cfg(feature = "tracing")]
     {
         crate::common::trace::init();
@@ -42,11 +43,8 @@ fn main() {
     }
     let attrs = WindowAttributes::default().with_title("My Test GUI lib");
 
-    _ = ui::winit::run_app_with::<Message, _, _, _, _>(
-        State::default(),
-        view,
-        update,
-        attrs,
-        pipeline_factories!["planet" => PlanetPipeline],
-    );
+    WinitApp::builder(State::default(), view, update)
+        .window_attributes(attrs)
+        .pipelines(pipeline_factories!["planet" => PlanetPipeline])
+        .run()
 }
