@@ -19,10 +19,6 @@ fn update<'a>(
     event_loop: &ActiveEventLoop,
 ) -> Task<Message> {
     match event {
-        Event::Platform(WindowEvent::CloseRequested) => {
-            event_loop.exit();
-            Task::None
-        }
         Event::Key(KeyEvent {
             state: KeyState::Pressed,
             logical_key: k,

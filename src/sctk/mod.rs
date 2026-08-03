@@ -443,6 +443,7 @@ fn run_app_core<'a, M, S, V, U, H, F>(
     view: V,
     mut update: U,
     opts: Options,
+    exit_on_close: bool,
     post_engine_init: F,
 ) -> crate::Result<()>
 where
@@ -689,6 +690,11 @@ where
                     }
                 }
             }
+
+            // TODO: SctkEvent::Closed should carry the sid
+            if exit_on_close && matches!(ev, SctkEvent::Closed) {
+                loop_ctl.exit();
+            }
         }
 
         for (sid, &tid) in sid_to_tid.iter() {
@@ -728,6 +734,7 @@ pub struct SctkApp<'a, M, S, V, U, H = DefaultHandler> {
     update: U,
     opts: Options,
     extra_pipelines: Vec<(&'static str, PipelineFactoryFn)>,
+    exit_on_close: bool,
     _marker: std::marker::PhantomData<(fn() -> M, fn() -> H, &'a ())>,
 }
 
@@ -754,6 +761,7 @@ impl<'a, M, S, V, U> SctkApp<'a, M, S, V, U, DefaultHandler> {
             update,
             opts,
             extra_pipelines: Vec::new(),
+            exit_on_close: true,
             _marker: std::marker::PhantomData,
         }
     }
@@ -770,8 +778,21 @@ impl<'a, M, S, V, U, H> SctkApp<'a, M, S, V, U, H> {
             update: self.update,
             opts: self.opts,
             extra_pipelines: self.extra_pipelines,
+            exit_on_close: self.exit_on_close,
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// Control whether the event loop exits automatically when the surface
+    /// receives a close request ([`SctkEvent::Closed`]).
+    ///
+    /// Defaults to `true`, so you don't need to wire up close handling in your
+    /// `update` function. The close event is still delivered to `update` before
+    /// the loop exits, so any cleanup there still runs. Pass `false` if you want
+    /// to decide when to exit yourself.
+    pub fn exit_on_close(mut self, exit_on_close: bool) -> Self {
+        self.exit_on_close = exit_on_close;
+        self
     }
 
     /// Register a single extra render pipeline factory under `name`.
@@ -806,6 +827,7 @@ impl<'a, M, S, V, U, H> SctkApp<'a, M, S, V, U, H> {
             self.view,
             self.update,
             self.opts,
+            self.exit_on_close,
             move |engine| {
                 for (key, factory) in pipelines {
                     engine.register_pipeline(

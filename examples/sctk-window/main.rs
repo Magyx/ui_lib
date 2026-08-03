@@ -18,10 +18,6 @@ fn update<'a>(
     loop_ctl: &SctkLoop,
 ) -> Task<Message> {
     match event {
-        Event::Platform(SctkEvent::Closed) => {
-            loop_ctl.exit();
-            Task::None
-        }
         Event::Key(KeyEvent {
             state: KeyState::Pressed,
             logical_key: k,

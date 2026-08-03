@@ -215,6 +215,7 @@ where
     window_attrs: WindowAttributes,
     next_frame: Instant,
     frame_interval: Duration,
+    exit_on_close: bool,
 
     startup_error: Option<crate::Error>,
 
@@ -240,6 +241,7 @@ where
         update: U,
         window_attrs: WindowAttributes,
         extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
+        exit_on_close: bool,
     ) -> Self {
         Self {
             window: None,
@@ -252,6 +254,7 @@ where
             window_attrs,
             next_frame: Instant::now(),
             frame_interval: Duration::from_millis(16),
+            exit_on_close,
 
             startup_error: None,
 
@@ -367,6 +370,10 @@ where
                     &mut self.state,
                     event_loop,
                 );
+
+                if self.exit_on_close && matches!(event, WindowEvent::CloseRequested) {
+                    event_loop.exit();
+                }
             }
         }
     }
@@ -378,6 +385,7 @@ fn run_app_core<'a, M, S, V, U>(
     update: U,
     window_attrs: WindowAttributes,
     extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
+    exit_on_close: bool,
 ) -> crate::Result<()>
 where
     M: 'static,
@@ -393,8 +401,14 @@ where
 {
     crate::profile::set_thread_name("ui-main");
     let event_loop = EventLoop::new()?;
-    let mut app =
-        WinitApp::<'a, M, S, V, U>::new(state, view, update, window_attrs, extra_pipelines);
+    let mut app = WinitApp::<'a, M, S, V, U>::new(
+        state,
+        view,
+        update,
+        window_attrs,
+        extra_pipelines,
+        exit_on_close,
+    );
     event_loop.run_app(&mut app)?;
 
     if let Some(err) = app.startup_error.take() {
@@ -410,6 +424,7 @@ pub struct WinitAppBuilder<'a, M, S, V, U> {
     update: U,
     window_attrs: WindowAttributes,
     extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
+    exit_on_close: bool,
     _marker: std::marker::PhantomData<(fn() -> M, &'a ())>,
 }
 impl<'a, M, S, V, U> WinitAppBuilder<'a, M, S, V, U>
@@ -435,6 +450,7 @@ where
             update,
             window_attrs: WindowAttributes::default(),
             extra_pipelines: None,
+            exit_on_close: true,
             _marker: std::marker::PhantomData,
         }
     }
@@ -442,6 +458,18 @@ where
     /// Set the [`WindowAttributes`] used to create the window.
     pub fn window_attributes(mut self, window_attrs: WindowAttributes) -> Self {
         self.window_attrs = window_attrs;
+        self
+    }
+
+    /// Control whether the event loop exits automatically when the window
+    /// receives a close request ([`WindowEvent::CloseRequested`]).
+    ///
+    /// Defaults to `true`, so you don't need to wire up close handling in your
+    /// `update` function. The close event is still delivered to `update` before
+    /// the loop exits, so any cleanup there still runs. Pass `false` if you want
+    /// to decide when to exit yourself (e.g. to prompt for unsaved changes).
+    pub fn exit_on_close(mut self, exit_on_close: bool) -> Self {
+        self.exit_on_close = exit_on_close;
         self
     }
 
@@ -474,6 +502,7 @@ where
             self.update,
             self.window_attrs,
             self.extra_pipelines,
+            self.exit_on_close,
         )
     }
 }
