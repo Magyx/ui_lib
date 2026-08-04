@@ -13,7 +13,7 @@ mod text_input {
     use super::common::*;
 
     use ui::event::{
-        KeyEvent, KeyLocation, KeyState, LogicalKey, Modifiers, MouseButton, PhysicalKey,
+        KeyEvent, KeyLocation, KeyState, LogicalKey, MouseButton, PhysicalKey,
         TextInput as TextInputEvent, UiEventRef,
     };
     use ui::model::{Position, Size};
@@ -32,7 +32,6 @@ mod text_input {
             logical_key: key,
             physical_key: PhysicalKey::Unidentified,
             location: KeyLocation::Standard,
-            modifiers: Modifiers::default(),
         }
     }
 

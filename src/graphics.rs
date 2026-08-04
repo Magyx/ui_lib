@@ -6,7 +6,7 @@ use crate::{
     context::{
         BasicMessageSink, Context, EventCtx, LayoutCtx, MessageSink, PaintCtx, PrepareCtx, SweepCtx,
     },
-    event::{Event, KeyState, ScrollDelta, ToEvent},
+    event::{Event, KeyState, Modifiers, ScrollDelta, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
     primitive::{Instance, InstanceStore, Primitive, Vertex},
@@ -505,8 +505,11 @@ impl<'a> Engine<'a> {
         }
     }
 
-    pub fn globals(&self, tid: &TargetId) -> Option<&Globals> {
-        self.targets.get(tid).map(|t| &t.globals)
+    pub fn globals(&self, tid: &TargetId) -> Option<Globals> {
+        self.targets.get(tid).map(|t| t.globals)
+    }
+    pub fn modifiers(&self, tid: &TargetId) -> Option<Modifiers> {
+        self.targets.get(tid).map(|t| t.ctx.modifiers)
     }
 
     pub fn attach_target<T>(

@@ -114,21 +114,39 @@ pub(super) fn pick_outputs(outputs: &OutputState, set: &OutputSet) -> Vec<Picked
 pub(super) fn map_keysym_to_logical(k: Keysym, utf8: Option<&str>) -> LogicalKey {
     use smithay_client_toolkit::seat::keyboard::Keysym as KS;
     match k {
-        KS::Return => LogicalKey::Enter,
+        KS::Return | KS::KP_Enter | KS::ISO_Enter | KS::Linefeed => LogicalKey::Enter,
         KS::Escape => LogicalKey::Escape,
         KS::BackSpace => LogicalKey::Backspace,
-        KS::Tab => LogicalKey::Tab,
-        KS::space => LogicalKey::Space,
-        KS::Left => LogicalKey::ArrowLeft,
-        KS::Right => LogicalKey::ArrowRight,
-        KS::Up => LogicalKey::ArrowUp,
-        KS::Down => LogicalKey::ArrowDown,
-        KS::Home => LogicalKey::Home,
-        KS::End => LogicalKey::End,
-        KS::Page_Up => LogicalKey::PageUp,
-        KS::Page_Down => LogicalKey::PageDown,
-        KS::Insert => LogicalKey::Insert,
-        KS::Delete => LogicalKey::Delete,
+        KS::Tab | KS::ISO_Left_Tab | KS::KP_Tab => LogicalKey::Tab,
+        KS::space | KS::KP_Space => LogicalKey::Space,
+
+        KS::Left | KS::KP_Left => LogicalKey::ArrowLeft,
+        KS::Right | KS::KP_Right => LogicalKey::ArrowRight,
+        KS::Up | KS::KP_Up => LogicalKey::ArrowUp,
+        KS::Down | KS::KP_Down => LogicalKey::ArrowDown,
+        KS::Home | KS::KP_Home => LogicalKey::Home,
+        KS::End | KS::KP_End => LogicalKey::End,
+        KS::Page_Up | KS::KP_Page_Up => LogicalKey::PageUp,
+        KS::Page_Down | KS::KP_Page_Down => LogicalKey::PageDown,
+        KS::Insert | KS::KP_Insert => LogicalKey::Insert,
+        KS::Delete | KS::KP_Delete => LogicalKey::Delete,
+
+        KS::Shift_L | KS::Shift_R => LogicalKey::Shift,
+        KS::Control_L | KS::Control_R => LogicalKey::Control,
+        KS::Alt_L | KS::Alt_R => LogicalKey::Alt,
+        KS::ISO_Level3_Shift | KS::Mode_switch => LogicalKey::AltGraph,
+        KS::Super_L | KS::Super_R | KS::Meta_L | KS::Meta_R => LogicalKey::Super,
+        KS::Caps_Lock => LogicalKey::CapsLock,
+        KS::Num_Lock => LogicalKey::NumLock,
+        KS::Menu => LogicalKey::ContextMenu,
+
+        other if other.is_function_key() => {
+            let n = other.raw() - KS::F1.raw() + 1;
+            LogicalKey::F(n as u8)
+        }
+
+        other if (KS::dead_grave.raw()..=0xfe93).contains(&other.raw()) => LogicalKey::Dead,
+
         _ => utf8
             .map(|s| LogicalKey::Character(s.to_smolstr()))
             .unwrap_or(LogicalKey::Unknown),

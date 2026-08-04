@@ -260,7 +260,6 @@ impl<M> ToEvent<M, SctkEvent> for SctkEvent {
                     logical_key,
                     physical_key,
                     location: KeyLocation::Standard,
-                    modifiers: Modifiers::default(),
                 })
             }
 

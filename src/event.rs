@@ -81,6 +81,14 @@ pub enum LogicalKey {
     PageDown,
     Insert,
     Delete,
+    Shift,
+    Control,
+    Alt,
+    AltGraph,
+    Super,
+    CapsLock,
+    NumLock,
+    ContextMenu,
     F(u8),
     Dead,
     Unknown,
@@ -99,7 +107,6 @@ pub struct KeyEvent {
     pub logical_key: LogicalKey,   // what the OS thinks the key “means”
     pub physical_key: PhysicalKey, // where on the keyboard (scan code)
     pub location: KeyLocation,     // left/right/numpad if known
-    pub modifiers: Modifiers,      // snapshot at the event time
 }
 
 #[derive(Debug, Clone)]
