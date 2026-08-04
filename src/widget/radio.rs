@@ -82,6 +82,18 @@ impl<M: Clone + 'static> Widget for Radio<M> {
     fn focusable(&self) -> bool {
         true
     }
+    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        use crate::focus::{GAP, RING_WIDTH};
+        let r = ctx.rect();
+        out.push(Instance::ui_rounded(
+            Position::new((r.x - GAP) as f32, (r.y - GAP) as f32),
+            Size::new((SIZE + GAP * 2) as f32, (SIZE + GAP * 2) as f32),
+            Color::TRANSPARENT,
+            SIZE as f32 / 2.0 + GAP as f32,
+            RING_WIDTH,
+            ctx.theme.focus_outline,
+        ));
+    }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
@@ -121,19 +133,6 @@ impl<M: Clone + 'static> Widget for Radio<M> {
                 Color::TRANSPARENT,
             ));
         }
-    }
-
-    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        use crate::focus::{GAP, RING_WIDTH};
-        let r = ctx.rect();
-        out.push(Instance::ui_rounded(
-            Position::new((r.x - GAP) as f32, (r.y - GAP) as f32),
-            Size::new((SIZE + GAP * 2) as f32, (SIZE + GAP * 2) as f32),
-            Color::TRANSPARENT,
-            SIZE as f32 / 2.0 + GAP as f32,
-            RING_WIDTH,
-            ctx.theme.focus_outline,
-        ));
     }
 
     fn handle_after(&mut self, ctx: &mut EventCtx) {

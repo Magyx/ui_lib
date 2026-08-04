@@ -249,6 +249,18 @@ impl<M: 'static> Widget for Checkbox<M> {
     fn focusable(&self) -> bool {
         !self.disabled
     }
+    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        use crate::focus::{GAP, RING_WIDTH};
+        let r = ctx.rect();
+        out.push(Instance::ui_rounded(
+            Position::new((r.x - GAP) as f32, (r.y - GAP) as f32),
+            Size::new((self.size + GAP * 2) as f32, (self.size + GAP * 2) as f32),
+            Color::TRANSPARENT,
+            ctx.theme.corner_radius + GAP as f32 * 2.0,
+            RING_WIDTH,
+            ctx.theme.focus_outline,
+        ));
+    }
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         let Some(ch) = self.visible_glyph() else {
@@ -355,19 +367,6 @@ impl<M: 'static> Widget for Checkbox<M> {
                 }
             }
         }
-    }
-
-    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        use crate::focus::{GAP, RING_WIDTH};
-        let r = ctx.rect();
-        out.push(Instance::ui_rounded(
-            Position::new((r.x - GAP) as f32, (r.y - GAP) as f32),
-            Size::new((self.size + GAP * 2) as f32, (self.size + GAP * 2) as f32),
-            Color::TRANSPARENT,
-            ctx.theme.corner_radius + GAP as f32 * 2.0,
-            RING_WIDTH,
-            ctx.theme.focus_outline,
-        ));
     }
 
     fn handle_after(&mut self, ctx: &mut EventCtx) {

@@ -514,6 +514,19 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
     fn focusable(&self) -> bool {
         true
     }
+    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        const FOCUS_BORDER: i32 = 2;
+        let r = ctx.rect();
+        let theme = ctx.theme;
+        out.push(Instance::ui_rounded(
+            Position::new(r.x as f32, r.y as f32),
+            Size::new(r.w as f32, r.h as f32),
+            Color::TRANSPARENT,
+            theme.corner_radius,
+            FOCUS_BORDER,
+            theme.focus_outline,
+        ));
+    }
 
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         let id = ctx.id();
@@ -563,20 +576,6 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
             theme.corner_radius,
             theme.border_width,
             theme.outline,
-        ));
-    }
-
-    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        const FOCUS_BORDER: i32 = 2;
-        let r = ctx.rect();
-        let theme = ctx.theme;
-        out.push(Instance::ui_rounded(
-            Position::new(r.x as f32, r.y as f32),
-            Size::new(r.w as f32, r.h as f32),
-            Color::TRANSPARENT,
-            theme.corner_radius,
-            FOCUS_BORDER,
-            theme.focus_outline,
         ));
     }
 

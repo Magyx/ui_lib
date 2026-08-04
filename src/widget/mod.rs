@@ -74,6 +74,9 @@ pub trait Widget: IntoElement {
     fn focus_trap(&self) -> bool {
         false
     }
+    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        ctx.focus_ring(out, ctx.rect().xywh());
+    }
 
     fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a>, width: i32) -> Option<i32> {
         let _ = (ctx, width);
@@ -90,9 +93,6 @@ pub trait Widget: IntoElement {
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore);
     fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let _ = (ctx, out);
-    }
-    fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        ctx.focus_ring(out, ctx.rect().xywh());
     }
 
     fn handle(&mut self, ctx: &mut EventCtx) {
