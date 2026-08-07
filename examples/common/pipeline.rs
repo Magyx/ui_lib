@@ -1,29 +1,28 @@
-use ui::graphics::{Globals, Gpu};
-use ui::render::pipeline::Pipeline;
+use std::ops::Range;
+
+use ui::graphics::Gpu;
+use ui::primitive::{InstanceData, Primitive};
+use ui::render::geometry::{QuadGeometry, Vertex};
+use ui::render::pipeline::{DrawCtx, Pipeline};
 
 #[derive(Pipeline)]
 pub struct PlanetPipeline {
     render_pipeline: Option<wgpu::RenderPipeline>,
+    geometry: QuadGeometry,
 }
 
 impl Pipeline for PlanetPipeline {
     fn new(
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
-        buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) -> Self {
         let mut p = Self {
             render_pipeline: None,
+            geometry: QuadGeometry::new(&gpu.device),
         };
-        p.reload(
-            gpu,
-            surface_format,
-            buffers,
-            texture_bgl,
-            push_constant_ranges,
-        );
+        p.reload(gpu, surface_format, texture_bgl, push_constant_ranges);
         p
     }
 
@@ -31,7 +30,6 @@ impl Pipeline for PlanetPipeline {
         &mut self,
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
-        buffers: &[wgpu::VertexBufferLayout],
         _texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
@@ -57,7 +55,7 @@ impl Pipeline for PlanetPipeline {
                 vertex: wgpu::VertexState {
                     module: &shader_module,
                     entry_point: Some("vs_main"),
-                    buffers,
+                    buffers: &[Vertex::layout(), Primitive::layout()],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -102,17 +100,17 @@ impl Pipeline for PlanetPipeline {
         ));
     }
 
-    fn apply_pipeline(
-        &mut self,
-        globals: &Globals,
-        _texture_bindgroup: &wgpu::BindGroup,
-        render_pass: &mut wgpu::RenderPass<'_>,
-    ) {
-        render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
-        render_pass.set_push_constants(
+    fn bind(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>) {
+        pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
+        pass.set_push_constants(
             wgpu::ShaderStages::VERTEX_FRAGMENT,
             0,
-            bytemuck::bytes_of(globals),
+            bytemuck::bytes_of(ctx.globals),
         );
+        self.geometry.bind(pass, ctx.instances);
+    }
+
+    fn draw(&mut self, pass: &mut wgpu::RenderPass<'_>, instances: Range<u32>) {
+        self.geometry.draw(pass, instances);
     }
 }

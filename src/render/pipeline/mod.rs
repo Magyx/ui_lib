@@ -1,4 +1,5 @@
 use core::sync::atomic::{AtomicU32, Ordering};
+use std::ops::Range;
 
 use crate::graphics::{Globals, Gpu};
 
@@ -46,7 +47,6 @@ pub struct PipelineRegistration(
         &mut PipelineRegistry,
         &Gpu,
         &wgpu::TextureFormat,
-        &[wgpu::VertexBufferLayout],
         &wgpu::BindGroupLayout,
         &[wgpu::PushConstantRange],
     ),
@@ -54,14 +54,12 @@ pub struct PipelineRegistration(
 
 impl PipelineRegistration {
     pub fn of<P: Pipeline>() -> Self {
-        Self(
-            |registry, gpu, surface_format, buffers, texture_bgl, ranges| {
-                registry.insert(
-                    PipelineId::of::<P>(),
-                    Box::new(P::new(gpu, surface_format, buffers, texture_bgl, ranges)),
-                );
-            },
-        )
+        Self(|registry, gpu, surface_format, texture_bgl, ranges| {
+            registry.insert(
+                PipelineId::of::<P>(),
+                Box::new(P::new(gpu, surface_format, texture_bgl, ranges)),
+            );
+        })
     }
 }
 
@@ -79,11 +77,20 @@ fn assign(memo: &AtomicU32) -> u32 {
     }
 }
 
+/// Shared per-frame resources a pipeline may bind.
+///
+/// The renderer owns these; a pipeline takes what it needs and ignores the
+/// rest — one that never samples the atlas simply doesn't touch `textures`.
+pub struct DrawCtx<'a> {
+    pub globals: &'a Globals,
+    pub textures: &'a wgpu::BindGroup,
+    pub instances: &'a wgpu::Buffer,
+}
+
 pub trait Pipeline: PipelineSlot + 'static {
     fn new(
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
-        buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) -> Self
@@ -94,17 +101,13 @@ pub trait Pipeline: PipelineSlot + 'static {
         &mut self,
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
-        buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     );
 
-    fn apply_pipeline(
-        &mut self,
-        globals: &Globals,
-        texture_bindgroup: &wgpu::BindGroup,
-        render_pass: &mut wgpu::RenderPass<'_>,
-    );
+    fn bind(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>);
+
+    fn draw(&mut self, pass: &mut wgpu::RenderPass<'_>, instances: Range<u32>);
 }
 
 pub(crate) struct PipelineRegistry {
@@ -120,7 +123,6 @@ impl PipelineRegistry {
         &mut self,
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
-        buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
@@ -129,7 +131,6 @@ impl PipelineRegistry {
             Box::new(ui::UiPipeline::new(
                 gpu,
                 surface_format,
-                buffers,
                 texture_bgl,
                 push_constant_ranges,
             )),
@@ -145,18 +146,10 @@ impl PipelineRegistry {
         reg: PipelineRegistration,
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
-        buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
-        (reg.0)(
-            self,
-            gpu,
-            surface_format,
-            buffers,
-            texture_bgl,
-            push_constant_ranges,
-        );
+        (reg.0)(self, gpu, surface_format, texture_bgl, push_constant_ranges);
     }
 
     fn insert(&mut self, id: PipelineId, pipeline: Box<dyn Pipeline>) {
@@ -171,18 +164,11 @@ impl PipelineRegistry {
         &mut self,
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
-        buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
         for pipeline in self.slots.iter_mut().flatten() {
-            pipeline.reload(
-                gpu,
-                surface_format,
-                buffers,
-                texture_bgl,
-                push_constant_ranges,
-            );
+            pipeline.reload(gpu, surface_format, texture_bgl, push_constant_ranges);
         }
     }
 
@@ -191,19 +177,9 @@ impl PipelineRegistry {
         self.slots.get(id.index())?.as_deref()
     }
 
-    pub(crate) fn apply_pipeline(
-        &mut self,
-        id: PipelineId,
-        globals: &Globals,
-        texture_bindgroup: &wgpu::BindGroup,
-        pass: &mut wgpu::RenderPass<'_>,
-    ) {
-        let pipeline = self
-            .slots
-            .get_mut(id.index())
-            .and_then(Option::as_deref_mut)
-            .expect("pipeline index was emitted but never registered");
-        pipeline.apply_pipeline(globals, texture_bindgroup, pass);
+    #[inline]
+    pub(crate) fn get_mut(&mut self, id: PipelineId) -> Option<&mut dyn Pipeline> {
+        self.slots.get_mut(id.index())?.as_deref_mut()
     }
 }
 
@@ -217,7 +193,6 @@ mod tests {
                 fn new(
                     _: &Gpu,
                     _: &wgpu::TextureFormat,
-                    _: &[wgpu::VertexBufferLayout],
                     _: &wgpu::BindGroupLayout,
                     _: &[wgpu::PushConstantRange],
                 ) -> Self {
@@ -227,18 +202,12 @@ mod tests {
                     &mut self,
                     _: &Gpu,
                     _: &wgpu::TextureFormat,
-                    _: &[wgpu::VertexBufferLayout],
                     _: &wgpu::BindGroupLayout,
                     _: &[wgpu::PushConstantRange],
                 ) {
                 }
-                fn apply_pipeline(
-                    &mut self,
-                    _: &Globals,
-                    _: &wgpu::BindGroup,
-                    _: &mut wgpu::RenderPass<'_>,
-                ) {
-                }
+                fn bind(&mut self, _: &DrawCtx, _: &mut wgpu::RenderPass<'_>) {}
+                fn draw(&mut self, _: &mut wgpu::RenderPass<'_>, _: Range<u32>) {}
             }
         };
     }

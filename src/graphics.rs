@@ -9,7 +9,7 @@ use crate::{
     event::{Event, KeyState, Modifiers, ScrollDelta, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
-    primitive::{Instance, InstanceStore, Primitive, Vertex},
+    primitive::{Instance, InstanceStore},
     render::{
         AllocatorKind,
         pipeline::{PipelineRegistration, PipelineRegistry},
@@ -412,7 +412,6 @@ impl<'a> Engine<'a> {
             self.pipeline_registry.register_default_pipelines(
                 &self.gpu,
                 &target.config.format,
-                &[Vertex::desc(), Primitive::desc()],
                 self.renderer.textures.layout(),
                 &self.push_constant_ranges,
             );
@@ -423,7 +422,6 @@ impl<'a> Engine<'a> {
                     reg,
                     &self.gpu,
                     &fmt,
-                    &[Vertex::desc(), Primitive::desc()],
                     self.renderer.textures.layout(),
                     &self.push_constant_ranges,
                 );
@@ -485,7 +483,6 @@ impl<'a> Engine<'a> {
         self.pipeline_registry.reload(
             &self.gpu,
             &fmt,
-            &[Vertex::desc(), Primitive::desc()],
             self.renderer.textures.layout(),
             &self.push_constant_ranges,
         );
@@ -597,7 +594,6 @@ impl<'a> Engine<'a> {
             reg,
             &self.gpu,
             &fmt,
-            &[Vertex::desc(), Primitive::desc()],
             self.renderer.textures.layout(),
             &self.push_constant_ranges,
         );

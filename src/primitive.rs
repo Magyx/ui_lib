@@ -6,32 +6,13 @@ use crate::{
     },
 };
 
-pub const QUAD_VERTICES: &[Vertex] = &[
-    Vertex { uv: [0.0, 0.0] },
-    Vertex { uv: [1.0, 0.0] },
-    Vertex { uv: [0.0, 1.0] },
-    Vertex { uv: [1.0, 1.0] },
-];
-pub const QUAD_INDICES: &[u16] = &[0, 1, 2, 2, 1, 3];
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct Vertex {
-    pub uv: [f32; 2],
-}
-
-impl Vertex {
-    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[wgpu::VertexAttribute {
-                offset: 0,
-                shader_location: 10,
-                format: wgpu::VertexFormat::Float32x2,
-            }],
-        }
-    }
+/// Per-instance data a pipeline consumes.
+///
+/// The [`Pod`](bytemuck::Pod) bound is what makes a type safe to hand to the
+/// GPU as raw bytes; `layout` tells wgpu how to read them back. Implement it
+/// for any `#[repr(C)]` struct a custom pipeline wants to draw with.
+pub trait InstanceData: bytemuck::Pod + Send + Sync + 'static {
+    fn layout() -> wgpu::VertexBufferLayout<'static>;
 }
 
 #[repr(C)]
@@ -54,8 +35,8 @@ impl Primitive {
     }
 }
 
-impl Primitive {
-    pub fn desc() -> wgpu::VertexBufferLayout<'static> {
+impl InstanceData for Primitive {
+    fn layout() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Primitive>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Instance,
@@ -197,12 +178,27 @@ impl PrimitiveStyle {
 }
 
 #[derive(Debug)]
-pub struct Instance {
-    pub(crate) primitive: Primitive,
+pub struct Instance<D: InstanceData = Primitive> {
+    pub(crate) data: D,
     pub(crate) kind: PipelineId,
     clip: Option<[u32; 4]>,
 }
-impl Instance {
+impl<D: InstanceData> Instance<D> {
+    /// Emit arbitrary instance data through `P`.
+    pub fn of<P: Pipeline>(data: D) -> Self {
+        Self::for_pipeline(PipelineId::of::<P>(), data)
+    }
+
+    /// Emit arbitrary instance data through an already-resolved pipeline.
+    pub fn for_pipeline(pipeline: PipelineId, data: D) -> Self {
+        Self {
+            data,
+            kind: pipeline,
+            clip: None,
+        }
+    }
+}
+impl Instance<Primitive> {
     /// Emit through `P`.
     pub fn new<P: Pipeline>(
         position: Position<f32>,
@@ -224,7 +220,7 @@ impl Instance {
         data2: [u32; 4],
     ) -> Self {
         Self {
-            primitive: Primitive {
+            data: Primitive {
                 position: [position.x, position.y],
                 size: [size.width, size.height],
                 data1,
@@ -237,7 +233,7 @@ impl Instance {
 
     pub fn ui(position: Position<f32>, size: Size<f32>, color: Color) -> Self {
         Self {
-            primitive: Primitive {
+            data: Primitive {
                 position: [position.x, position.y],
                 size: [size.width, size.height],
                 data1: [color.0, 0, 0, 0],
@@ -255,7 +251,7 @@ impl Instance {
         handle: TextureHandle,
     ) -> Self {
         Self {
-            primitive: Primitive {
+            data: Primitive {
                 position: [position.x, position.y],
                 size: [size.width, size.height],
                 data1: [tint.0, 0, 0, 0],
@@ -286,7 +282,7 @@ impl Instance {
             content_offset[1],
         ]);
         Self {
-            primitive: Primitive {
+            data: Primitive {
                 position: [position.x, position.y],
                 size: [size.width, size.height],
                 data1: [tint.0, 0, 0, 0],
@@ -321,7 +317,7 @@ impl Instance {
     pub fn ui_styled(position: Position<f32>, size: Size<f32>, style: PrimitiveStyle) -> Self {
         let (shape_params, border_packed, aux_packed) = style.pack();
         Self {
-            primitive: Primitive {
+            data: Primitive {
                 position: [position.x, position.y],
                 size: [size.width, size.height],
                 data1: [style.fill.0, shape_params, border_packed, aux_packed],
@@ -338,39 +334,50 @@ pub struct InstanceMeta {
     pub clip: Option<[u32; 4]>,
 }
 
-pub struct InstanceStore {
-    primitives: Vec<Primitive>,
+pub struct InstanceStore<D: InstanceData = Primitive> {
+    data: Vec<D>,
     meta: Vec<InstanceMeta>,
 }
-impl Default for InstanceStore {
+impl<D: InstanceData> Default for InstanceStore<D> {
     fn default() -> Self {
         Self::new()
     }
 }
-impl InstanceStore {
+impl<D: InstanceData> InstanceStore<D> {
     pub fn new() -> Self {
         Self {
-            primitives: Vec::new(),
+            data: Vec::new(),
             meta: Vec::new(),
         }
     }
     pub fn len(&self) -> usize {
-        self.primitives.len()
+        self.data.len()
     }
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    pub fn primitives(&self) -> &[Primitive] {
-        &self.primitives
+    pub fn layout() -> wgpu::VertexBufferLayout<'static> {
+        D::layout()
     }
+
+    pub fn data(&self) -> &[D] {
+        &self.data
+    }
+    pub(crate) fn stride(&self) -> u64 {
+        std::mem::size_of::<D>() as u64
+    }
+    pub(crate) fn bytes(&self) -> &[u8] {
+        bytemuck::cast_slice(&self.data)
+    }
+
     pub fn meta(&self) -> &[InstanceMeta] {
         &self.meta
     }
 
     pub(crate) fn clear(&mut self) {
-        self.primitives.clear();
+        self.data.clear();
         self.meta.clear();
     }
 
@@ -389,8 +396,8 @@ impl InstanceStore {
         }
     }
 
-    pub fn push(&mut self, i: Instance) {
-        self.primitives.push(i.primitive);
+    pub fn push(&mut self, i: Instance<D>) {
+        self.data.push(i.data);
         self.meta.push(InstanceMeta {
             id: i.kind,
             clip: i.clip,
@@ -403,21 +410,89 @@ mod tests {
     use super::*;
     use crate::model::{Color, Position, Size};
 
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+    struct CustomInstance {
+        center: [f32; 2],
+        radius: f32,
+        _pad: f32,
+    }
+
+    impl InstanceData for CustomInstance {
+        fn layout() -> wgpu::VertexBufferLayout<'static> {
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<CustomInstance>() as wgpu::BufferAddress,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &[wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x4,
+                }],
+            }
+        }
+    }
+
+    #[test]
+    fn stride_follows_the_instance_type() {
+        let primitives: InstanceStore = InstanceStore::new();
+        assert_eq!(primitives.stride(), std::mem::size_of::<Primitive>() as u64);
+
+        let custom: InstanceStore<CustomInstance> = InstanceStore::new();
+        assert_eq!(
+            custom.stride(),
+            std::mem::size_of::<CustomInstance>() as u64
+        );
+        assert_ne!(custom.stride(), primitives.stride());
+    }
+
+    #[test]
+    fn bytes_length_is_len_times_stride() {
+        let mut store: InstanceStore = InstanceStore::new();
+        for _ in 0..3 {
+            store.push(Instance::ui(
+                Position::new(0.0, 0.0),
+                Size::new(1.0, 1.0),
+                Color::RED,
+            ));
+        }
+        assert_eq!(store.len(), 3);
+        assert_eq!(store.bytes().len() as u64, 3 * store.stride());
+    }
+
+    #[test]
+    fn custom_instance_data_round_trips() {
+        let mut store: InstanceStore<CustomInstance> = InstanceStore::new();
+        let id = PipelineId::of::<UiPipeline>();
+        store.push(Instance::for_pipeline(
+            id,
+            CustomInstance {
+                center: [3.0, 4.0],
+                radius: 5.0,
+                _pad: 0.0,
+            },
+        ));
+
+        assert_eq!(store.data()[0].center, [3.0, 4.0]);
+        assert_eq!(store.data()[0].radius, 5.0);
+        assert_eq!(store.meta()[0].id, id);
+        assert_eq!(store.bytes().len(), std::mem::size_of::<CustomInstance>());
+    }
+
     #[test]
     fn ui_instance_packs_color_into_data1_low_word() {
         let color = Color::rgba(0x11, 0x22, 0x33, 0x44);
         let inst = Instance::ui(Position::new(1.0, 2.0), Size::new(10.0, 20.0), color);
-        assert_eq!(inst.primitive.data1[0], color.0);
-        assert_eq!(inst.primitive.data1[1], 0);
-        assert_eq!(inst.primitive.data2, [0, 0, 0, 0]);
+        assert_eq!(inst.data.data1[0], color.0);
+        assert_eq!(inst.data.data1[1], 0);
+        assert_eq!(inst.data.data2, [0, 0, 0, 0]);
         assert!(inst.clip.is_none());
     }
 
     #[test]
     fn ui_instance_preserves_position_and_size() {
         let inst = Instance::ui(Position::new(3.0, 7.0), Size::new(50.0, 60.0), Color::WHITE);
-        assert_eq!(inst.primitive.position, [3.0, 7.0]);
-        assert_eq!(inst.primitive.size, [50.0, 60.0]);
+        assert_eq!(inst.data.position, [3.0, 7.0]);
+        assert_eq!(inst.data.size, [50.0, 60.0]);
     }
 
     #[test]
@@ -490,15 +565,15 @@ mod tests {
             Size::new(0.0, 0.0),
             Color::TRANSPARENT,
         );
-        assert_eq!(inst.primitive.position, [-7.0, -8.0]);
-        assert_eq!(inst.primitive.size, [0.0, 0.0]);
+        assert_eq!(inst.data.position, [-7.0, -8.0]);
+        assert_eq!(inst.data.size, [0.0, 0.0]);
     }
 
     #[test]
     fn subpixel_positions_preserved() {
         let inst = Instance::ui(Position::new(10.3, 20.7), Size::new(5.5, 8.0), Color::WHITE);
-        assert_eq!(inst.primitive.position, [10.3, 20.7]);
-        assert_eq!(inst.primitive.size, [5.5, 8.0]);
+        assert_eq!(inst.data.position, [10.3, 20.7]);
+        assert_eq!(inst.data.size, [5.5, 8.0]);
     }
 
     #[test]
@@ -543,11 +618,11 @@ mod tests {
     fn ui_flat_has_zero_shape_params() {
         let inst = Instance::ui(Position::new(0.0, 0.0), Size::new(10.0, 10.0), Color::RED);
         assert_eq!(
-            inst.primitive.data1[1], 0,
+            inst.data.data1[1], 0,
             "flat ui must have shape_params == 0 for fast path"
         );
-        assert_eq!(inst.primitive.data1[2], 0);
-        assert_eq!(inst.primitive.data1[3], 0);
+        assert_eq!(inst.data.data1[2], 0);
+        assert_eq!(inst.data.data1[3], 0);
     }
 
     #[test]
@@ -562,10 +637,10 @@ mod tests {
         );
 
         // data1[0] = fill color
-        assert_eq!(inst.primitive.data1[0], Color::BLUE.0);
+        assert_eq!(inst.data.data1[0], Color::BLUE.0);
 
         // data1[1] = shape_params (non-zero because corner_radius=8 and border_width=1)
-        let (r, b, s, flags) = unpack_shape_params(inst.primitive.data1[1]);
+        let (r, b, s, flags) = unpack_shape_params(inst.data.data1[1]);
         assert_eq!(r, 8.0);
         assert_eq!(b, 1.0);
         assert_eq!(s, 0.0);
@@ -573,10 +648,10 @@ mod tests {
         assert_eq!(flags & shape_flags::HAS_SHADOW, 0);
 
         // data1[2] = border color
-        assert_eq!(inst.primitive.data1[2], Color::WHITE.0);
+        assert_eq!(inst.data.data1[2], Color::WHITE.0);
 
         // data2 = no texture
-        assert_eq!(inst.primitive.data2, [0, 0, 0, 0]);
+        assert_eq!(inst.data.data2, [0, 0, 0, 0]);
     }
 
     #[test]
@@ -590,7 +665,7 @@ mod tests {
             Color::TRANSPARENT,
         );
 
-        let (r, b, _, flags) = unpack_shape_params(inst.primitive.data1[1]);
+        let (r, b, _, flags) = unpack_shape_params(inst.data.data1[1]);
         assert_eq!(r, 12.0);
         assert_eq!(b, 0.0);
         assert_eq!(flags & shape_flags::HAS_BORDER, 0);
@@ -601,12 +676,12 @@ mod tests {
         let style = PrimitiveStyle::flat(Color::WHITE).with_shadow(16.0, Color::rgba(0, 0, 0, 128));
         let inst = Instance::ui_styled(Position::new(10.0, 20.0), Size::new(100.0, 60.0), style);
 
-        let (_, _, s, flags) = unpack_shape_params(inst.primitive.data1[1]);
+        let (_, _, s, flags) = unpack_shape_params(inst.data.data1[1]);
         assert_eq!(s, 16.0);
         assert_eq!(flags & shape_flags::HAS_SHADOW, shape_flags::HAS_SHADOW);
 
         // aux_color = shadow_color
-        assert_eq!(inst.primitive.data1[3], Color::rgba(0, 0, 0, 128).0);
+        assert_eq!(inst.data.data1[3], Color::rgba(0, 0, 0, 128).0);
     }
 
     #[test]
@@ -614,9 +689,9 @@ mod tests {
         let style = PrimitiveStyle::rounded(Color::RED, 6.0).with_gradient_end(Color::BLUE);
         let inst = Instance::ui_styled(Position::new(0.0, 0.0), Size::new(200.0, 100.0), style);
 
-        let (_, _, _, flags) = unpack_shape_params(inst.primitive.data1[1]);
+        let (_, _, _, flags) = unpack_shape_params(inst.data.data1[1]);
         assert_eq!(flags & shape_flags::GRADIENT_V, shape_flags::GRADIENT_V);
-        assert_eq!(inst.primitive.data1[3], Color::BLUE.0);
+        assert_eq!(inst.data.data1[3], Color::BLUE.0);
     }
 
     #[test]
@@ -632,7 +707,7 @@ mod tests {
     fn ui_styled_preserves_position_and_size() {
         let style = PrimitiveStyle::rounded(Color::WHITE, 10.0).with_border(2.0, Color::BLACK);
         let inst = Instance::ui_styled(Position::new(5.5, 7.5), Size::new(120.0, 80.0), style);
-        assert_eq!(inst.primitive.position, [5.5, 7.5]);
-        assert_eq!(inst.primitive.size, [120.0, 80.0]);
+        assert_eq!(inst.data.position, [5.5, 7.5]);
+        assert_eq!(inst.data.size, [120.0, 80.0]);
     }
 }

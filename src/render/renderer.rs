@@ -1,10 +1,8 @@
-use wgpu::util::DeviceExt;
-
 use crate::{
     graphics::{Globals, Gpu, Target},
-    primitive::{InstanceStore, Primitive, QUAD_INDICES, QUAD_VERTICES},
+    primitive::{InstanceStore, Primitive},
     render::{
-        pipeline::{PipelineId, PipelineRegistry},
+        pipeline::{DrawCtx, PipelineId, PipelineRegistry},
         texture::TextureRegistry,
     },
 };
@@ -17,11 +15,9 @@ struct DrawCommand {
 }
 
 pub(crate) struct Renderer {
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    number_of_indices: u32,
     instance_buffer: wgpu::Buffer,
     instance_capacity: u64,
+    instance_stride: u64,
 
     pub(crate) textures: TextureRegistry,
 
@@ -31,19 +27,6 @@ pub(crate) struct Renderer {
 impl Renderer {
     pub(crate) fn with_capacity(device: &wgpu::Device, max_instances: u64) -> Self {
         let max_instances = max_instances.max(1);
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Pipeline Vertex Buffer"),
-            contents: bytemuck::cast_slice(QUAD_VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Pipeline Index Buffer"),
-            contents: bytemuck::cast_slice(QUAD_INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let number_of_indices = QUAD_INDICES.len() as u32;
-
         let instance_buffer = device.create_buffer(&wgpu::wgt::BufferDescriptor {
             label: Some("Pipeline Instance Buffer"),
             size: std::mem::size_of::<Primitive>() as u64 * max_instances,
@@ -52,17 +35,25 @@ impl Renderer {
         });
 
         Self {
-            vertex_buffer,
-            index_buffer,
-            number_of_indices,
             instance_capacity: max_instances,
+            instance_stride: std::mem::size_of::<Primitive>() as u64,
             instance_buffer,
             textures: TextureRegistry::new(device),
             draw_buf: Vec::new(),
         }
     }
 
-    fn ensure_instance_capacity(&mut self, device: &wgpu::Device, needed: u64) -> bool {
+    fn ensure_instance_capacity(
+        &mut self,
+        device: &wgpu::Device,
+        needed: u64,
+        stride: u64,
+    ) -> bool {
+        debug_assert_eq!(
+            stride, self.instance_stride,
+            "instance buffer was allocated for a different instance type"
+        );
+
         if needed <= self.instance_capacity {
             return false;
         }
@@ -70,7 +61,7 @@ impl Renderer {
         let new_cap = needed.max(1).next_power_of_two();
         self.instance_buffer = device.create_buffer(&wgpu::wgt::BufferDescriptor {
             label: Some("Pipeline Instance Buffer"),
-            size: std::mem::size_of::<Primitive>() as u64 * new_cap,
+            size: stride * new_cap,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -156,13 +147,10 @@ impl Renderer {
             });
         }
 
-        self.ensure_instance_capacity(&gpu.device, store.len() as u64);
+        self.ensure_instance_capacity(&gpu.device, store.len() as u64, store.stride());
 
-        gpu.queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            bytemuck::cast_slice(store.primitives()),
-        );
+        gpu.queue
+            .write_buffer(&self.instance_buffer, 0, store.bytes());
 
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -180,17 +168,26 @@ impl Renderer {
                 timestamp_writes: None,
             });
 
-            pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            let ctx = DrawCtx {
+                globals,
+                textures: self.textures.bind_group(),
+                instances: &self.instance_buffer,
+            };
 
+            let mut bound: Option<PipelineId> = None;
             for command in &self.draw_buf {
-                pipeline_registry.apply_pipeline(
-                    command.id,
-                    globals,
-                    self.textures.bind_group(),
-                    &mut pass,
-                );
+                let Some(pipeline) = pipeline_registry.get_mut(command.id) else {
+                    debug_assert!(false, "batch emitted for an unregistered pipeline");
+                    continue;
+                };
+
+                // Geometry and bind groups only change when the pipeline does;
+                // consecutive batches differing only by scissor skip this.
+                if bound != Some(command.id) {
+                    pipeline.bind(&ctx, &mut pass);
+                    bound = Some(command.id);
+                }
+
                 let sf = globals.scale;
                 let [x, y, w, h] = command.clip;
                 let px = (x as f32 * sf) as u32;
@@ -198,11 +195,8 @@ impl Renderer {
                 let pw = (w as f32 * sf).ceil() as u32;
                 let ph = (h as f32 * sf).ceil() as u32;
                 pass.set_scissor_rect(px, py, pw.max(1), ph.max(1));
-                pass.draw_indexed(
-                    0..self.number_of_indices,
-                    0,
-                    command.base..(command.base + command.amount),
-                );
+
+                pipeline.draw(&mut pass, command.base..(command.base + command.amount));
             }
         }
 

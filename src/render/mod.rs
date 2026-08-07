@@ -1,3 +1,4 @@
+pub mod geometry;
 pub mod pipeline;
 pub(crate) mod renderer;
 pub mod texture;

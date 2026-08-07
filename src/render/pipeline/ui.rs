@@ -1,6 +1,12 @@
+use std::ops::Range;
+
 use crate::{
-    graphics::{Globals, Gpu},
-    render::pipeline::*,
+    graphics::Gpu,
+    primitive::{InstanceData, Primitive},
+    render::{
+        geometry::{QuadGeometry, Vertex},
+        pipeline::*,
+    },
 };
 use wgpu::RenderPipeline;
 
@@ -9,27 +15,22 @@ use wgpu::RenderPipeline;
 pub struct UiPipeline {
     render_pipeline: Option<RenderPipeline>,
     layout: Option<wgpu::PipelineLayout>,
+    geometry: QuadGeometry,
 }
 
 impl Pipeline for UiPipeline {
     fn new(
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
-        buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) -> Self {
         let mut pipeline = Self {
             render_pipeline: None,
             layout: None,
+            geometry: QuadGeometry::new(&gpu.device),
         };
-        pipeline.reload(
-            gpu,
-            surface_format,
-            buffers,
-            texture_bgl,
-            push_constant_ranges,
-        );
+        pipeline.reload(gpu, surface_format, texture_bgl, push_constant_ranges);
 
         pipeline
     }
@@ -38,7 +39,6 @@ impl Pipeline for UiPipeline {
         &mut self,
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
-        buffers: &[wgpu::VertexBufferLayout],
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
@@ -67,7 +67,7 @@ impl Pipeline for UiPipeline {
                 vertex: wgpu::VertexState {
                     module: &shader_module,
                     entry_point: Some("vs_main"),
-                    buffers,
+                    buffers: &[Vertex::layout(), Primitive::layout()],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -100,18 +100,18 @@ impl Pipeline for UiPipeline {
         ));
     }
 
-    fn apply_pipeline(
-        &mut self,
-        globals: &Globals,
-        texture_bindgroup: &wgpu::BindGroup,
-        render_pass: &mut wgpu::RenderPass<'_>,
-    ) {
-        render_pass.set_bind_group(0, texture_bindgroup, &[]);
-        render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
-        render_pass.set_push_constants(
+    fn bind(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>) {
+        pass.set_bind_group(0, ctx.textures, &[]);
+        pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
+        pass.set_push_constants(
             wgpu::ShaderStages::VERTEX_FRAGMENT,
             0,
-            bytemuck::bytes_of(globals),
+            bytemuck::bytes_of(ctx.globals),
         );
+        self.geometry.bind(pass, ctx.instances);
+    }
+
+    fn draw(&mut self, pass: &mut wgpu::RenderPass<'_>, instances: Range<u32>) {
+        self.geometry.draw(pass, instances);
     }
 }

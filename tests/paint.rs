@@ -23,7 +23,7 @@ mod paint {
         let instances = h.paint(&mut rect);
         assert_eq!(instances.len(), 1, "one rectangle => one instance");
 
-        let prim = instances.primitives()[0];
+        let prim = instances.data()[0];
         assert_eq!(prim.position, [0.0, 0.0]);
         assert_eq!(prim.size, [50.0, 30.0]);
         assert_eq!(prim.data1[0], Color::RED.0, "color packed into data1[0]");
@@ -64,8 +64,8 @@ mod paint {
         // Row itself has no background (transparent), so only children emit.
         assert_eq!(instances.len(), 2, "two rectangles => two instances");
 
-        let p0 = instances.primitives()[0];
-        let p1 = instances.primitives()[1];
+        let p0 = instances.data()[0];
+        let p1 = instances.data()[1];
 
         assert_eq!(p0.position, [0.0, 0.0], "first child at origin");
         assert_eq!(p0.size, [40.0, 20.0]);
@@ -89,8 +89,8 @@ mod paint {
 
         assert_eq!(instances.len(), 2);
 
-        let p0 = instances.primitives()[0];
-        let p1 = instances.primitives()[1];
+        let p0 = instances.data()[0];
+        let p1 = instances.data()[1];
 
         assert_eq!(p0.position[1], 0.0);
         assert_eq!(p1.position[1], 20.0, "second child at y = first.h");
@@ -172,12 +172,12 @@ mod paint {
         // Background is emitted first (by paint_tree visiting the parent
         // before recursing into children).
         assert_eq!(
-            instances.primitives()[0].data1[0],
+            instances.data()[0].data1[0],
             Color::RED.0,
             "first instance is the Row background"
         );
         assert_eq!(
-            instances.primitives()[1].data1[0],
+            instances.data()[1].data1[0],
             Color::GREEN.0,
             "second instance is the child"
         );
@@ -205,9 +205,9 @@ mod paint {
 
         assert_eq!(instances.len(), 3);
 
-        let pa = instances.primitives()[0];
-        let pb = instances.primitives()[1];
-        let pc = instances.primitives()[2];
+        let pa = instances.data()[0];
+        let pb = instances.data()[1];
+        let pc = instances.data()[2];
 
         // a at (0, 0)
         assert_eq!(pa.position, [0.0, 0.0]);
