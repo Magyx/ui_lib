@@ -10,7 +10,7 @@ mod paint {
     use super::common::*;
 
     use ui::model::{Color, Size};
-    use ui::widget::{Column, Element, Length, Rectangle, Row};
+    use ui::widget::{Column, Element, Length, Rectangle, Row, Scrollable};
 
     // Rectangle paint output
 
@@ -118,11 +118,165 @@ mod paint {
         let instances = h.paint(&mut row);
 
         assert!(!instances.is_empty());
-        let scissor = instances.meta()[0].clip;
+        let scissor = instances.batches()[0].clip;
         assert_eq!(
             scissor,
             Some([0, 0, 200, 100]),
             "screen clip should be applied to all instances"
+        );
+    }
+
+    // batching
+
+    #[test]
+    fn siblings_under_one_clip_share_a_batch() {
+        let mut h = Harness::default();
+
+        let a = Rectangle::new(Size::new(Length::Fixed(40), Length::Fixed(20)), Color::RED);
+        let b = Rectangle::new(Size::new(Length::Fixed(40), Length::Fixed(20)), Color::BLUE);
+        let mut row = Row::new([Element::new(a), Element::new(b)]);
+
+        h.layout(&mut row, 200, 100);
+        let instances = h.paint(&mut row);
+
+        assert_eq!(instances.len(), 2, "two rectangles");
+        assert_eq!(
+            instances.batches().len(),
+            1,
+            "same pipeline and same clip must compress into one draw"
+        );
+        assert_eq!(instances.batches()[0].range, 0..2);
+    }
+
+    #[test]
+    fn batches_cover_every_instance_contiguously() {
+        let mut h = Harness::default();
+
+        let inner = Column::new([
+            Element::new(Rectangle::new(
+                Size::new(Length::Fixed(80), Length::Fixed(60)),
+                Color::RED,
+            )),
+            Element::new(Rectangle::new(
+                Size::new(Length::Fixed(80), Length::Fixed(60)),
+                Color::BLUE,
+            )),
+        ]);
+        let mut root = Row::new([Element::new(
+            Scrollable::new(inner).size(Size::new(Length::Fixed(100), Length::Fixed(50))),
+        )]);
+
+        h.layout(&mut root, 200, 100);
+        let instances = h.paint(&mut root);
+
+        // The invariant the renderer depends on: ranges tile 0..len exactly.
+        let mut next = 0u32;
+        for batch in instances.batches() {
+            assert_eq!(batch.range.start, next, "gap or overlap between batches");
+            assert!(batch.range.end > batch.range.start, "empty batch");
+            next = batch.range.end;
+        }
+        assert_eq!(next as usize, instances.len());
+    }
+
+    #[test]
+    fn scrollable_narrows_the_clip_for_its_children() {
+        let mut h = Harness::default();
+
+        // Content taller than the viewport, so the scrollable must clip.
+        let inner = Rectangle::new(
+            Size::new(Length::Fixed(80), Length::Fixed(400)),
+            Color::GREEN,
+        );
+        let mut root = Row::new([Element::new(
+            Scrollable::new(inner).size(Size::new(Length::Fixed(100), Length::Fixed(50))),
+        )]);
+
+        h.layout(&mut root, 200, 100);
+        let instances = h.paint(&mut root);
+
+        let screen = Some([0, 0, 200, 100]);
+        let narrowed = instances
+            .batches()
+            .iter()
+            .find(|b| b.clip.is_some() && b.clip != screen);
+
+        let clip = narrowed
+            .expect("scrollable content should carry a clip tighter than the screen")
+            .clip
+            .unwrap();
+
+        assert!(
+            clip[3] <= 50,
+            "child clip height {} should be bounded by the 50px viewport",
+            clip[3]
+        );
+        assert!(
+            clip[2] <= 100,
+            "child clip width {} should be bounded by the 100px viewport",
+            clip[2]
+        );
+    }
+
+    #[test]
+    fn nested_scrollables_intersect_to_the_tighter_clip() {
+        let mut h = Harness::default();
+
+        let innermost = Rectangle::new(
+            Size::new(Length::Fixed(80), Length::Fixed(400)),
+            Color::GREEN,
+        );
+        let inner =
+            Scrollable::new(innermost).size(Size::new(Length::Fixed(90), Length::Fixed(30)));
+        let outer = Scrollable::new(inner).size(Size::new(Length::Fixed(120), Length::Fixed(80)));
+        let mut root = Row::new([Element::new(outer)]);
+
+        h.layout(&mut root, 200, 100);
+        let instances = h.paint(&mut root);
+
+        // Whatever the tightest clip is, it must not exceed the inner
+        // scrollable's viewport: parents narrow children, never the reverse.
+        let tightest = instances
+            .batches()
+            .iter()
+            .filter_map(|b| b.clip)
+            .min_by_key(|c| c[2] as i64 * c[3] as i64)
+            .expect("expected at least one clipped batch");
+
+        assert!(
+            tightest[3] <= 30,
+            "nested clip height {} must be bounded by the inner 30px viewport",
+            tightest[3]
+        );
+        assert!(
+            tightest[2] <= 90,
+            "nested clip width {} must be bounded by the inner 90px viewport",
+            tightest[2]
+        );
+    }
+
+    #[test]
+    fn clip_is_restored_after_a_clipping_subtree() {
+        let mut h = Harness::default();
+
+        let scrolled = Scrollable::new(Rectangle::new(
+            Size::new(Length::Fixed(80), Length::Fixed(400)),
+            Color::GREEN,
+        ))
+        .size(Size::new(Length::Fixed(60), Length::Fixed(30)));
+
+        // A sibling *after* the scrollable must not inherit its clip.
+        let after = Rectangle::new(Size::new(Length::Fixed(40), Length::Fixed(20)), Color::RED);
+        let mut root = Row::new([Element::new(scrolled), Element::new(after)]);
+
+        h.layout(&mut root, 200, 100);
+        let instances = h.paint(&mut root);
+
+        let screen = Some([0, 0, 200, 100]);
+        assert_eq!(
+            instances.batches().last().unwrap().clip,
+            screen,
+            "the trailing sibling should be back under the screen clip"
         );
     }
 

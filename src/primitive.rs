@@ -1,3 +1,5 @@
+use std::{mem, ops::Range};
+
 use crate::{
     model::{Color, Position, Size},
     render::{
@@ -177,11 +179,9 @@ impl PrimitiveStyle {
     }
 }
 
-#[derive(Debug)]
 pub struct Instance<D: InstanceData = Primitive> {
     pub(crate) data: D,
     pub(crate) kind: PipelineId,
-    clip: Option<[u32; 4]>,
 }
 impl<D: InstanceData> Instance<D> {
     /// Emit arbitrary instance data through `P`.
@@ -194,7 +194,6 @@ impl<D: InstanceData> Instance<D> {
         Self {
             data,
             kind: pipeline,
-            clip: None,
         }
     }
 }
@@ -227,7 +226,6 @@ impl Instance<Primitive> {
                 data2,
             },
             kind: pipeline,
-            clip: None,
         }
     }
 
@@ -240,7 +238,6 @@ impl Instance<Primitive> {
                 data2: [0, 0, 0, 0],
             },
             kind: PipelineId::of::<UiPipeline>(),
-            clip: None,
         }
     }
 
@@ -263,7 +260,6 @@ impl Instance<Primitive> {
                 ],
             },
             kind: PipelineId::of::<UiPipeline>(),
-            clip: None,
         }
     }
 
@@ -294,7 +290,6 @@ impl Instance<Primitive> {
                 ],
             },
             kind: PipelineId::of::<UiPipeline>(),
-            clip: None,
         }
     }
 
@@ -324,19 +319,20 @@ impl Instance<Primitive> {
                 data2: [0, 0, 0, 0],
             },
             kind: PipelineId::of::<UiPipeline>(),
-            clip: None,
         }
     }
 }
 
-pub struct InstanceMeta {
+pub struct Batch {
     pub id: PipelineId,
-    pub clip: Option<[u32; 4]>,
+    pub range: Range<u32>,
+    pub clip: Option<[i32; 4]>,
 }
 
 pub struct InstanceStore<D: InstanceData = Primitive> {
     data: Vec<D>,
-    meta: Vec<InstanceMeta>,
+    batches: Vec<Batch>,
+    clip: Option<[i32; 4]>,
 }
 impl<D: InstanceData> Default for InstanceStore<D> {
     fn default() -> Self {
@@ -347,7 +343,8 @@ impl<D: InstanceData> InstanceStore<D> {
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
-            meta: Vec::new(),
+            batches: Vec::new(),
+            clip: None,
         }
     }
     pub fn len(&self) -> usize {
@@ -365,6 +362,10 @@ impl<D: InstanceData> InstanceStore<D> {
     pub fn data(&self) -> &[D] {
         &self.data
     }
+    pub fn batches(&self) -> &[Batch] {
+        &self.batches
+    }
+
     pub(crate) fn stride(&self) -> u64 {
         std::mem::size_of::<D>() as u64
     }
@@ -372,36 +373,27 @@ impl<D: InstanceData> InstanceStore<D> {
         bytemuck::cast_slice(&self.data)
     }
 
-    pub fn meta(&self) -> &[InstanceMeta] {
-        &self.meta
-    }
-
     pub(crate) fn clear(&mut self) {
         self.data.clear();
-        self.meta.clear();
+        self.batches.clear();
+        self.clip = None;
     }
-
-    pub(crate) fn add_clip_for<R>(&mut self, [x, y, w, h]: [i32; 4], range: R)
-    where
-        R: std::slice::SliceIndex<[InstanceMeta], Output = [InstanceMeta]>,
-    {
-        let clip_u32 = if w > 0 && h > 0 {
-            Some([x.max(0) as u32, y.max(0) as u32, w as u32, h as u32])
-        } else {
-            Some([0, 0, 0, 0])
-        };
-
-        for m in &mut self.meta[range] {
-            m.clip = clip_u32;
-        }
+    pub(crate) fn set_clip(&mut self, clip: Option<[i32; 4]>) -> Option<[i32; 4]> {
+        mem::replace(&mut self.clip, clip)
     }
 
     pub fn push(&mut self, i: Instance<D>) {
+        let idx = self.data.len() as u32;
         self.data.push(i.data);
-        self.meta.push(InstanceMeta {
-            id: i.kind,
-            clip: i.clip,
-        });
+
+        match self.batches.last_mut() {
+            Some(b) if b.id == i.kind && b.clip == self.clip => b.range.end = idx + 1,
+            _ => self.batches.push(Batch {
+                id: i.kind,
+                range: idx..idx + 1,
+                clip: self.clip,
+            }),
+        }
     }
 }
 
@@ -474,7 +466,7 @@ mod tests {
 
         assert_eq!(store.data()[0].center, [3.0, 4.0]);
         assert_eq!(store.data()[0].radius, 5.0);
-        assert_eq!(store.meta()[0].id, id);
+        assert_eq!(store.batches()[0].id, id);
         assert_eq!(store.bytes().len(), std::mem::size_of::<CustomInstance>());
     }
 
@@ -485,7 +477,6 @@ mod tests {
         assert_eq!(inst.data.data1[0], color.0);
         assert_eq!(inst.data.data1[1], 0);
         assert_eq!(inst.data.data2, [0, 0, 0, 0]);
-        assert!(inst.clip.is_none());
     }
 
     #[test]
@@ -493,69 +484,6 @@ mod tests {
         let inst = Instance::ui(Position::new(3.0, 7.0), Size::new(50.0, 60.0), Color::WHITE);
         assert_eq!(inst.data.position, [3.0, 7.0]);
         assert_eq!(inst.data.size, [50.0, 60.0]);
-    }
-
-    #[test]
-    fn add_clip_normal_rect_sets_scissor() {
-        let mut store = InstanceStore::new();
-        store.push(Instance::ui(
-            Position::new(0.0, 0.0),
-            Size::new(1.0, 1.0),
-            Color::WHITE,
-        ));
-        store.add_clip_for([5, 10, 100, 200], 0..1);
-        assert_eq!(store.meta()[0].clip, Some([5, 10, 100, 200]));
-    }
-
-    #[test]
-    fn add_clip_zero_width_becomes_null_clip() {
-        let mut store = InstanceStore::new();
-        store.push(Instance::ui(
-            Position::new(0.0, 0.0),
-            Size::new(1.0, 1.0),
-            Color::WHITE,
-        ));
-        // Implementation uses `w > 0 && h > 0`; non-positive means [0;4].
-        store.add_clip_for([5, 10, 0, 200], 0..1);
-        assert_eq!(store.meta()[0].clip, Some([0, 0, 0, 0]));
-    }
-
-    #[test]
-    fn add_clip_negative_height_becomes_null_clip() {
-        let mut store = InstanceStore::new();
-        store.push(Instance::ui(
-            Position::new(0.0, 0.0),
-            Size::new(1.0, 1.0),
-            Color::WHITE,
-        ));
-        store.add_clip_for([5, 10, 100, -1], 0..1);
-        assert_eq!(store.meta()[0].clip, Some([0, 0, 0, 0]));
-    }
-
-    #[test]
-    fn add_clip_negative_origin_clamps_to_zero() {
-        let mut store = InstanceStore::new();
-        store.push(Instance::ui(
-            Position::new(0.0, 0.0),
-            Size::new(1.0, 1.0),
-            Color::WHITE,
-        ));
-        store.add_clip_for([-10, -20, 100, 50], 0..1);
-        // x and y are clamped via `.max(0)` before the u32 cast.
-        assert_eq!(store.meta()[0].clip, Some([0, 0, 100, 50]));
-    }
-
-    #[test]
-    fn add_clip_overwrites_previous_clip() {
-        let mut store = InstanceStore::new();
-        store.push(Instance::ui(
-            Position::new(0.0, 0.0),
-            Size::new(1.0, 1.0),
-            Color::WHITE,
-        ));
-        store.add_clip_for([1, 1, 10, 10], 0..1);
-        store.add_clip_for([5, 5, 20, 20], 0..1);
-        assert_eq!(store.meta()[0].clip, Some([5, 5, 20, 20]));
     }
 
     #[test]
@@ -709,5 +637,226 @@ mod tests {
         let inst = Instance::ui_styled(Position::new(5.5, 7.5), Size::new(120.0, 80.0), style);
         assert_eq!(inst.data.position, [5.5, 7.5]);
         assert_eq!(inst.data.size, [120.0, 80.0]);
+    }
+}
+
+#[cfg(test)]
+mod batching {
+    use super::*;
+    use crate::render::pipeline::{Pipeline, impl_stub_pipeline};
+
+    #[derive(Pipeline)]
+    struct AltPipeline;
+    impl_stub_pipeline!(AltPipeline);
+
+    fn ui_id() -> PipelineId {
+        PipelineId::of::<UiPipeline>()
+    }
+    fn alt_id() -> PipelineId {
+        PipelineId::of::<AltPipeline>()
+    }
+
+    /// A 1x1 white quad through the UI pipeline. Contents are irrelevant to
+    /// batching; only `kind` is.
+    fn ui_quad() -> Instance<Primitive> {
+        Instance::ui(Position::new(0.0, 0.0), Size::new(1.0, 1.0), Color::WHITE)
+    }
+
+    fn alt_quad() -> Instance<Primitive> {
+        Instance::with_pipeline(
+            alt_id(),
+            Position::new(0.0, 0.0),
+            Size::new(1.0, 1.0),
+            [0; 4],
+            [0; 4],
+        )
+    }
+
+    /// Every batch is contiguous, they cover `0..len` with no gaps or
+    /// overlaps, and none is empty. The renderer indexes the instance buffer
+    /// with these ranges directly, so a violation is a wrong-instances draw.
+    fn assert_covers_all(store: &InstanceStore) {
+        let mut next = 0u32;
+        for b in store.batches() {
+            assert_eq!(
+                b.range.start, next,
+                "batch does not start where the previous ended"
+            );
+            assert!(b.range.end > b.range.start, "empty batch");
+            next = b.range.end;
+        }
+        assert_eq!(
+            next as usize,
+            store.len(),
+            "batches do not cover every instance"
+        );
+    }
+
+    #[test]
+    fn empty_store_has_no_batches() {
+        let store: InstanceStore = InstanceStore::new();
+        assert!(store.batches().is_empty());
+        assert_covers_all(&store);
+    }
+
+    #[test]
+    fn single_push_opens_one_batch() {
+        let mut store: InstanceStore = InstanceStore::new();
+        store.push(ui_quad());
+
+        assert_eq!(store.batches().len(), 1);
+        assert_eq!(store.batches()[0].id, ui_id());
+        assert_eq!(store.batches()[0].range, 0..1);
+        assert_eq!(store.batches()[0].clip, None);
+        assert_covers_all(&store);
+    }
+
+    #[test]
+    fn same_pipeline_and_clip_merge_into_one_batch() {
+        let mut store: InstanceStore = InstanceStore::new();
+        for _ in 0..5 {
+            store.push(ui_quad());
+        }
+
+        assert_eq!(
+            store.batches().len(),
+            1,
+            "run of 5 should compress to 1 batch"
+        );
+        assert_eq!(store.batches()[0].range, 0..5);
+        assert_eq!(store.len(), 5, "compression must not drop instance data");
+        assert_covers_all(&store);
+    }
+
+    #[test]
+    fn pipeline_change_splits_the_batch() {
+        let mut store: InstanceStore = InstanceStore::new();
+        store.push(ui_quad());
+        store.push(ui_quad());
+        store.push(alt_quad());
+        store.push(ui_quad());
+
+        let b = store.batches();
+        assert_eq!(b.len(), 3);
+        assert_eq!((b[0].id, b[0].range.clone()), (ui_id(), 0..2));
+        assert_eq!((b[1].id, b[1].range.clone()), (alt_id(), 2..3));
+        assert_eq!((b[2].id, b[2].range.clone()), (ui_id(), 3..4));
+        assert_covers_all(&store);
+    }
+
+    #[test]
+    fn clip_change_splits_the_batch() {
+        let mut store: InstanceStore = InstanceStore::new();
+        store.push(ui_quad());
+        store.set_clip(Some([10, 20, 30, 40]));
+        store.push(ui_quad());
+
+        let b = store.batches();
+        assert_eq!(b.len(), 2, "same pipeline but a different clip must split");
+        assert_eq!(b[0].clip, None);
+        assert_eq!(b[1].clip, Some([10, 20, 30, 40]));
+        assert_covers_all(&store);
+    }
+
+    #[test]
+    fn setting_the_same_clip_does_not_split() {
+        let mut store: InstanceStore = InstanceStore::new();
+        let clip = Some([1, 2, 3, 4]);
+        store.set_clip(clip);
+        store.push(ui_quad());
+        store.set_clip(clip);
+        store.push(ui_quad());
+
+        assert_eq!(
+            store.batches().len(),
+            1,
+            "redundant set_clip must not fragment"
+        );
+        assert_eq!(store.batches()[0].range, 0..2);
+    }
+
+    /// Merging only ever considers the *open* batch. Returning to an earlier
+    /// clip starts a fresh batch rather than reopening the old one — draw
+    /// order forbids reordering instances into it.
+    #[test]
+    fn returning_to_an_earlier_clip_starts_a_new_batch() {
+        let mut store: InstanceStore = InstanceStore::new();
+        let outer = Some([0, 0, 100, 100]);
+        let inner = Some([10, 10, 20, 20]);
+
+        store.set_clip(outer);
+        store.push(ui_quad());
+        store.set_clip(inner);
+        store.push(ui_quad());
+        store.set_clip(outer);
+        store.push(ui_quad());
+
+        let b = store.batches();
+        assert_eq!(b.len(), 3);
+        assert_eq!(b[0].clip, outer);
+        assert_eq!(b[1].clip, inner);
+        assert_eq!(b[2].clip, outer);
+        assert_covers_all(&store);
+    }
+
+    /// `layout.rs` restores the parent clip from this return value, so the
+    /// `mem::replace` contract is load-bearing for nested clipping.
+    #[test]
+    fn set_clip_returns_the_previous_clip() {
+        let mut store: InstanceStore = InstanceStore::new();
+        assert_eq!(store.set_clip(Some([1, 1, 1, 1])), None);
+        assert_eq!(store.set_clip(Some([2, 2, 2, 2])), Some([1, 1, 1, 1]));
+        assert_eq!(store.set_clip(None), Some([2, 2, 2, 2]));
+    }
+
+    /// Culling degenerate clips is the renderer's job. The store records the
+    /// batch faithfully so the renderer can decide.
+    #[test]
+    fn zero_area_clip_still_records_a_batch() {
+        let mut store: InstanceStore = InstanceStore::new();
+        store.set_clip(Some([5, 5, 0, 40]));
+        store.push(ui_quad());
+
+        assert_eq!(store.batches().len(), 1);
+        assert_eq!(store.batches()[0].clip, Some([5, 5, 0, 40]));
+    }
+
+    #[test]
+    fn clear_resets_data_batches_and_clip() {
+        let mut store: InstanceStore = InstanceStore::new();
+        store.set_clip(Some([1, 2, 3, 4]));
+        store.push(ui_quad());
+        store.clear();
+
+        assert_eq!(store.len(), 0);
+        assert!(store.batches().is_empty());
+        assert!(store.bytes().is_empty());
+
+        // A stale clip would silently apply to the next frame.
+        store.push(ui_quad());
+        assert_eq!(
+            store.batches()[0].clip,
+            None,
+            "clear must reset the active clip, not just the batches"
+        );
+    }
+
+    #[test]
+    fn alternating_pipelines_do_not_compress() {
+        let mut store: InstanceStore = InstanceStore::new();
+        for i in 0..6 {
+            if i % 2 == 0 {
+                store.push(ui_quad());
+            } else {
+                store.push(alt_quad());
+            }
+        }
+
+        assert_eq!(
+            store.batches().len(),
+            6,
+            "worst case for RLE: one batch per instance"
+        );
+        assert_covers_all(&store);
     }
 }

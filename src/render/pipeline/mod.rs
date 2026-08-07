@@ -184,33 +184,41 @@ impl PipelineRegistry {
 }
 
 #[cfg(test)]
+macro_rules! impl_stub_pipeline {
+    ($ty:ident) => {
+        impl $crate::render::pipeline::Pipeline for $ty {
+            fn new(
+                _: &$crate::graphics::Gpu,
+                _: &wgpu::TextureFormat,
+                _: &wgpu::BindGroupLayout,
+                _: &[wgpu::PushConstantRange],
+            ) -> Self {
+                unreachable!("test stub is never built")
+            }
+            fn reload(
+                &mut self,
+                _: &$crate::graphics::Gpu,
+                _: &wgpu::TextureFormat,
+                _: &wgpu::BindGroupLayout,
+                _: &[wgpu::PushConstantRange],
+            ) {
+            }
+            fn bind(
+                &mut self,
+                _: &$crate::render::pipeline::DrawCtx,
+                _: &mut wgpu::RenderPass<'_>,
+            ) {
+            }
+            fn draw(&mut self, _: &mut wgpu::RenderPass<'_>, _: ::core::ops::Range<u32>) {}
+        }
+    };
+}
+#[cfg(test)]
+pub(crate) use impl_stub_pipeline;
+
+#[cfg(test)]
 mod tests {
     use super::*;
-
-    macro_rules! impl_stub_pipeline {
-        ($ty:ident) => {
-            impl Pipeline for $ty {
-                fn new(
-                    _: &Gpu,
-                    _: &wgpu::TextureFormat,
-                    _: &wgpu::BindGroupLayout,
-                    _: &[wgpu::PushConstantRange],
-                ) -> Self {
-                    unreachable!("test stub is never built")
-                }
-                fn reload(
-                    &mut self,
-                    _: &Gpu,
-                    _: &wgpu::TextureFormat,
-                    _: &wgpu::BindGroupLayout,
-                    _: &[wgpu::PushConstantRange],
-                ) {
-                }
-                fn bind(&mut self, _: &DrawCtx, _: &mut wgpu::RenderPass<'_>) {}
-                fn draw(&mut self, _: &mut wgpu::RenderPass<'_>, _: Range<u32>) {}
-            }
-        };
-    }
 
     #[derive(Pipeline)]
     struct A;

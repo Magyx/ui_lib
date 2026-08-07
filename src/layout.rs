@@ -328,13 +328,10 @@ fn __paint_tree(
         clip = Some(r);
     }
 
-    let self_begin = out.len();
+    let prev_clip = out.set_clip(clip);
     w.paint(ctx, out);
     if w.focusable() && ctx.is_focused() {
         w.paint_focus_ring(ctx, out);
-    }
-    if let Some(c) = clip {
-        out.add_clip_for(c, self_begin..);
     }
 
     *cursor += 1;
@@ -362,7 +359,6 @@ fn __paint_tree(
         );
     }
 
-    let overlay_begin = out.len();
     ctx.__set_data(id, acc_tx, acc_ty, env);
     w.paint_overlay(ctx, out);
 
@@ -384,10 +380,7 @@ fn __paint_tree(
             col,
         ));
     }
-
-    if let Some(c) = clip {
-        out.add_clip_for(c, overlay_begin..);
-    }
+    out.set_clip(prev_clip);
 }
 
 #[derive(Clone, Copy, Debug)]
