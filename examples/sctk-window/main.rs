@@ -1,7 +1,6 @@
 use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
-    pipeline_factories,
     sctk::{SctkApp, SctkEvent, SctkLoop, XdgOptions},
     task::Task,
 };
@@ -44,6 +43,6 @@ fn main() -> ui::Result<()> {
     };
 
     SctkApp::window(State::default(), view, update, opts)
-        .pipelines(pipeline_factories!["planet" => PlanetPipeline])
+        .pipeline::<PlanetPipeline>()
         .run()
 }

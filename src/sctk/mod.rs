@@ -16,7 +16,7 @@ use crate::{
     },
     graphics::{Engine, TargetId},
     model::{Position, Size},
-    render::PipelineFactoryFn,
+    render::pipeline::{Pipeline, PipelineRegistration},
     task::{BoxWork, Payload, Task, TaskId, TaskRunner},
     widget::Element,
 };
@@ -732,7 +732,7 @@ pub struct SctkApp<'a, M, S, V, U, H = DefaultHandler> {
     view: V,
     update: U,
     opts: Options,
-    extra_pipelines: Vec<(&'static str, PipelineFactoryFn)>,
+    extra_pipelines: Vec<PipelineRegistration>,
     exit_on_close: bool,
     _marker: std::marker::PhantomData<(fn() -> M, fn() -> H, &'a ())>,
 }
@@ -795,17 +795,16 @@ impl<'a, M, S, V, U, H> SctkApp<'a, M, S, V, U, H> {
     }
 
     /// Register a single extra render pipeline factory under `name`.
-    pub fn pipeline(mut self, name: &'static str, factory: PipelineFactoryFn) -> Self {
-        self.extra_pipelines.push((name, factory));
+    pub fn pipeline<P: Pipeline>(mut self) -> Self {
+        self.extra_pipelines.push(PipelineRegistration::of::<P>());
         self
     }
 
-    /// Register extra render pipeline factories, e.g. from the
-    /// [`pipeline_factories!`](crate::pipeline_factories) macro. Can be called
-    /// more than once to accumulate factories.
+    /// Register several at once. Registering the same pipeline type twice is
+    /// harmless: the later build replaces the earlier one in the same slot.
     pub fn pipelines<I>(mut self, pipelines: I) -> Self
     where
-        I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
+        I: IntoIterator<Item = PipelineRegistration>,
     {
         self.extra_pipelines.extend(pipelines);
         self
@@ -828,11 +827,8 @@ impl<'a, M, S, V, U, H> SctkApp<'a, M, S, V, U, H> {
             self.opts,
             self.exit_on_close,
             move |engine| {
-                for (key, factory) in pipelines {
-                    engine.register_pipeline(
-                        crate::render::pipeline::PipelineKey::Other(key),
-                        factory,
-                    );
+                for reg in pipelines {
+                    engine.register(reg);
                 }
             },
         )

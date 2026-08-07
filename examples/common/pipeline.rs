@@ -1,6 +1,7 @@
 use ui::graphics::{Globals, Gpu};
 use ui::render::pipeline::Pipeline;
 
+#[derive(Pipeline)]
 pub struct PlanetPipeline {
     render_pipeline: Option<wgpu::RenderPipeline>,
 }

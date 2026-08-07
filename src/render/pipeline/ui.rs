@@ -1,10 +1,12 @@
 use crate::{
     graphics::{Globals, Gpu},
-    render::pipeline::Pipeline,
+    render::pipeline::*,
 };
 use wgpu::RenderPipeline;
 
-pub(super) struct UiPipeline {
+/// The built-in pipeline every stock widget draws through.
+#[derive(Pipeline)]
+pub struct UiPipeline {
     render_pipeline: Option<RenderPipeline>,
     layout: Option<wgpu::PipelineLayout>,
 }

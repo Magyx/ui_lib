@@ -4,7 +4,7 @@ use crate::{
     consts::DEFAULT_MAX_INSTANCES,
     context::MessageSink,
     graphics::Engine,
-    render::{AllocatorKind, PipelineFactoryFn, pipeline::PipelineKey},
+    render::{AllocatorKind, pipeline::PipelineRegistration},
     text::TextBackend,
     theme::Theme,
 };
@@ -96,7 +96,7 @@ pub struct EngineBuilder<M> {
     pub(crate) theme: Theme,
     pub(crate) target_defaults: TargetConfig,
     pub(crate) gpu_source: GpuSource,
-    pub(crate) pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
+    pub(crate) pending_pipelines: Vec<PipelineRegistration>,
     pub(crate) text_backend: Option<Box<dyn TextBackend>>,
     pub(crate) message_sink: Option<Box<dyn MessageSink>>,
     pub(crate) task_runner: Option<Box<dyn crate::task::TaskRunner>>,
@@ -226,8 +226,9 @@ impl<M: 'static> EngineBuilder<M> {
     /// Register a custom pipeline before the first frame. Default pipelines are
     /// always registered; these are applied right after, once the first target
     /// establishes the surface format.
-    pub fn pipeline(mut self, key: PipelineKey, factory: PipelineFactoryFn) -> Self {
-        self.pending_pipelines.push((key, factory));
+    /// Chainable: `.pipeline::<Planet>().pipeline::<Stars>()`.
+    pub fn pipeline<P: crate::render::pipeline::Pipeline>(mut self) -> Self {
+        self.pending_pipelines.push(PipelineRegistration::of::<P>());
         self
     }
 

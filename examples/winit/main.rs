@@ -1,7 +1,6 @@
 use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
     graphics::{Engine, TargetId},
-    pipeline_factories,
     task::Task,
     winit::WinitApp,
 };
@@ -41,6 +40,6 @@ fn main() -> ui::Result<()> {
 
     WinitApp::builder(State::default(), view, update)
         .window_attributes(attrs)
-        .pipelines(pipeline_factories!["planet" => PlanetPipeline])
+        .pipeline::<PlanetPipeline>()
         .run()
 }

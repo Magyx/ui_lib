@@ -4,13 +4,13 @@ use crate::{
     graphics::{Globals, Gpu, Target},
     primitive::{InstanceStore, Primitive, QUAD_INDICES, QUAD_VERTICES},
     render::{
-        pipeline::{PipelineKey, PipelineRegistry},
+        pipeline::{PipelineId, PipelineRegistry},
         texture::TextureRegistry,
     },
 };
 
 struct DrawCommand {
-    id: u16,
+    id: PipelineId,
     base: u32,
     amount: u32,
     clip: [u32; 4],
@@ -119,7 +119,7 @@ impl Renderer {
 
         self.draw_buf.clear();
         let mut base = 0u32;
-        let mut current_key: Option<&PipelineKey> = None;
+        let mut current_key: Option<PipelineId> = None;
         let mut current_clip = default_clip;
         for (i, instance) in store.meta().iter().enumerate() {
             let mut clip = instance.clip.unwrap_or(default_clip);
@@ -128,8 +128,7 @@ impl Renderer {
             clip[2] = clip[2].min(lw.saturating_sub(clip[0]));
             clip[3] = clip[3].min(lh.saturating_sub(clip[1]));
 
-            let need_new_segment =
-                current_key.map(|k| k != &instance.kind).unwrap_or(true) || clip != current_clip;
+            let need_new_segment = current_key != Some(instance.id) || clip != current_clip;
 
             if need_new_segment {
                 if let Some(key) = current_key
@@ -137,20 +136,20 @@ impl Renderer {
                     && current_clip[3] > 0
                 {
                     self.draw_buf.push(DrawCommand {
-                        id: pipeline_registry.get_id(key),
+                        id: key,
                         base,
                         amount: i as u32 - base,
                         clip: current_clip,
                     });
                 }
-                current_key = Some(&instance.kind);
+                current_key = Some(instance.id);
                 current_clip = clip;
                 base = i as u32;
             }
         }
         if let Some(key) = current_key {
             self.draw_buf.push(DrawCommand {
-                id: pipeline_registry.get_id(key),
+                id: key,
                 base,
                 amount: store.len() as u32 - base,
                 clip: current_clip,

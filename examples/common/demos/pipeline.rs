@@ -1,3 +1,4 @@
+use super::super::pipeline::PlanetPipeline;
 use super::*;
 use ui::widget::SimpleCanvas;
 
@@ -11,9 +12,8 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
     let t = &state.theme;
 
     Overlay::new(el![
-        SimpleCanvas::new(
+        SimpleCanvas::new::<PlanetPipeline>(
             Size::new(Grow, Grow),
-            "planet",
             Some(|cx| {
                 cx.ui.request_redraw();
             }),

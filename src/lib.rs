@@ -1,3 +1,5 @@
+extern crate self as ui;
+
 pub use bytemuck;
 pub use error::{Error, Result};
 pub use wgpu;
@@ -51,35 +53,23 @@ pub mod prelude {
     pub use crate::theme::Theme;
 }
 
+/// Build a list of pipelines for
+/// [`pipelines`](crate::winit::WinitApp::pipelines), naming only the types.
+///
+/// ```ignore
+/// .pipelines(ui::pipelines![PlanetPipeline, StarfieldPipeline])
+/// ```
+///
+/// Equivalent to chaining `.pipeline::<P>()` once per type; use whichever
+/// reads better. Neither requires importing anything beyond the pipeline
+/// types themselves.
 #[macro_export]
-macro_rules! pipeline_factory {
-    ( $ty:path ) => {{
-        fn __factory(
-            gpu: &$crate::graphics::Gpu,
-            surface_format: &$crate::wgpu::TextureFormat,
-            buffers: &[$crate::wgpu::VertexBufferLayout],
-            texture_bgl: &$crate::wgpu::BindGroupLayout,
-            ranges: &[$crate::wgpu::PushConstantRange],
-        ) -> ::std::boxed::Box<dyn $crate::render::pipeline::Pipeline> {
-            ::std::boxed::Box::new(<$ty as $crate::render::pipeline::Pipeline>::new(
-                gpu,
-                surface_format,
-                buffers,
-                texture_bgl,
-                ranges,
-            ))
-        }
-        __factory as $crate::render::PipelineFactoryFn
-    }};
-}
-
-#[macro_export]
-macro_rules! pipeline_factories {
-    ( $( $name:literal => $ty:path ),+ $(,)? ) => {{
+macro_rules! pipelines {
+    ( $( $ty:path ),+ $(,)? ) => {
         [
             $(
-                ($name, $crate::pipeline_factory!($ty)),
+                $crate::render::pipeline::PipelineRegistration::of::<$ty>(),
             )+
         ]
-    }};
+    };
 }

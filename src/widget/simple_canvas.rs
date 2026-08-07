@@ -1,23 +1,23 @@
 use super::*;
-use crate::render::pipeline::PipelineKey;
+use crate::render::pipeline::{Pipeline, PipelineId};
 
 pub struct SimpleCanvas {
     size: Size<Length>,
-    key: &'static str,
+    pipeline: PipelineId,
     with_handle: Option<fn(&mut EventCtx)>,
     min: Size<i32>,
     max: Size<i32>,
 }
 
 impl SimpleCanvas {
-    pub fn new(
-        size: Size<Length>,
-        pipeline_key: &'static str,
-        with_handle: Option<fn(&mut EventCtx)>,
-    ) -> Self {
+    /// Draw a full-bounds quad through `P`.
+    ///
+    /// `P` does not need to be registered yet — the index is reserved on first
+    /// use and the pipeline is looked up at draw time.
+    pub fn new<P: Pipeline>(size: Size<Length>, with_handle: Option<fn(&mut EventCtx)>) -> Self {
         Self {
             size,
-            key: pipeline_key,
+            pipeline: PipelineId::of::<P>(),
             with_handle,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
@@ -54,8 +54,8 @@ impl Widget for SimpleCanvas {
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
-        out.push(Instance::new(
-            PipelineKey::Other(self.key),
+        out.push(Instance::with_pipeline(
+            self.pipeline,
             Position::new(r.x as f32, r.y as f32),
             Size::new(r.w as f32, r.h as f32),
             [0, 0, 0, 0],

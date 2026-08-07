@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -27,7 +26,7 @@ use crate::{
     },
     graphics::{Engine, TargetId},
     model::{Position, Size},
-    render::PipelineFactoryFn,
+    render::pipeline::{Pipeline, PipelineRegistration},
     task::Task,
     widget::Element,
 };
@@ -226,7 +225,7 @@ where
     window: Option<Arc<Window>>,
     target: Option<TargetId>,
     engine: Option<Engine<'a>>,
-    extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
+    extra_pipelines: Option<Vec<PipelineRegistration>>,
     state: S,
     view: V,
     update: U,
@@ -258,7 +257,7 @@ where
         view: V,
         update: U,
         window_attrs: WindowAttributes,
-        extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
+        extra_pipelines: Option<Vec<PipelineRegistration>>,
         exit_on_close: bool,
     ) -> Self {
         Self {
@@ -313,11 +312,8 @@ where
             let (target, mut engine) =
                 Engine::new_for::<M, _>(window.clone(), size, window.scale_factor());
             if let Some(pipelines) = self.extra_pipelines.take() {
-                for (key, factory) in pipelines {
-                    engine.register_pipeline(
-                        crate::render::pipeline::PipelineKey::Other(key),
-                        factory,
-                    );
+                for reg in pipelines {
+                    engine.register(reg);
                 }
             }
 
@@ -402,7 +398,7 @@ fn run_app_core<'a, M, S, V, U>(
     view: V,
     update: U,
     window_attrs: WindowAttributes,
-    extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
+    extra_pipelines: Option<Vec<PipelineRegistration>>,
     exit_on_close: bool,
 ) -> crate::Result<()>
 where
@@ -441,7 +437,7 @@ pub struct WinitAppBuilder<'a, M, S, V, U> {
     view: V,
     update: U,
     window_attrs: WindowAttributes,
-    extra_pipelines: Option<HashMap<&'static str, PipelineFactoryFn>>,
+    extra_pipelines: Option<Vec<PipelineRegistration>>,
     exit_on_close: bool,
     _marker: std::marker::PhantomData<(fn() -> M, &'a ())>,
 }
@@ -491,23 +487,23 @@ where
         self
     }
 
-    /// Register a single extra render pipeline factory under `name`.
-    pub fn pipeline(mut self, name: &'static str, factory: PipelineFactoryFn) -> Self {
+    /// Register an extra render pipeline. Chainable:
+    /// `.pipeline::<Planet>().pipeline::<Stars>()`.
+    pub fn pipeline<P: Pipeline>(mut self) -> Self {
         self.extra_pipelines
-            .get_or_insert_with(HashMap::new)
-            .insert(name, factory);
+            .get_or_insert_with(Vec::new)
+            .push(PipelineRegistration::of::<P>());
         self
     }
 
-    /// Register extra render pipeline factories, e.g. from the
-    /// [`pipeline_factories!`](crate::pipeline_factories) macro. Can be called
-    /// more than once; later entries override earlier ones with the same name.
+    /// Register several at once. Registering the same pipeline type twice is
+    /// harmless: the later build replaces the earlier one in the same slot.
     pub fn pipelines<I>(mut self, pipelines: I) -> Self
     where
-        I: IntoIterator<Item = (&'static str, PipelineFactoryFn)>,
+        I: IntoIterator<Item = PipelineRegistration>,
     {
         self.extra_pipelines
-            .get_or_insert_with(HashMap::new)
+            .get_or_insert_with(Vec::new)
             .extend(pipelines);
         self
     }

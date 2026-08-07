@@ -11,8 +11,8 @@ use crate::{
     model::*,
     primitive::{Instance, InstanceStore, Primitive, Vertex},
     render::{
-        AllocatorKind, PipelineFactoryFn,
-        pipeline::{PipelineKey, PipelineRegistry},
+        AllocatorKind,
+        pipeline::{PipelineRegistration, PipelineRegistry},
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
     },
@@ -103,7 +103,7 @@ pub struct Engine<'a> {
     landings: Vec<(TargetId, TaskId, Payload)>,
 
     target_defaults: TargetConfig,
-    pending_pipelines: Vec<(PipelineKey, PipelineFactoryFn)>,
+    pending_pipelines: Vec<PipelineRegistration>,
 }
 impl<'a> Engine<'a> {
     /// Start an [`EngineBuilder`]. This is the configurable entry point; see
@@ -418,15 +418,15 @@ impl<'a> Engine<'a> {
             );
 
             let fmt = target.config.format;
-            for (key, factory) in std::mem::take(&mut self.pending_pipelines) {
-                let pipeline = factory(
+            for reg in std::mem::take(&mut self.pending_pipelines) {
+                self.pipeline_registry.register(
+                    reg,
                     &self.gpu,
                     &fmt,
                     &[Vertex::desc(), Primitive::desc()],
                     self.renderer.textures.layout(),
                     &self.push_constant_ranges,
                 );
-                self.pipeline_registry.register_pipeline(key, pipeline);
             }
         }
 
@@ -575,25 +575,32 @@ impl<'a> Engine<'a> {
         }
     }
 
-    pub fn register_pipeline(
-        &mut self,
-        key: crate::render::pipeline::PipelineKey,
-        pipeline_factory: crate::render::PipelineFactoryFn,
-    ) {
+    /// Register a pipeline for `P` after startup.
+    ///
+    /// No-ops if no target exists yet, since the surface format isn't known
+    /// until then; use [`EngineBuilder::pipeline`](crate::builder::EngineBuilder::pipeline)
+    /// for pipelines known up front.
+    pub fn register_pipeline<P: crate::render::pipeline::Pipeline>(&mut self) {
+        self.register(PipelineRegistration::of::<P>());
+    }
+
+    /// Same, for callers that already hold a [`PipelineRegistration`] (the
+    /// backends collect them from their builders).
+    pub fn register(&mut self, reg: PipelineRegistration) {
         let fmt = if let Some(t) = self.primary_target() {
             t.config.format
         } else {
             return; // TODO: we should definitely return a result here
         };
 
-        let pipeline = pipeline_factory(
+        self.pipeline_registry.register(
+            reg,
             &self.gpu,
             &fmt,
             &[Vertex::desc(), Primitive::desc()],
             self.renderer.textures.layout(),
             &self.push_constant_ranges,
         );
-        self.pipeline_registry.register_pipeline(key, pipeline);
     }
 
     pub fn load_texture_rgba8(&mut self, width: u32, height: u32, pixels: &[u8]) -> TextureHandle {

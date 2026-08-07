@@ -1,14 +1,85 @@
+use core::sync::atomic::{AtomicU32, Ordering};
+
 use crate::graphics::{Globals, Gpu};
 
-mod ui;
+pub mod ui;
 
-#[derive(Eq, Copy, Clone, Hash, PartialEq, Debug)]
-pub enum PipelineKey {
-    Ui,
-    Other(&'static str),
+pub use ui_macros::Pipeline;
+
+static NEXT_INDEX: AtomicU32 = AtomicU32::new(1);
+
+/// Do not implement this by hand — use
+/// [`impl_pipeline_slot!`](crate::impl_pipeline_slot). Every implementation
+/// MUST return a distinct `static`; two types sharing one would collide on the
+/// same registry slot and silently draw with the wrong pipeline.
+#[doc(hidden)]
+pub trait PipelineSlot {
+    fn slot() -> &'static AtomicU32
+    where
+        Self: Sized;
 }
 
-pub trait Pipeline {
+/// Identifies the pipeline that draws an instance.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct PipelineId(u32);
+
+impl PipelineId {
+    #[inline(always)]
+    pub fn of<P: Pipeline>() -> Self {
+        let memo = P::slot();
+        let v = memo.load(Ordering::Relaxed);
+        if v != 0 {
+            return Self(v - 1);
+        }
+        Self(assign(memo))
+    }
+
+    #[inline(always)]
+    fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct PipelineRegistration(
+    fn(
+        &mut PipelineRegistry,
+        &Gpu,
+        &wgpu::TextureFormat,
+        &[wgpu::VertexBufferLayout],
+        &wgpu::BindGroupLayout,
+        &[wgpu::PushConstantRange],
+    ),
+);
+
+impl PipelineRegistration {
+    pub fn of<P: Pipeline>() -> Self {
+        Self(
+            |registry, gpu, surface_format, buffers, texture_bgl, ranges| {
+                registry.insert(
+                    PipelineId::of::<P>(),
+                    Box::new(P::new(gpu, surface_format, buffers, texture_bgl, ranges)),
+                );
+            },
+        )
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn assign(memo: &AtomicU32) -> u32 {
+    let candidate = NEXT_INDEX.fetch_add(1, Ordering::Relaxed);
+    assert!(candidate != 0, "pipeline index space exhausted");
+
+    // Two threads racing on the same type both take a candidate; the loser's
+    // is simply never claimed, leaving one permanent hole in every registry.
+    match memo.compare_exchange(0, candidate, Ordering::Relaxed, Ordering::Relaxed) {
+        Ok(_) => candidate - 1,
+        Err(actual) => actual - 1,
+    }
+}
+
+pub trait Pipeline: PipelineSlot + 'static {
     fn new(
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
@@ -36,40 +107,13 @@ pub trait Pipeline {
     );
 }
 
-pub(crate) struct RegisteredPipeline {
-    key: PipelineKey,
-    pipeline: Box<dyn Pipeline>,
-}
-impl AsMut<Box<dyn Pipeline>> for RegisteredPipeline {
-    fn as_mut(&mut self) -> &mut Box<dyn Pipeline> {
-        &mut self.pipeline
-    }
-}
-impl AsRef<Box<dyn Pipeline>> for RegisteredPipeline {
-    fn as_ref(&self) -> &Box<dyn Pipeline> {
-        &self.pipeline
-    }
-}
-
-const CACHE_SIZE: usize = 64;
-
-#[derive(Copy, Clone, Default)]
-struct CacheEntry {
-    ptr: usize,
-    pipeline_id: u16,
-}
-
 pub(crate) struct PipelineRegistry {
-    pipelines: Vec<RegisteredPipeline>,
-    cache: [CacheEntry; CACHE_SIZE],
+    slots: Vec<Option<Box<dyn Pipeline>>>,
 }
 
 impl PipelineRegistry {
     pub(crate) fn new() -> Self {
-        Self {
-            pipelines: Vec::new(),
-            cache: [Default::default(); CACHE_SIZE],
-        }
+        Self { slots: Vec::new() }
     }
 
     pub(crate) fn register_default_pipelines(
@@ -80,8 +124,8 @@ impl PipelineRegistry {
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
-        self.register_pipeline(
-            PipelineKey::Ui,
+        self.insert(
+            PipelineId::of::<ui::UiPipeline>(),
             Box::new(ui::UiPipeline::new(
                 gpu,
                 surface_format,
@@ -93,18 +137,34 @@ impl PipelineRegistry {
     }
 
     pub(crate) fn has_default_pipelines(&self) -> bool {
-        !self.pipelines.is_empty()
+        self.get(PipelineId::of::<ui::UiPipeline>()).is_some()
     }
 
-    pub fn register_pipeline(&mut self, key: PipelineKey, pipeline: Box<dyn Pipeline>) {
-        let pipeline_id = self.pipelines.len() as u16;
-        self.pipelines.push(RegisteredPipeline { key, pipeline });
+    pub(crate) fn register(
+        &mut self,
+        reg: PipelineRegistration,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
+        buffers: &[wgpu::VertexBufferLayout],
+        texture_bgl: &wgpu::BindGroupLayout,
+        push_constant_ranges: &[wgpu::PushConstantRange],
+    ) {
+        (reg.0)(
+            self,
+            gpu,
+            surface_format,
+            buffers,
+            texture_bgl,
+            push_constant_ranges,
+        );
+    }
 
-        if let PipelineKey::Other(name) = key {
-            let ptr = name.as_ptr() as usize;
-            let slot = (ptr >> 3) & (CACHE_SIZE - 1);
-            self.cache[slot] = CacheEntry { ptr, pipeline_id };
+    fn insert(&mut self, id: PipelineId, pipeline: Box<dyn Pipeline>) {
+        let idx = id.index();
+        if self.slots.len() <= idx {
+            self.slots.resize_with(idx + 1, || None);
         }
+        self.slots[idx] = Some(pipeline);
     }
 
     pub(crate) fn reload(
@@ -115,8 +175,8 @@ impl PipelineRegistry {
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
-        for pipeline in &mut self.pipelines {
-            pipeline.as_mut().reload(
+        for pipeline in self.slots.iter_mut().flatten() {
+            pipeline.reload(
                 gpu,
                 surface_format,
                 buffers,
@@ -126,48 +186,78 @@ impl PipelineRegistry {
         }
     }
 
-    #[inline(always)]
-    pub(crate) fn get_id(&mut self, key: &PipelineKey) -> u16 {
-        match key {
-            PipelineKey::Ui => 0,
-            PipelineKey::Other(name) => {
-                let ptr = name.as_ptr() as usize;
-                let slot = (ptr >> 3) & (CACHE_SIZE - 1);
-                let entry = self.cache[slot];
-
-                if entry.ptr == ptr {
-                    return entry.pipeline_id;
-                }
-
-                self.resolve_cold(ptr, name, slot)
-            }
-        }
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn resolve_cold(&mut self, ptr: usize, name: &'static str, slot: usize) -> u16 {
-        let (id, _) = self
-            .pipelines
-            .iter()
-            .enumerate()
-            .find(|(_, reg)| matches!(reg.key, PipelineKey::Other(n) if n == name))
-            .expect("Pipeline not registered!");
-
-        let pipeline_id = id as u16;
-        self.cache[slot] = CacheEntry { ptr, pipeline_id };
-        pipeline_id
+    #[inline]
+    fn get(&self, id: PipelineId) -> Option<&dyn Pipeline> {
+        self.slots.get(id.index())?.as_deref()
     }
 
     pub(crate) fn apply_pipeline(
         &mut self,
-        id: u16,
+        id: PipelineId,
         globals: &Globals,
         texture_bindgroup: &wgpu::BindGroup,
         pass: &mut wgpu::RenderPass<'_>,
     ) {
-        self.pipelines[id as usize]
-            .as_mut()
-            .apply_pipeline(globals, texture_bindgroup, pass);
+        let pipeline = self
+            .slots
+            .get_mut(id.index())
+            .and_then(Option::as_deref_mut)
+            .expect("pipeline index was emitted but never registered");
+        pipeline.apply_pipeline(globals, texture_bindgroup, pass);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! impl_stub_pipeline {
+        ($ty:ident) => {
+            impl Pipeline for $ty {
+                fn new(
+                    _: &Gpu,
+                    _: &wgpu::TextureFormat,
+                    _: &[wgpu::VertexBufferLayout],
+                    _: &wgpu::BindGroupLayout,
+                    _: &[wgpu::PushConstantRange],
+                ) -> Self {
+                    unreachable!("test stub is never built")
+                }
+                fn reload(
+                    &mut self,
+                    _: &Gpu,
+                    _: &wgpu::TextureFormat,
+                    _: &[wgpu::VertexBufferLayout],
+                    _: &wgpu::BindGroupLayout,
+                    _: &[wgpu::PushConstantRange],
+                ) {
+                }
+                fn apply_pipeline(
+                    &mut self,
+                    _: &Globals,
+                    _: &wgpu::BindGroup,
+                    _: &mut wgpu::RenderPass<'_>,
+                ) {
+                }
+            }
+        };
+    }
+
+    #[derive(Pipeline)]
+    struct A;
+    impl_stub_pipeline!(A);
+    #[derive(Pipeline)]
+    struct B;
+    impl_stub_pipeline!(B);
+
+    #[test]
+    fn distinct_types_get_distinct_slots() {
+        assert!(!core::ptr::eq(A::slot(), B::slot()));
+    }
+
+    #[test]
+    fn id_is_stable_across_calls() {
+        assert_eq!(PipelineId::of::<A>(), PipelineId::of::<A>());
+        assert_ne!(PipelineId::of::<A>(), PipelineId::of::<B>());
     }
 }

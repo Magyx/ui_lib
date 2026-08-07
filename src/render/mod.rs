@@ -9,11 +9,3 @@ pub mod text_cosmic;
 
 pub(crate) mod alloc;
 pub use alloc::AllocatorKind;
-
-pub type PipelineFactoryFn = fn(
-    &crate::graphics::Gpu,
-    &wgpu::TextureFormat,
-    &[wgpu::VertexBufferLayout],
-    &wgpu::BindGroupLayout,
-    &[wgpu::PushConstantRange],
-) -> Box<dyn pipeline::Pipeline>;

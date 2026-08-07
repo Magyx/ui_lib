@@ -1,7 +1,7 @@
 use crate::{
     model::{Color, Position, Size},
     render::{
-        pipeline::PipelineKey,
+        pipeline::{Pipeline, PipelineId, ui::UiPipeline},
         texture::{TextureHandle, pack_unorm4x8},
     },
 };
@@ -199,12 +199,25 @@ impl PrimitiveStyle {
 #[derive(Debug)]
 pub struct Instance {
     pub(crate) primitive: Primitive,
-    pub(crate) kind: PipelineKey,
+    pub(crate) kind: PipelineId,
     clip: Option<[u32; 4]>,
 }
 impl Instance {
-    pub fn new(
-        kind: PipelineKey,
+    /// Emit through `P`.
+    pub fn new<P: Pipeline>(
+        position: Position<f32>,
+        size: Size<f32>,
+        data1: [u32; 4],
+        data2: [u32; 4],
+    ) -> Self {
+        Self::with_pipeline(PipelineId::of::<P>(), position, size, data1, data2)
+    }
+
+    /// Emit through an already-resolved pipeline. Prefer this in widgets that
+    /// draw through a fixed pipeline: resolve once when the widget is built,
+    /// then reuse the id for every instance.
+    pub fn with_pipeline(
+        pipeline: PipelineId,
         position: Position<f32>,
         size: Size<f32>,
         data1: [u32; 4],
@@ -217,7 +230,7 @@ impl Instance {
                 data1,
                 data2,
             },
-            kind,
+            kind: pipeline,
             clip: None,
         }
     }
@@ -230,7 +243,7 @@ impl Instance {
                 data1: [color.0, 0, 0, 0],
                 data2: [0, 0, 0, 0],
             },
-            kind: PipelineKey::Ui,
+            kind: PipelineId::of::<UiPipeline>(),
             clip: None,
         }
     }
@@ -253,7 +266,7 @@ impl Instance {
                     0,
                 ],
             },
-            kind: PipelineKey::Ui,
+            kind: PipelineId::of::<UiPipeline>(),
             clip: None,
         }
     }
@@ -284,7 +297,7 @@ impl Instance {
                     content_fit,
                 ],
             },
-            kind: PipelineKey::Ui,
+            kind: PipelineId::of::<UiPipeline>(),
             clip: None,
         }
     }
@@ -314,14 +327,14 @@ impl Instance {
                 data1: [style.fill.0, shape_params, border_packed, aux_packed],
                 data2: [0, 0, 0, 0],
             },
-            kind: PipelineKey::Ui,
+            kind: PipelineId::of::<UiPipeline>(),
             clip: None,
         }
     }
 }
 
 pub struct InstanceMeta {
-    pub kind: PipelineKey,
+    pub id: PipelineId,
     pub clip: Option<[u32; 4]>,
 }
 
@@ -379,7 +392,7 @@ impl InstanceStore {
     pub fn push(&mut self, i: Instance) {
         self.primitives.push(i.primitive);
         self.meta.push(InstanceMeta {
-            kind: i.kind,
+            id: i.kind,
             clip: i.clip,
         });
     }

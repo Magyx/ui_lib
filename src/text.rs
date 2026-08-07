@@ -2,7 +2,7 @@ use crate::{
     graphics::Gpu,
     model::{Color, Family, Position, Size},
     render::{
-        pipeline::PipelineKey,
+        pipeline::{PipelineId, ui::UiPipeline},
         texture::{TextureHandle, TextureRegistry},
     },
     theme::TextStyle,
@@ -278,8 +278,9 @@ pub trait TextBackend {
     fn tick(&mut self);
 
     /// Which pipeline draws this backend's glyphs. Coverage/subpixel masks use
-    /// the standard UI pipeline; an SDF backend overrides this.
-    fn pipeline_key(&self) -> PipelineKey {
-        PipelineKey::Ui
+    /// the standard UI pipeline; an SDF backend overrides this by returning
+    /// [`PipelineId::of::<ItsOwnPipeline>()`](crate::render::pipeline::PipelineId).
+    fn pipeline_id(&self) -> PipelineId {
+        PipelineId::of::<UiPipeline>()
     }
 }
