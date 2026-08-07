@@ -280,7 +280,7 @@ where
     }
 
     /// See [`WinitAppBuilder::new`] for details.
-    pub fn builder(state: S, view: V, update: U) -> WinitAppBuilder<'a, M, S, V, U> {
+    pub fn builder(state: S, view: V, update: U) -> WinitAppBuilder<M, S, V, U> {
         WinitAppBuilder::new(state, view, update)
     }
 }
@@ -432,16 +432,16 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-pub struct WinitAppBuilder<'a, M, S, V, U> {
+pub struct WinitAppBuilder<M, S, V, U> {
     state: S,
     view: V,
     update: U,
     window_attrs: WindowAttributes,
     extra_pipelines: Option<Vec<PipelineRegistration>>,
     exit_on_close: bool,
-    _marker: std::marker::PhantomData<(fn() -> M, &'a ())>,
+    _marker: std::marker::PhantomData<M>,
 }
-impl<'a, M, S, V, U> WinitAppBuilder<'a, M, S, V, U>
+impl<'a, M, S, V, U> WinitAppBuilder<M, S, V, U>
 where
     M: 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,

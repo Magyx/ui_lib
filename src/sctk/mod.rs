@@ -437,7 +437,7 @@ enum OutputHotplugCfg {
 }
 
 // TODO: collect error results for further diagnosis
-fn run_app_core<'a, M, S, V, U, H, F>(
+fn run_app_core<M, S, V, U, H, F>(
     mut state: S,
     view: V,
     mut update: U,
@@ -448,10 +448,10 @@ fn run_app_core<'a, M, S, V, U, H, F>(
 where
     M: 'static,
     V: Fn(&TargetId, &S) -> Element + 'static,
-    U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+    U: FnMut(TargetId, &mut Engine<'_>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
         + 'static,
     H: handler::SctkHandler<M> + 'static,
-    F: FnOnce(&mut Engine<'a>),
+    F: FnOnce(&mut Engine<'_>),
 {
     // 1) Wayland connection + queue
     let conn = Connection::connect_to_env().map_err(crate::error::SctkError::connect)?;
@@ -554,7 +554,7 @@ where
             return Err(crate::error::SctkError::SurfaceSetup.into());
         };
 
-        let mut engine = Engine::<'a>::builder::<M>()
+        let mut engine = Engine::builder::<M>()
             .with_message_sink(Box::new(sink.clone()))
             .with_task_runner(Box::new(task_runner))
             .build()?;
@@ -727,17 +727,17 @@ where
 }
 
 #[allow(clippy::type_complexity)]
-pub struct SctkApp<'a, M, S, V, U, H = DefaultHandler> {
+pub struct SctkApp<M, S, V, U, H = DefaultHandler> {
     state: S,
     view: V,
     update: U,
     opts: Options,
     extra_pipelines: Vec<PipelineRegistration>,
     exit_on_close: bool,
-    _marker: std::marker::PhantomData<(fn() -> M, fn() -> H, &'a ())>,
+    _marker: std::marker::PhantomData<(M, H)>,
 }
 
-impl<'a, M, S, V, U> SctkApp<'a, M, S, V, U, DefaultHandler> {
+impl<M, S, V, U> SctkApp<M, S, V, U, DefaultHandler> {
     /// Build a `wlr-layer-shell` surface application (bars, overlays, wallpapers).
     pub fn layer(state: S, view: V, update: U, opts: LayerOptions) -> Self {
         Self::with_options(state, view, update, Options::Layer(opts))
@@ -766,11 +766,11 @@ impl<'a, M, S, V, U> SctkApp<'a, M, S, V, U, DefaultHandler> {
     }
 }
 
-impl<'a, M, S, V, U, H> SctkApp<'a, M, S, V, U, H> {
+impl<M, S, V, U, H> SctkApp<M, S, V, U, H> {
     /// Use a custom [`SctkHandler`](handler::SctkHandler) type instead of the
     /// [`DefaultHandler`]. This only changes the handler *type*; there is no
     /// value to pass since handlers are zero-sized markers.
-    pub fn handler<H2>(self) -> SctkApp<'a, M, S, V, U, H2> {
+    pub fn handler<H2>(self) -> SctkApp<M, S, V, U, H2> {
         SctkApp {
             state: self.state,
             view: self.view,
@@ -816,7 +816,7 @@ impl<'a, M, S, V, U, H> SctkApp<'a, M, S, V, U, H> {
         M: 'static,
         H: handler::SctkHandler<M> + 'static,
         V: Fn(&TargetId, &S) -> Element + 'static,
-        U: FnMut(TargetId, &mut Engine<'a>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
+        U: FnMut(TargetId, &mut Engine<'_>, &Event<M, SctkEvent>, &mut S, &SctkLoop) -> Task<M>
             + 'static,
     {
         let pipelines = self.extra_pipelines;

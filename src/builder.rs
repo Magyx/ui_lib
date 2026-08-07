@@ -100,7 +100,7 @@ pub struct EngineBuilder<M> {
     pub(crate) text_backend: Option<Box<dyn TextBackend>>,
     pub(crate) message_sink: Option<Box<dyn MessageSink>>,
     pub(crate) task_runner: Option<Box<dyn crate::task::TaskRunner>>,
-    pub(crate) _marker: PhantomData<fn() -> M>,
+    pub(crate) _marker: PhantomData<M>,
 }
 
 impl<M: 'static> Default for EngineBuilder<M> {
