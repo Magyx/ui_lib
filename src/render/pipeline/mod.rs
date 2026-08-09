@@ -1,7 +1,5 @@
-use core::sync::atomic::{AtomicU32, Ordering};
-use std::ops::Range;
-
 use crate::graphics::{Globals, Gpu};
+use core::sync::atomic::{AtomicU32, Ordering};
 
 pub mod ui;
 
@@ -18,6 +16,8 @@ pub trait PipelineSlot {
     fn slot() -> &'static AtomicU32
     where
         Self: Sized;
+
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any;
 }
 
 /// Identifies the pipeline that draws an instance.
@@ -78,9 +78,6 @@ fn assign(memo: &AtomicU32) -> u32 {
 }
 
 /// Shared per-frame resources a pipeline may bind.
-///
-/// The renderer owns these; a pipeline takes what it needs and ignores the
-/// rest — one that never samples the atlas simply doesn't touch `textures`.
 pub struct DrawCtx<'a> {
     pub globals: &'a Globals,
     pub textures: &'a wgpu::BindGroup,
@@ -107,7 +104,13 @@ pub trait Pipeline: PipelineSlot + 'static {
 
     fn bind(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>);
 
-    fn draw(&mut self, pass: &mut wgpu::RenderPass<'_>, instances: Range<u32>);
+    fn draw(
+        &mut self,
+        ctx: &DrawCtx,
+        pass: &mut wgpu::RenderPass<'_>,
+        byte_offset: u64,
+        count: u32,
+    );
 }
 
 pub(crate) struct PipelineRegistry {
@@ -181,6 +184,35 @@ impl PipelineRegistry {
     pub(crate) fn get_mut(&mut self, id: PipelineId) -> Option<&mut dyn Pipeline> {
         self.slots.get_mut(id.index())?.as_deref_mut()
     }
+
+    pub(crate) fn get_or_insert<P: Pipeline>(
+        &mut self,
+        gpu: &Gpu,
+        surface_format: &wgpu::TextureFormat,
+        texture_bgl: &wgpu::BindGroupLayout,
+        push_constant_ranges: &[wgpu::PushConstantRange],
+    ) -> &mut P {
+        let idx = PipelineId::of::<P>().index();
+        if self.slots.len() <= idx {
+            self.slots.resize_with(idx + 1, || None);
+        }
+        if self.slots[idx].is_none() {
+            self.slots[idx] = Some(Box::new(P::new(
+                gpu,
+                surface_format,
+                texture_bgl,
+                push_constant_ranges,
+            )));
+        }
+
+        self.slots[idx]
+            .as_deref_mut()
+            .expect("just inserted")
+            .as_any_mut()
+            .downcast_mut::<P>()
+            // Unreachable: PipelineId::of::<P>() is unique to P.
+            .expect("pipeline slot holds a different type than its PipelineId")
+    }
 }
 
 #[cfg(test)]
@@ -209,7 +241,14 @@ macro_rules! impl_stub_pipeline {
                 _: &mut wgpu::RenderPass<'_>,
             ) {
             }
-            fn draw(&mut self, _: &mut wgpu::RenderPass<'_>, _: ::core::ops::Range<u32>) {}
+            fn draw(
+                &mut self,
+                _: &$crate::render::pipeline::DrawCtx,
+                _: &mut wgpu::RenderPass<'_>,
+                _: u64,
+                _: u32,
+            ) {
+            }
         }
     };
 }

@@ -7,7 +7,7 @@ use ui::{
 
 #[path = "../common/mod.rs"]
 mod common;
-use common::{Message, State, pipeline::PlanetPipeline, view};
+use common::{Message, State, view};
 
 fn update<'a>(
     target: TargetId,
@@ -43,6 +43,5 @@ fn main() -> ui::Result<()> {
     };
 
     SctkApp::window(State::default(), view, update, opts)
-        .pipeline::<PlanetPipeline>()
         .run()
 }

@@ -10,6 +10,7 @@ mod paint {
     use super::common::*;
 
     use ui::model::{Color, Size};
+    use ui::primitive::Primitive;
     use ui::widget::{Column, Element, Length, Rectangle, Row, Scrollable};
 
     // Rectangle paint output
@@ -23,7 +24,8 @@ mod paint {
         let instances = h.paint(&mut rect);
         assert_eq!(instances.len(), 1, "one rectangle => one instance");
 
-        let prim = instances.data()[0];
+        let batch = &instances.batches()[0];
+        let prim = instances.view::<Primitive>(batch)[0];
         assert_eq!(prim.position, [0.0, 0.0]);
         assert_eq!(prim.size, [50.0, 30.0]);
         assert_eq!(prim.data1[0], Color::RED.0, "color packed into data1[0]");
@@ -64,8 +66,10 @@ mod paint {
         // Row itself has no background (transparent), so only children emit.
         assert_eq!(instances.len(), 2, "two rectangles => two instances");
 
-        let p0 = instances.data()[0];
-        let p1 = instances.data()[1];
+        let batch = &instances.batches()[0];
+        let prims = instances.view::<Primitive>(batch);
+        let p0 = prims[0];
+        let p1 = prims[1];
 
         assert_eq!(p0.position, [0.0, 0.0], "first child at origin");
         assert_eq!(p0.size, [40.0, 20.0]);
@@ -89,8 +93,10 @@ mod paint {
 
         assert_eq!(instances.len(), 2);
 
-        let p0 = instances.data()[0];
-        let p1 = instances.data()[1];
+        let batch = &instances.batches()[0];
+        let prims = instances.view::<Primitive>(batch);
+        let p0 = prims[0];
+        let p1 = prims[1];
 
         assert_eq!(p0.position[1], 0.0);
         assert_eq!(p1.position[1], 20.0, "second child at y = first.h");
@@ -145,7 +151,7 @@ mod paint {
             1,
             "same pipeline and same clip must compress into one draw"
         );
-        assert_eq!(instances.batches()[0].range, 0..2);
+        assert_eq!(instances.batches()[0].count, 2);
     }
 
     #[test]
@@ -169,14 +175,18 @@ mod paint {
         h.layout(&mut root, 200, 100);
         let instances = h.paint(&mut root);
 
-        // The invariant the renderer depends on: ranges tile 0..len exactly.
+        // The invariant the renderer depends on: batches tile the byte buffer
+        // exactly, and their counts sum to the instance count.
+        let stride = std::mem::size_of::<Primitive>() as u32;
         let mut next = 0u32;
+        let mut total = 0usize;
         for batch in instances.batches() {
-            assert_eq!(batch.range.start, next, "gap or overlap between batches");
-            assert!(batch.range.end > batch.range.start, "empty batch");
-            next = batch.range.end;
+            assert_eq!(batch.byte_offset, next, "gap or overlap between batches");
+            assert!(batch.count > 0, "empty batch");
+            next += batch.count * stride;
+            total += batch.count as usize;
         }
-        assert_eq!(next as usize, instances.len());
+        assert_eq!(total, instances.len());
     }
 
     #[test]
@@ -323,18 +333,19 @@ mod paint {
         // Row bg + child rect = 2 instances.
         assert_eq!(instances.len(), 2, "bg + child");
 
+        let batch = &instances.batches()[0];
+        let prims = instances.view::<Primitive>(batch);
+        let p0 = prims[0];
+        let p1 = prims[1];
+
         // Background is emitted first (by paint_tree visiting the parent
         // before recursing into children).
         assert_eq!(
-            instances.data()[0].data1[0],
+            p0.data1[0],
             Color::RED.0,
             "first instance is the Row background"
         );
-        assert_eq!(
-            instances.data()[1].data1[0],
-            Color::GREEN.0,
-            "second instance is the child"
-        );
+        assert_eq!(p1.data1[0], Color::GREEN.0, "second instance is the child");
     }
 
     // Nested layout: positions propagate correctly through paint
@@ -359,9 +370,11 @@ mod paint {
 
         assert_eq!(instances.len(), 3);
 
-        let pa = instances.data()[0];
-        let pb = instances.data()[1];
-        let pc = instances.data()[2];
+        let batch = &instances.batches()[0];
+        let prims = instances.view::<Primitive>(batch);
+        let pa = prims[0];
+        let pb = prims[1];
+        let pc = prims[2];
 
         // a at (0, 0)
         assert_eq!(pa.position, [0.0, 0.0]);

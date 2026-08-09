@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use ui::graphics::Gpu;
 use ui::primitive::{InstanceData, Primitive};
 use ui::render::geometry::{QuadGeometry, Vertex};
@@ -107,10 +105,16 @@ impl Pipeline for PlanetPipeline {
             0,
             bytemuck::bytes_of(ctx.globals),
         );
-        self.geometry.bind(pass, ctx.instances);
+        self.geometry.bind(pass);
     }
 
-    fn draw(&mut self, pass: &mut wgpu::RenderPass<'_>, instances: Range<u32>) {
-        self.geometry.draw(pass, instances);
+    fn draw(
+        &mut self,
+        ctx: &DrawCtx,
+        pass: &mut wgpu::RenderPass<'_>,
+        byte_offset: u64,
+        count: u32,
+    ) {
+        self.geometry.draw(pass, ctx.instances, byte_offset, count);
     }
 }

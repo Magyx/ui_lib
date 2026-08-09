@@ -8,7 +8,7 @@ use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::WindowAttri
 
 #[path = "../common/mod.rs"]
 mod common;
-use common::{Message, State, pipeline::PlanetPipeline, view};
+use common::{Message, State, view};
 
 fn update<'a>(
     target: TargetId,
@@ -40,6 +40,5 @@ fn main() -> ui::Result<()> {
 
     WinitApp::builder(State::default(), view, update)
         .window_attributes(attrs)
-        .pipeline::<PlanetPipeline>()
         .run()
 }

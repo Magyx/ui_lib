@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use crate::{
     graphics::Gpu,
     primitive::{InstanceData, Primitive},
@@ -108,10 +106,16 @@ impl Pipeline for UiPipeline {
             0,
             bytemuck::bytes_of(ctx.globals),
         );
-        self.geometry.bind(pass, ctx.instances);
+        self.geometry.bind(pass);
     }
 
-    fn draw(&mut self, pass: &mut wgpu::RenderPass<'_>, instances: Range<u32>) {
-        self.geometry.draw(pass, instances);
+    fn draw(
+        &mut self,
+        ctx: &DrawCtx,
+        pass: &mut wgpu::RenderPass<'_>,
+        byte_offset: u64,
+        count: u32,
+    ) {
+        self.geometry.draw(pass, ctx.instances, byte_offset, count);
     }
 }

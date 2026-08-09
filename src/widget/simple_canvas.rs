@@ -1,26 +1,25 @@
-use super::*;
-use crate::render::pipeline::{Pipeline, PipelineId};
+use std::marker::PhantomData;
 
-pub struct SimpleCanvas {
+use super::*;
+use crate::primitive::{Instanced, Primitive};
+
+pub struct SimpleCanvas<P: Instanced<Primitive>> {
     size: Size<Length>,
-    pipeline: PipelineId,
     with_handle: Option<fn(&mut EventCtx)>,
     min: Size<i32>,
     max: Size<i32>,
+    _pipeline: PhantomData<fn() -> P>,
 }
 
-impl SimpleCanvas {
+impl<P: Instanced<Primitive>> SimpleCanvas<P> {
     /// Draw a full-bounds quad through `P`.
-    ///
-    /// `P` does not need to be registered yet — the index is reserved on first
-    /// use and the pipeline is looked up at draw time.
-    pub fn new<P: Pipeline>(size: Size<Length>, with_handle: Option<fn(&mut EventCtx)>) -> Self {
+    pub fn new(size: Size<Length>, with_handle: Option<fn(&mut EventCtx)>) -> Self {
         Self {
             size,
-            pipeline: PipelineId::of::<P>(),
             with_handle,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
+            _pipeline: PhantomData,
         }
     }
     pub fn min(mut self, s: Size<i32>) -> Self {
@@ -33,9 +32,9 @@ impl SimpleCanvas {
     }
 }
 
-impl IntoElement for SimpleCanvas {}
+impl<P: Instanced<Primitive>> IntoElement for SimpleCanvas<P> {}
 
-impl Widget for SimpleCanvas {
+impl<P: Instanced<Primitive>> Widget for SimpleCanvas<P> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
             size: self.size,
@@ -52,10 +51,14 @@ impl Widget for SimpleCanvas {
         unreachable!()
     }
 
+    fn prepare(&mut self, ctx: &mut PrepareCtx) {
+        // Declaring the dependency here is what registers `P`.
+        ctx.ensure_pipeline::<P>();
+    }
+
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         let r = ctx.rect();
-        out.push(Instance::with_pipeline(
-            self.pipeline,
+        out.push(Instance::new::<P>(
             Position::new(r.x as f32, r.y as f32),
             Size::new(r.w as f32, r.h as f32),
             [0, 0, 0, 0],

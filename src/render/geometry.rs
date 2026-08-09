@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use wgpu::util::DeviceExt;
 
 pub const QUAD_VERTICES: &[Vertex] = &[
@@ -57,13 +55,26 @@ impl QuadGeometry {
         }
     }
 
-    pub fn bind(&self, pass: &mut wgpu::RenderPass<'_>, instances: &wgpu::Buffer) {
+    /// Bind the quad at slot 0 plus the index buffer. Call from
+    /// [`Pipeline::bind`](crate::render::pipeline::Pipeline::bind).
+    pub fn bind(&self, pass: &mut wgpu::RenderPass<'_>) {
         pass.set_vertex_buffer(0, self.vertices.slice(..));
-        pass.set_vertex_buffer(1, instances.slice(..));
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint16);
     }
 
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, instances: Range<u32>) {
-        pass.draw_indexed(0..self.index_count, 0, instances);
+    /// Bind this batch's slice of the shared instance buffer and draw. Call
+    /// from [`Pipeline::draw`](crate::render::pipeline::Pipeline::draw).
+    ///
+    /// Slicing from `byte_offset` makes instance 0 of the draw the batch's
+    /// first instance, so the range is always `0..count`.
+    pub fn draw(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        instances: &wgpu::Buffer,
+        byte_offset: u64,
+        count: u32,
+    ) {
+        pass.set_vertex_buffer(1, instances.slice(byte_offset..));
+        pass.draw_indexed(0..self.index_count, 0, 0..count);
     }
 }

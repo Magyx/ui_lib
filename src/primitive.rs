@@ -1,4 +1,4 @@
-use std::{mem, ops::Range};
+use std::mem;
 
 use crate::{
     model::{Color, Position, Size},
@@ -16,6 +16,9 @@ use crate::{
 pub trait InstanceData: bytemuck::Pod + Send + Sync + 'static {
     fn layout() -> wgpu::VertexBufferLayout<'static>;
 }
+
+/// Declares that `Self` reads `D` as its per-instance data.
+pub trait Instanced<D: InstanceData>: Pipeline {}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -184,49 +187,28 @@ pub struct Instance<D: InstanceData = Primitive> {
     pub(crate) kind: PipelineId,
 }
 impl<D: InstanceData> Instance<D> {
-    /// Emit arbitrary instance data through `P`.
-    pub fn of<P: Pipeline>(data: D) -> Self {
-        Self::for_pipeline(PipelineId::of::<P>(), data)
-    }
-
-    /// Emit arbitrary instance data through an already-resolved pipeline.
-    pub fn for_pipeline(pipeline: PipelineId, data: D) -> Self {
+    /// Emit `data` through `P`.
+    pub fn of<P: Instanced<D>>(data: D) -> Self {
         Self {
             data,
-            kind: pipeline,
+            kind: PipelineId::of::<P>(),
         }
     }
 }
 impl Instance<Primitive> {
-    /// Emit through `P`.
-    pub fn new<P: Pipeline>(
+    /// Emit a [`Primitive`] through `P`.
+    pub fn new<P: Instanced<Primitive>>(
         position: Position<f32>,
         size: Size<f32>,
         data1: [u32; 4],
         data2: [u32; 4],
     ) -> Self {
-        Self::with_pipeline(PipelineId::of::<P>(), position, size, data1, data2)
-    }
-
-    /// Emit through an already-resolved pipeline. Prefer this in widgets that
-    /// draw through a fixed pipeline: resolve once when the widget is built,
-    /// then reuse the id for every instance.
-    pub fn with_pipeline(
-        pipeline: PipelineId,
-        position: Position<f32>,
-        size: Size<f32>,
-        data1: [u32; 4],
-        data2: [u32; 4],
-    ) -> Self {
-        Self {
-            data: Primitive {
-                position: [position.x, position.y],
-                size: [size.width, size.height],
-                data1,
-                data2,
-            },
-            kind: pipeline,
-        }
+        Self::of::<P>(Primitive {
+            position: [position.x, position.y],
+            size: [size.width, size.height],
+            data1,
+            data2,
+        })
     }
 
     pub fn ui(position: Position<f32>, size: Size<f32>, color: Color) -> Self {
@@ -323,51 +305,53 @@ impl Instance<Primitive> {
     }
 }
 
+/// One run of instances sharing a pipeline and a clip.
 pub struct Batch {
     pub id: PipelineId,
-    pub range: Range<u32>,
+    pub byte_offset: u32,
+    pub count: u32,
     pub clip: Option<[i32; 4]>,
 }
 
-pub struct InstanceStore<D: InstanceData = Primitive> {
-    data: Vec<D>,
+/// Instances emitted during one paint pass, in draw order.
+pub struct InstanceStore {
+    data: Vec<u32>,
     batches: Vec<Batch>,
     clip: Option<[i32; 4]>,
+    count: usize,
 }
-impl<D: InstanceData> Default for InstanceStore<D> {
+impl Default for InstanceStore {
     fn default() -> Self {
         Self::new()
     }
 }
-impl<D: InstanceData> InstanceStore<D> {
+impl InstanceStore {
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
             batches: Vec::new(),
             clip: None,
+            count: 0,
         }
     }
+
+    /// Total instances pushed this frame, across every pipeline.
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.count
     }
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.count == 0
     }
 
-    pub fn layout() -> wgpu::VertexBufferLayout<'static> {
-        D::layout()
-    }
-
-    pub fn data(&self) -> &[D] {
-        &self.data
-    }
     pub fn batches(&self) -> &[Batch] {
         &self.batches
     }
 
-    pub(crate) fn stride(&self) -> u64 {
-        std::mem::size_of::<D>() as u64
+    pub fn view<D: InstanceData>(&self, batch: &Batch) -> &[D] {
+        let start = batch.byte_offset as usize;
+        let end = start + std::mem::size_of::<D>() * batch.count as usize;
+        bytemuck::cast_slice(&self.bytes()[start..end])
     }
     pub(crate) fn bytes(&self) -> &[u8] {
         bytemuck::cast_slice(&self.data)
@@ -377,20 +361,42 @@ impl<D: InstanceData> InstanceStore<D> {
         self.data.clear();
         self.batches.clear();
         self.clip = None;
+        self.count = 0;
     }
     pub(crate) fn set_clip(&mut self, clip: Option<[i32; 4]>) -> Option<[i32; 4]> {
         mem::replace(&mut self.clip, clip)
     }
 
-    pub fn push(&mut self, i: Instance<D>) {
-        let idx = self.data.len() as u32;
-        self.data.push(i.data);
+    pub fn push<D: InstanceData>(&mut self, i: Instance<D>) {
+        debug_assert_eq!(
+            std::mem::size_of::<D>() % 4,
+            0,
+            "instance stride must be a multiple of 4"
+        );
+        debug_assert!(
+            std::mem::align_of::<D>() >= 4,
+            "instance data must be at least 4-byte aligned"
+        );
+
+        let byte_offset = (self.data.len() * 4) as u32;
+        self.data
+            .extend_from_slice(bytemuck::cast_slice(std::slice::from_ref(&i.data)));
+        self.count += 1;
 
         match self.batches.last_mut() {
-            Some(b) if b.id == i.kind && b.clip == self.clip => b.range.end = idx + 1,
+            Some(b) if b.id == i.kind && b.clip == self.clip => {
+                debug_assert_eq!(
+                    byte_offset,
+                    b.byte_offset + b.count * std::mem::size_of::<D>() as u32,
+                    "instances in one batch must be contiguous and equally sized; \
+                     does this pipeline implement Instanced for more than one type?"
+                );
+                b.count += 1;
+            }
             _ => self.batches.push(Batch {
                 id: i.kind,
-                range: idx..idx + 1,
+                byte_offset,
+                count: 1,
                 clip: self.clip,
             }),
         }
@@ -401,6 +407,7 @@ impl<D: InstanceData> InstanceStore<D> {
 mod tests {
     use super::*;
     use crate::model::{Color, Position, Size};
+    use crate::render::pipeline::impl_stub_pipeline;
 
     #[repr(C)]
     #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -424,22 +431,33 @@ mod tests {
         }
     }
 
-    #[test]
-    fn stride_follows_the_instance_type() {
-        let primitives: InstanceStore = InstanceStore::new();
-        assert_eq!(primitives.stride(), std::mem::size_of::<Primitive>() as u64);
+    #[derive(Pipeline)]
+    struct CustomPipeline;
+    impl_stub_pipeline!(CustomPipeline);
+    impl Instanced<CustomInstance> for CustomPipeline {}
 
-        let custom: InstanceStore<CustomInstance> = InstanceStore::new();
-        assert_eq!(
-            custom.stride(),
-            std::mem::size_of::<CustomInstance>() as u64
-        );
-        assert_ne!(custom.stride(), primitives.stride());
+    #[test]
+    fn bytes_length_follows_the_instance_type() {
+        let mut store = InstanceStore::new();
+        store.push(Instance::ui(
+            Position::new(0.0, 0.0),
+            Size::new(1.0, 1.0),
+            Color::WHITE,
+        ));
+        assert_eq!(store.bytes().len(), std::mem::size_of::<Primitive>());
+
+        let mut custom = InstanceStore::new();
+        custom.push(Instance::of::<CustomPipeline>(CustomInstance {
+            center: [0.0, 0.0],
+            radius: 1.0,
+            _pad: 0.0,
+        }));
+        assert_eq!(custom.bytes().len(), std::mem::size_of::<CustomInstance>());
     }
 
     #[test]
-    fn bytes_length_is_len_times_stride() {
-        let mut store: InstanceStore = InstanceStore::new();
+    fn bytes_length_is_count_times_stride() {
+        let mut store = InstanceStore::new();
         for _ in 0..3 {
             store.push(Instance::ui(
                 Position::new(0.0, 0.0),
@@ -448,26 +466,42 @@ mod tests {
             ));
         }
         assert_eq!(store.len(), 3);
-        assert_eq!(store.bytes().len() as u64, 3 * store.stride());
+        assert_eq!(store.bytes().len(), 3 * std::mem::size_of::<Primitive>());
     }
 
+    /// Two pipelines with different instance sizes in one buffer: the whole
+    /// point of the byte store.
     #[test]
-    fn custom_instance_data_round_trips() {
-        let mut store: InstanceStore<CustomInstance> = InstanceStore::new();
-        let id = PipelineId::of::<UiPipeline>();
-        store.push(Instance::for_pipeline(
-            id,
-            CustomInstance {
-                center: [3.0, 4.0],
-                radius: 5.0,
-                _pad: 0.0,
-            },
+    fn mixed_instance_formats_share_one_buffer() {
+        let mut store = InstanceStore::new();
+        store.push(Instance::ui(
+            Position::new(1.0, 2.0),
+            Size::new(3.0, 4.0),
+            Color::RED,
         ));
+        store.push(Instance::of::<CustomPipeline>(CustomInstance {
+            center: [7.0, 8.0],
+            radius: 9.0,
+            _pad: 0.0,
+        }));
 
-        assert_eq!(store.data()[0].center, [3.0, 4.0]);
-        assert_eq!(store.data()[0].radius, 5.0);
-        assert_eq!(store.batches()[0].id, id);
-        assert_eq!(store.bytes().len(), std::mem::size_of::<CustomInstance>());
+        let b = store.batches();
+        assert_eq!(b.len(), 2, "different pipelines must not merge");
+        assert_eq!(b[0].byte_offset, 0);
+        assert_eq!(
+            b[1].byte_offset as usize,
+            std::mem::size_of::<Primitive>(),
+            "the second batch starts where the first ended, in bytes"
+        );
+        assert_eq!(
+            store.bytes().len(),
+            std::mem::size_of::<Primitive>() + std::mem::size_of::<CustomInstance>()
+        );
+
+        // Each batch reads back at its own stride.
+        assert_eq!(store.view::<Primitive>(&b[0])[0].position, [1.0, 2.0]);
+        assert_eq!(store.view::<CustomInstance>(&b[1])[0].center, [7.0, 8.0]);
+        assert_eq!(store.view::<CustomInstance>(&b[1])[0].radius, 9.0);
     }
 
     #[test]
@@ -663,57 +697,59 @@ mod batching {
     }
 
     fn alt_quad() -> Instance<Primitive> {
-        Instance::with_pipeline(
-            alt_id(),
-            Position::new(0.0, 0.0),
-            Size::new(1.0, 1.0),
-            [0; 4],
-            [0; 4],
-        )
+        Instance::new::<AltPipeline>(Position::new(0.0, 0.0), Size::new(1.0, 1.0), [0; 4], [0; 4])
     }
 
-    /// Every batch is contiguous, they cover `0..len` with no gaps or
-    /// overlaps, and none is empty. The renderer indexes the instance buffer
-    /// with these ranges directly, so a violation is a wrong-instances draw.
+    /// Batches tile the byte buffer with no gaps or overlaps, none is empty,
+    /// and their counts sum to the instance count. The renderer slices the
+    /// buffer at these offsets, so a violation draws the wrong bytes.
+    ///
+    /// Every batch here is `Primitive`-sized; mixed strides are covered by
+    /// `mixed_instance_formats_share_one_buffer`.
     fn assert_covers_all(store: &InstanceStore) {
+        let stride = std::mem::size_of::<Primitive>() as u32;
         let mut next = 0u32;
+        let mut total = 0usize;
         for b in store.batches() {
             assert_eq!(
-                b.range.start, next,
+                b.byte_offset, next,
                 "batch does not start where the previous ended"
             );
-            assert!(b.range.end > b.range.start, "empty batch");
-            next = b.range.end;
+            assert!(b.count > 0, "empty batch");
+            next += b.count * stride;
+            total += b.count as usize;
         }
         assert_eq!(
             next as usize,
-            store.len(),
-            "batches do not cover every instance"
+            store.bytes().len(),
+            "batches do not cover every byte"
         );
+        assert_eq!(total, store.len(), "batches do not cover every instance");
     }
 
     #[test]
     fn empty_store_has_no_batches() {
-        let store: InstanceStore = InstanceStore::new();
+        let store = InstanceStore::new();
         assert!(store.batches().is_empty());
         assert_covers_all(&store);
     }
 
     #[test]
     fn single_push_opens_one_batch() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         store.push(ui_quad());
 
         assert_eq!(store.batches().len(), 1);
         assert_eq!(store.batches()[0].id, ui_id());
-        assert_eq!(store.batches()[0].range, 0..1);
+        assert_eq!(store.batches()[0].byte_offset, 0);
+        assert_eq!(store.batches()[0].count, 1);
         assert_eq!(store.batches()[0].clip, None);
         assert_covers_all(&store);
     }
 
     #[test]
     fn same_pipeline_and_clip_merge_into_one_batch() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         for _ in 0..5 {
             store.push(ui_quad());
         }
@@ -723,14 +759,14 @@ mod batching {
             1,
             "run of 5 should compress to 1 batch"
         );
-        assert_eq!(store.batches()[0].range, 0..5);
+        assert_eq!(store.batches()[0].count, 5);
         assert_eq!(store.len(), 5, "compression must not drop instance data");
         assert_covers_all(&store);
     }
 
     #[test]
     fn pipeline_change_splits_the_batch() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         store.push(ui_quad());
         store.push(ui_quad());
         store.push(alt_quad());
@@ -738,15 +774,22 @@ mod batching {
 
         let b = store.batches();
         assert_eq!(b.len(), 3);
-        assert_eq!((b[0].id, b[0].range.clone()), (ui_id(), 0..2));
-        assert_eq!((b[1].id, b[1].range.clone()), (alt_id(), 2..3));
-        assert_eq!((b[2].id, b[2].range.clone()), (ui_id(), 3..4));
+        let stride = std::mem::size_of::<Primitive>() as u32;
+        assert_eq!((b[0].id, b[0].byte_offset, b[0].count), (ui_id(), 0, 2));
+        assert_eq!(
+            (b[1].id, b[1].byte_offset, b[1].count),
+            (alt_id(), 2 * stride, 1)
+        );
+        assert_eq!(
+            (b[2].id, b[2].byte_offset, b[2].count),
+            (ui_id(), 3 * stride, 1)
+        );
         assert_covers_all(&store);
     }
 
     #[test]
     fn clip_change_splits_the_batch() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         store.push(ui_quad());
         store.set_clip(Some([10, 20, 30, 40]));
         store.push(ui_quad());
@@ -760,7 +803,7 @@ mod batching {
 
     #[test]
     fn setting_the_same_clip_does_not_split() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         let clip = Some([1, 2, 3, 4]);
         store.set_clip(clip);
         store.push(ui_quad());
@@ -772,7 +815,7 @@ mod batching {
             1,
             "redundant set_clip must not fragment"
         );
-        assert_eq!(store.batches()[0].range, 0..2);
+        assert_eq!(store.batches()[0].count, 2);
     }
 
     /// Merging only ever considers the *open* batch. Returning to an earlier
@@ -780,7 +823,7 @@ mod batching {
     /// order forbids reordering instances into it.
     #[test]
     fn returning_to_an_earlier_clip_starts_a_new_batch() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         let outer = Some([0, 0, 100, 100]);
         let inner = Some([10, 10, 20, 20]);
 
@@ -803,7 +846,7 @@ mod batching {
     /// `mem::replace` contract is load-bearing for nested clipping.
     #[test]
     fn set_clip_returns_the_previous_clip() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         assert_eq!(store.set_clip(Some([1, 1, 1, 1])), None);
         assert_eq!(store.set_clip(Some([2, 2, 2, 2])), Some([1, 1, 1, 1]));
         assert_eq!(store.set_clip(None), Some([2, 2, 2, 2]));
@@ -813,7 +856,7 @@ mod batching {
     /// batch faithfully so the renderer can decide.
     #[test]
     fn zero_area_clip_still_records_a_batch() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         store.set_clip(Some([5, 5, 0, 40]));
         store.push(ui_quad());
 
@@ -823,7 +866,7 @@ mod batching {
 
     #[test]
     fn clear_resets_data_batches_and_clip() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         store.set_clip(Some([1, 2, 3, 4]));
         store.push(ui_quad());
         store.clear();
@@ -843,7 +886,7 @@ mod batching {
 
     #[test]
     fn alternating_pipelines_do_not_compress() {
-        let mut store: InstanceStore = InstanceStore::new();
+        let mut store = InstanceStore::new();
         for i in 0..6 {
             if i % 2 == 0 {
                 store.push(ui_quad());

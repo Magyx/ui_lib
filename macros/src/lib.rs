@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
-#[proc_macro_derive(Pipeline)]
+#[proc_macro_derive(Pipeline, attributes(instance_data))]
 pub fn derive_pipeline(item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
@@ -18,6 +18,17 @@ pub fn derive_pipeline(item: TokenStream) -> TokenStream {
         .into();
     }
 
+    let mut instance_type: syn::Type = syn::parse_quote!(::ui::primitive::Primitive);
+    for attr in &input.attrs {
+        if attr.path().is_ident("instance_data") {
+            // Note: If using syn 1.x, use `attr.path.is_ident`
+            match attr.parse_args::<syn::Type>() {
+                Ok(ty) => instance_type = ty,
+                Err(err) => return err.to_compile_error().into(),
+            }
+        }
+    }
+
     quote! {
         impl ::ui::render::pipeline::PipelineSlot for #name {
             fn slot() -> &'static ::core::sync::atomic::AtomicU32
@@ -28,7 +39,12 @@ pub fn derive_pipeline(item: TokenStream) -> TokenStream {
                     ::core::sync::atomic::AtomicU32::new(0);
                 &SLOT
             }
+
+            fn as_any_mut(&mut self) -> &mut dyn ::core::any::Any {
+                self
+            }
         }
+        impl ::ui::primitive::Instanced<#instance_type> for #name {}
     }
     .into()
 }

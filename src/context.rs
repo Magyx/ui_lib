@@ -10,7 +10,10 @@ use crate::{
     layout::{LayoutEngine, ROOT_SEED},
     model::{Color, Position, Rect, Size},
     primitive::{Instance, InstanceStore},
-    render::texture::TextureRegistry,
+    render::{
+        pipeline::{Pipeline, PipelineRegistry},
+        texture::TextureRegistry,
+    },
     task::{ErasedFinish, Payload, TaskId},
     text::TextBackend,
     theme::{Env, Theme},
@@ -289,6 +292,9 @@ pub struct PrepareCtx<'a> {
     pub text: &'a mut dyn TextBackend,
     pub gpu: &'a Gpu,
     pub texture: &'a mut TextureRegistry,
+    pub(crate) pipelines: &'a mut PipelineRegistry,
+    pub(crate) surface_format: wgpu::TextureFormat,
+    pub(crate) push_constant_ranges: &'a [wgpu::PushConstantRange],
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
     pub(crate) offset: Position<i32>,
@@ -298,11 +304,15 @@ pub struct PrepareCtx<'a> {
 }
 
 impl<'a> PrepareCtx<'a> {
-    pub fn new(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn new(
         globals: &'a Globals,
         text: &'a mut dyn TextBackend,
         gpu: &'a Gpu,
         texture: &'a mut TextureRegistry,
+        pipelines: &'a mut PipelineRegistry,
+        surface_format: wgpu::TextureFormat,
+        push_constant_ranges: &'a [wgpu::PushConstantRange],
         layout: &'a LayoutEngine,
         view_state: &'a mut ViewState,
         theme: &'a Theme,
@@ -312,6 +322,9 @@ impl<'a> PrepareCtx<'a> {
             text,
             gpu,
             texture,
+            pipelines,
+            surface_format,
+            push_constant_ranges,
             layout,
             current_node: 0,
             offset: Position::splat(0),
@@ -320,6 +333,21 @@ impl<'a> PrepareCtx<'a> {
             env: theme.root_env(),
         }
     }
+    /// The pipeline for `P`, building it if this is its first use.
+    pub fn pipeline<P: Pipeline>(&mut self) -> &mut P {
+        self.pipelines.get_or_insert::<P>(
+            self.gpu,
+            &self.surface_format,
+            self.texture.layout(),
+            self.push_constant_ranges,
+        )
+    }
+
+    /// Register `P` without needing a handle to it.
+    pub fn ensure_pipeline<P: Pipeline>(&mut self) {
+        let _ = self.pipeline::<P>();
+    }
+
     pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32, env: Env) {
         self.current_node = current_node;
         self.offset = Position::new(acc_tx, acc_ty);

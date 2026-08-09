@@ -12,7 +12,7 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
     let t = &state.theme;
 
     Overlay::new(el![
-        SimpleCanvas::new::<PlanetPipeline>(
+        SimpleCanvas::<PlanetPipeline>::new(
             Size::new(Grow, Grow),
             Some(|cx| {
                 cx.ui.request_redraw();

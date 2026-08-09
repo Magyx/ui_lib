@@ -10,7 +10,6 @@ use crate::{
 pub(crate) struct Renderer {
     instance_buffer: wgpu::Buffer,
     instance_capacity: u64,
-    instance_stride: u64,
 
     pub(crate) textures: TextureRegistry,
 }
@@ -26,24 +25,13 @@ impl Renderer {
         });
 
         Self {
-            instance_capacity: max_instances,
-            instance_stride: std::mem::size_of::<Primitive>() as u64,
+            instance_capacity: max_instances * std::mem::size_of::<Primitive>() as u64,
             instance_buffer,
             textures: TextureRegistry::new(device),
         }
     }
 
-    fn ensure_instance_capacity(
-        &mut self,
-        device: &wgpu::Device,
-        needed: u64,
-        stride: u64,
-    ) -> bool {
-        debug_assert_eq!(
-            stride, self.instance_stride,
-            "instance buffer was allocated for a different instance type"
-        );
-
+    fn ensure_instance_capacity(&mut self, device: &wgpu::Device, needed: u64) -> bool {
         if needed <= self.instance_capacity {
             return false;
         }
@@ -51,7 +39,7 @@ impl Renderer {
         let new_cap = needed.max(1).next_power_of_two();
         self.instance_buffer = device.create_buffer(&wgpu::wgt::BufferDescriptor {
             label: Some("Pipeline Instance Buffer"),
-            size: stride * new_cap,
+            size: new_cap,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -94,7 +82,7 @@ impl Renderer {
                 label: Some("Render Encoder"),
             });
 
-        self.ensure_instance_capacity(&gpu.device, store.len() as u64, store.stride());
+        self.ensure_instance_capacity(&gpu.device, store.bytes().len() as u64);
 
         gpu.queue
             .write_buffer(&self.instance_buffer, 0, store.bytes());
@@ -153,7 +141,7 @@ impl Renderer {
                     bound = Some(batch.id);
                 }
                 pass.set_scissor_rect(px, py, pw, ph);
-                pipeline.draw(&mut pass, batch.range.clone());
+                pipeline.draw(&ctx, &mut pass, batch.byte_offset as u64, batch.count);
             }
         }
 

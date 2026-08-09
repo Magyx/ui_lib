@@ -1,10 +1,7 @@
 use crate::{
     graphics::Gpu,
     model::{Color, Family, Position, Size},
-    render::{
-        pipeline::{PipelineId, ui::UiPipeline},
-        texture::{TextureHandle, TextureRegistry},
-    },
+    render::texture::{TextureHandle, TextureRegistry},
     theme::TextStyle,
 };
 
@@ -276,11 +273,4 @@ pub trait TextBackend {
     /// Advance per-frame atlas state (LRU counters). Called once per render
     /// pass, before the prepare phase.
     fn tick(&mut self);
-
-    /// Which pipeline draws this backend's glyphs. Coverage/subpixel masks use
-    /// the standard UI pipeline; an SDF backend overrides this by returning
-    /// [`PipelineId::of::<ItsOwnPipeline>()`](crate::render::pipeline::PipelineId).
-    fn pipeline_id(&self) -> PipelineId {
-        PipelineId::of::<UiPipeline>()
-    }
 }
