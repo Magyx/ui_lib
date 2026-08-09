@@ -8,50 +8,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub struct Svg {
-    size: Size<Length>,
-    min: Size<i32>,
-    max: Size<i32>,
-
-    tint: Color,
-    fit: ContentFit,
-
-    path: PathBuf,
-}
-
-impl Svg {
-    pub fn new(size: Size<Length>, path: impl Into<PathBuf>) -> Self {
-        Self {
-            size,
-            min: Size::new(0, 0),
-            max: Size::splat(i32::MAX),
-            tint: Color::WHITE,
-            fit: ContentFit::Fill,
-            path: path.into(),
-        }
-    }
-
-    pub fn tint(mut self, tint: Color) -> Self {
-        self.tint = tint;
-        self
-    }
-
-    pub fn fit(mut self, fit: ContentFit) -> Self {
-        self.fit = fit;
-        self
-    }
-
-    pub fn min_size(mut self, min: Size<i32>) -> Self {
-        self.min = min;
-        self
-    }
-
-    pub fn max_size(mut self, max: Size<i32>) -> Self {
-        self.max = max;
-        self
-    }
-}
-
 #[derive(Default)]
 struct SvgState {
     // Source tracking
@@ -64,15 +20,6 @@ struct SvgState {
 
     draw_rect: Option<(f32, f32, f32, f32)>,
 }
-
-impl OnSweep for SvgState {
-    fn on_sweep(&mut self, cx: &mut SweepCtx) {
-        if let Some(handle) = self.handle.take() {
-            cx.texture.unload(cx.gpu, handle);
-        }
-    }
-}
-
 impl SvgState {
     fn ensure_tree(
         &mut self,
@@ -110,6 +57,13 @@ impl SvgState {
         match usvg::Tree::from_str(text, &opt) {
             Ok(t) => self.tree = Some(t),
             Err(_) => self.tree = None,
+        }
+    }
+}
+impl OnSweep for SvgState {
+    fn on_sweep(&mut self, cx: &mut SweepCtx) {
+        if let Some(handle) = self.handle.take() {
+            cx.texture.unload(cx.gpu, handle);
         }
     }
 }
@@ -153,8 +107,49 @@ fn fit_rect(
     }
 }
 
-impl IntoElement for Svg {}
+#[derive(Widget)]
+pub struct Svg {
+    size: Size<Length>,
+    min: Size<i32>,
+    max: Size<i32>,
 
+    tint: Color,
+    fit: ContentFit,
+
+    path: PathBuf,
+}
+impl Svg {
+    pub fn new(size: Size<Length>, path: impl Into<PathBuf>) -> Self {
+        Self {
+            size,
+            min: Size::new(0, 0),
+            max: Size::splat(i32::MAX),
+            tint: Color::WHITE,
+            fit: ContentFit::Fill,
+            path: path.into(),
+        }
+    }
+
+    pub fn tint(mut self, tint: Color) -> Self {
+        self.tint = tint;
+        self
+    }
+
+    pub fn fit(mut self, fit: ContentFit) -> Self {
+        self.fit = fit;
+        self
+    }
+
+    pub fn min_size(mut self, min: Size<i32>) -> Self {
+        self.min = min;
+        self
+    }
+
+    pub fn max_size(mut self, max: Size<i32>) -> Self {
+        self.max = max;
+        self
+    }
+}
 impl Widget for Svg {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

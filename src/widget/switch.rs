@@ -15,6 +15,7 @@ struct SwitchState {
     pressed: bool,
 }
 
+#[derive(Widget)]
 pub struct Switch<M> {
     on: bool,
     disabled: bool,
@@ -22,7 +23,6 @@ pub struct Switch<M> {
     on_toggle: Option<Box<dyn Fn(bool) -> M>>,
     label: Option<Element>,
 }
-
 impl<M: 'static> Switch<M> {
     pub fn new(on: bool) -> Self {
         Self {
@@ -63,9 +63,6 @@ impl<M: 'static> Switch<M> {
         self
     }
 }
-
-impl<M> IntoElement for Switch<M> {}
-
 impl<M: 'static> Widget for Switch<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         let left = if self.label.is_some() {

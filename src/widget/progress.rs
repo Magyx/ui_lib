@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Widget)]
 pub struct ProgressBar {
     value: f32,
     height: i32,
@@ -9,7 +10,6 @@ pub struct ProgressBar {
     track_color: Option<Color>,
     fill_color: Option<Color>,
 }
-
 impl ProgressBar {
     /// A determinate bar; `value` is clamped to `[0, 1]`.
     pub fn new(value: f32) -> Self {
@@ -58,9 +58,6 @@ impl ProgressBar {
         self
     }
 }
-
-impl IntoElement for ProgressBar {}
-
 impl Widget for ProgressBar {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

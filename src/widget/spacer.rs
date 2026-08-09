@@ -1,11 +1,11 @@
 use super::*;
 
+#[derive(Widget)]
 pub struct Spacer {
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
 }
-
 impl Spacer {
     pub fn new(size: Size<Length>) -> Self {
         Self {
@@ -23,9 +23,6 @@ impl Spacer {
         self
     }
 }
-
-impl IntoElement for Spacer {}
-
 impl Widget for Spacer {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

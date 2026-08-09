@@ -10,6 +10,7 @@ struct ButtonState {
     pressed: bool,
 }
 
+#[derive(Widget)]
 pub struct Button<M> {
     size: Size<Length>,
     min: Size<i32>,
@@ -22,7 +23,6 @@ pub struct Button<M> {
 
     on_press: Option<M>,
 }
-
 impl<M: Clone> Button<M> {
     pub fn new(size: Size<Length>, color: Color) -> Self {
         Self {
@@ -83,9 +83,6 @@ impl<M: Clone> Button<M> {
         self
     }
 }
-
-impl<M> IntoElement for Button<M> {}
-
 impl<M: Clone + 'static> Widget for Button<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

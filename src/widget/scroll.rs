@@ -35,6 +35,35 @@ pub struct ScrollViewState {
     last_focus: Option<Id>,
 }
 
+fn focused_reveal(ctx: &EventCtx, self_idx: usize) -> Option<(i32, i32)> {
+    let focused = ctx.ui.focus.focused()?;
+    let nodes = &ctx.layout.nodes;
+    // `nodes` is reused across frames without truncation (only `node_count` is
+    // reset), so bound the search to the live prefix.
+    let live = ctx.layout.node_count;
+    let fidx = nodes[..live].iter().position(|n| n.id == focused)?;
+
+    // Walk from the focused node up to `self_idx`, summing the scroll offset of
+    // every intermediate scrollable (strictly between the two).
+    let mut idx = fidx;
+    let mut inner_scroll = 0;
+    loop {
+        let parent = nodes[idx].parent?;
+        if parent == self_idx {
+            break;
+        }
+        if let Some(sv) = ctx.ui.view_state.get::<ScrollViewState>(&nodes[parent].id) {
+            inner_scroll += sv.y;
+        }
+        idx = parent;
+    }
+
+    let top = nodes[fidx].pos.y - nodes[self_idx].pos.y - inner_scroll;
+    let height = nodes[fidx].current_size.height;
+    Some((top, height))
+}
+
+#[derive(Widget)]
 pub struct Scrollable {
     size: Size<Length>,
     min: Size<i32>,
@@ -50,7 +79,6 @@ pub struct Scrollable {
     scroll_to: Option<ScrollTo>,
     follow_focus: bool,
 }
-
 impl Scrollable {
     pub fn new<E: Into<Element>>(child: E) -> Self {
         Self {
@@ -153,37 +181,6 @@ impl Scrollable {
         })
     }
 }
-
-impl IntoElement for Scrollable {}
-
-fn focused_reveal(ctx: &EventCtx, self_idx: usize) -> Option<(i32, i32)> {
-    let focused = ctx.ui.focus.focused()?;
-    let nodes = &ctx.layout.nodes;
-    // `nodes` is reused across frames without truncation (only `node_count` is
-    // reset), so bound the search to the live prefix.
-    let live = ctx.layout.node_count;
-    let fidx = nodes[..live].iter().position(|n| n.id == focused)?;
-
-    // Walk from the focused node up to `self_idx`, summing the scroll offset of
-    // every intermediate scrollable (strictly between the two).
-    let mut idx = fidx;
-    let mut inner_scroll = 0;
-    loop {
-        let parent = nodes[idx].parent?;
-        if parent == self_idx {
-            break;
-        }
-        if let Some(sv) = ctx.ui.view_state.get::<ScrollViewState>(&nodes[parent].id) {
-            inner_scroll += sv.y;
-        }
-        idx = parent;
-    }
-
-    let top = nodes[fidx].pos.y - nodes[self_idx].pos.y - inner_scroll;
-    let height = nodes[fidx].current_size.height;
-    Some((top, height))
-}
-
 impl Widget for Scrollable {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

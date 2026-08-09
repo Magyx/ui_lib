@@ -153,6 +153,7 @@ impl TextRole {
     }
 }
 
+#[derive(Widget)]
 pub struct Text {
     text: Cow<'static, str>,
     role: TextRole,
@@ -168,7 +169,6 @@ pub struct Text {
     min: Size<i32>,
     max: Size<i32>,
 }
-
 impl Text {
     pub fn new<S: Into<Cow<'static, str>>>(content: S) -> Self {
         Self {
@@ -286,9 +286,6 @@ impl Text {
         state
     }
 }
-
-impl IntoElement for Text {}
-
 impl Widget for Text {
     fn child_count(&self) -> usize {
         0

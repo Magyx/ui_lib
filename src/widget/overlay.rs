@@ -1,23 +1,11 @@
 use super::*;
 
+#[derive(Widget)]
 struct Absolute {
     inner: Element,
     offx: i32,
     offy: i32,
 }
-
-impl Absolute {
-    fn new(child: Element, offx: i32, offy: i32) -> Self {
-        Self {
-            inner: child,
-            offx,
-            offy,
-        }
-    }
-}
-
-impl IntoElement for Absolute {}
-
 impl Widget for Absolute {
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node {
         let mut n = self.inner.as_mut().layout(ctx);
@@ -61,6 +49,7 @@ impl Widget for Absolute {
     }
 }
 
+#[derive(Widget)]
 pub struct Overlay {
     children: Vec<Absolute>,
     size: Size<Length>,
@@ -70,7 +59,6 @@ pub struct Overlay {
     max: Size<i32>,
     modal: bool,
 }
-
 impl Overlay {
     pub fn empty() -> Self {
         Self::new::<Vec<_>, Element>(el!())
@@ -82,7 +70,11 @@ impl Overlay {
     {
         let wrapped = children
             .into_iter()
-            .map(|c| Absolute::new(c.into(), 0, 0))
+            .map(|c| Absolute {
+                inner: c.into(),
+                offx: 0,
+                offy: 0,
+            })
             .collect();
         Self {
             children: wrapped,
@@ -126,12 +118,13 @@ impl Overlay {
     where
         E: Into<Element>,
     {
-        self.children.push(Absolute::new(element.into(), x, y));
+        self.children.push(Absolute {
+            inner: element.into(),
+            offx: x,
+            offy: y,
+        });
     }
 }
-
-impl IntoElement for Overlay {}
-
 impl Widget for Overlay {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

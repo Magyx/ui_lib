@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Widget)]
 pub struct Row {
     children: Vec<Element>,
     spacing: i32,
@@ -11,7 +12,6 @@ pub struct Row {
     main_align: Align,
     cross_align: Align,
 }
-
 impl Row {
     pub fn empty() -> Self {
         Self::new::<Vec<_>, Element>(el!())
@@ -79,9 +79,6 @@ impl Row {
         self.children.push(element.into());
     }
 }
-
-impl IntoElement for Row {}
-
 impl Widget for Row {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

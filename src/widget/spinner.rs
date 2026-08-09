@@ -1,12 +1,12 @@
 use super::*;
 
+#[derive(Widget)]
 pub struct Spinner {
     size: i32,
     dots: usize,
     speed: f32,
     color: Option<Color>,
 }
-
 impl Spinner {
     pub fn new() -> Self {
         Self {
@@ -39,9 +39,6 @@ impl Default for Spinner {
         Self::new()
     }
 }
-
-impl IntoElement for Spinner {}
-
 impl Widget for Spinner {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

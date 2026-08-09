@@ -48,3 +48,15 @@ pub fn derive_pipeline(item: TokenStream) -> TokenStream {
     }
     .into()
 }
+
+#[proc_macro_derive(Widget)]
+pub fn derive_widget(item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as DeriveInput);
+    let name = &input.ident;
+
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+    quote! {
+        impl #impl_generics ::ui::widget::IntoElement for #name #ty_generics #where_clause {}
+    }
+    .into()
+}

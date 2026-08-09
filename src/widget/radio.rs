@@ -12,6 +12,7 @@ struct RadioState {
     pressed: bool,
 }
 
+#[derive(Widget)]
 pub struct Radio<M> {
     selected: bool,
     gap: i32,
@@ -19,7 +20,6 @@ pub struct Radio<M> {
 
     label: Option<Element>,
 }
-
 impl<M: Clone + 'static> Radio<M> {
     pub fn new(selected: bool) -> Self {
         Self {
@@ -49,9 +49,6 @@ impl<M: Clone + 'static> Radio<M> {
         self
     }
 }
-
-impl<M> IntoElement for Radio<M> {}
-
 impl<M: Clone + 'static> Widget for Radio<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         let left = if self.label.is_some() {
@@ -200,12 +197,12 @@ impl<M: Clone + 'static> Widget for Radio<M> {
 }
 
 /// A vertical (or horizontal) group of mutually-exclusive [`Radio`] options.
+#[derive(Widget)]
 pub struct RadioGroup<M> {
     axis: Axis,
     spacing: i32,
     rows: Vec<Radio<M>>,
 }
-
 impl<M: Clone + 'static> RadioGroup<M> {
     pub fn new<I, S>(options: I, selected: Option<usize>) -> Self
     where
@@ -248,9 +245,6 @@ impl<M: Clone + 'static> RadioGroup<M> {
         self
     }
 }
-
-impl<M> IntoElement for RadioGroup<M> {}
-
 impl<M: Clone + 'static> Widget for RadioGroup<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

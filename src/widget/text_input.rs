@@ -183,6 +183,7 @@ impl TextMode for MultiLine {
     }
 }
 
+#[derive(Widget)]
 pub struct TextInput<M, Mode: TextMode = SingleLine> {
     size: Size<Length>,
     min: Size<i32>,
@@ -203,7 +204,6 @@ pub struct TextInput<M, Mode: TextMode = SingleLine> {
 
     _mode: PhantomData<Mode>,
 }
-
 impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
     fn new_impl<S: Into<Cow<'static, str>>>(value: S, size: Size<Length>) -> Self {
         Self {
@@ -467,8 +467,6 @@ impl<M> TextInput<M, MultiLine> {
         s
     }
 }
-
-impl<M, Mode: TextMode> IntoElement for TextInput<M, Mode> {}
 
 impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
     fn layout<'b>(&mut self, ctx: &mut LayoutCtx<'b>) -> Node {

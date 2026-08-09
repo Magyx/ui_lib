@@ -7,6 +7,7 @@ pub enum ContentFit {
     Cover,
 }
 
+#[derive(Widget)]
 pub struct Image {
     size: Size<Length>,
     min: Size<i32>,
@@ -15,7 +16,6 @@ pub struct Image {
     fit: ContentFit,
     tint: Color,
 }
-
 impl Image {
     pub fn new(size: Size<Length>, handle: TextureHandle) -> Self {
         Self {
@@ -44,9 +44,6 @@ impl Image {
         self
     }
 }
-
-impl IntoElement for Image {}
-
 impl Widget for Image {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         let mut node = Node {

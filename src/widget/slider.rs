@@ -6,6 +6,7 @@ struct SliderViewState {
     grab: Option<f32>,
 }
 
+#[derive(Widget)]
 pub struct Slider<M> {
     size: Size<Length>,
     min: Size<i32>,
@@ -23,7 +24,6 @@ pub struct Slider<M> {
 
     on_change: Option<Box<dyn Fn(f32) -> M + 'static>>,
 }
-
 impl<M> Slider<M> {
     pub fn new(size: Size<Length>, range: (f32, f32), value: f32) -> Self {
         let (lo, hi) = range;
@@ -144,9 +144,6 @@ impl<M> Slider<M> {
         view_state.ensure(id, || SliderViewState { grab: None })
     }
 }
-
-impl<M> IntoElement for Slider<M> {}
-
 impl<M: 'static> Widget for Slider<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

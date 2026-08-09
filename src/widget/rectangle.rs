@@ -1,12 +1,12 @@
 use super::*;
 
+#[derive(Widget)]
 pub struct Rectangle {
     size: Size<Length>,
     color: Color,
     min: Size<i32>,
     max: Size<i32>,
 }
-
 impl Rectangle {
     pub fn placeholder() -> Self {
         Self::new(Size::splat(Length::Fit), Color::TRANSPARENT)
@@ -36,9 +36,6 @@ impl Rectangle {
         self
     }
 }
-
-impl IntoElement for Rectangle {}
-
 impl Widget for Rectangle {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

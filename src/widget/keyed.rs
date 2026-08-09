@@ -2,11 +2,11 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use super::*;
 
+#[derive(Widget)]
 pub struct Keyed<W> {
     key: u64,
     inner: W,
 }
-
 impl<W> Keyed<W> {
     pub fn new<K: Hash>(key: K, inner: W) -> Self {
         let mut h = DefaultHasher::default();
@@ -17,9 +17,6 @@ impl<W> Keyed<W> {
         }
     }
 }
-
-impl<W> IntoElement for Keyed<W> {}
-
 impl<W: Widget> Widget for Keyed<W> {
     fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node {
         self.inner.layout(ctx)

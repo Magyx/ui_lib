@@ -183,11 +183,11 @@ mod harness {
     /// Wraps any Widget and captures its final (x, y, w, h) in a shared cell.
     /// Cloning the Rc<Cell<...>> before moving the Probe into an Element lets
     /// us read back the captured rect after layout without any unsafe code.
+    #[derive(Widget)]
     pub struct Probe<W: Widget> {
         inner: W,
         slot: RectSlot,
     }
-
     impl<W: Widget> Probe<W> {
         pub fn new(inner: W) -> (Self, RectSlot) {
             let slot: RectSlot = Rc::new(Cell::new(None));
@@ -200,9 +200,6 @@ mod harness {
             )
         }
     }
-
-    impl<W: Widget> IntoElement for Probe<W> {}
-
     impl<W: Widget> Widget for Probe<W> {
         fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> ui::layout::Node {
             self.inner.layout(ctx)
@@ -245,13 +242,13 @@ mod harness {
     }
 
     /// Minimal clip container for exercising `clip_children` layout behavior.
+    #[derive(Widget)]
     pub struct ClipBox {
         child: Element,
         size: Size<Length>,
         clip: bool,
         max: Size<i32>,
     }
-
     impl ClipBox {
         pub fn new(size: Size<Length>, clip: bool, child: impl Into<Element>) -> Self {
             Self {
@@ -266,9 +263,6 @@ mod harness {
             self
         }
     }
-
-    impl IntoElement for ClipBox {}
-
     impl Widget for ClipBox {
         fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> ui::layout::Node {
             ui::layout::Node {

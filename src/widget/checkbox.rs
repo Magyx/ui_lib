@@ -22,7 +22,6 @@ pub enum Mark {
     /// A filled dot, drawn as a primitive (no text).
     Dot,
 }
-
 impl Mark {
     /// The glyph to shape, or `None` for marks drawn as primitives.
     #[inline]
@@ -99,6 +98,7 @@ impl Default for CheckboxState {
     }
 }
 
+#[derive(Widget)]
 pub struct Checkbox<M> {
     state: CheckState,
     mark: Mark,
@@ -108,7 +108,6 @@ pub struct Checkbox<M> {
     on_toggle: Option<Box<dyn Fn(CheckState) -> M>>,
     label: Option<Element>,
 }
-
 impl<M: 'static> Checkbox<M> {
     /// A checkbox in the given state. Accepts a `bool` (`true` -> `On`) or a
     /// [`CheckState`] directly.
@@ -162,9 +161,7 @@ impl<M: 'static> Checkbox<M> {
         self.on_toggle = Some(Box::new(f));
         self
     }
-}
 
-impl<M> Checkbox<M> {
     #[inline]
     fn visible_glyph(&self) -> Option<char> {
         if self.state == CheckState::On {
@@ -216,9 +213,6 @@ impl<M> Checkbox<M> {
         (fill, border)
     }
 }
-
-impl<M> IntoElement for Checkbox<M> {}
-
 impl<M: 'static> Widget for Checkbox<M> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         let left = if self.label.is_some() {

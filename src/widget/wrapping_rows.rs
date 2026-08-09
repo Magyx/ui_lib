@@ -2,6 +2,7 @@ use std::num::NonZero;
 
 use super::*;
 
+#[derive(Widget)]
 pub struct WrappingRows {
     rows: Vec<Row>,
     size: Size<Length>,
@@ -11,7 +12,6 @@ pub struct WrappingRows {
     min: Size<i32>,
     max: Size<i32>,
 }
-
 impl WrappingRows {
     pub fn empty(columns: NonZero<usize>) -> Self {
         Self::new::<Vec<_>, Element>(columns, el!())
@@ -75,9 +75,6 @@ impl WrappingRows {
         self
     }
 }
-
-impl IntoElement for WrappingRows {}
-
 impl Widget for WrappingRows {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

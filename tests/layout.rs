@@ -16,8 +16,7 @@ mod layout {
     use ui::model::{Color, Size, Vec4};
     use ui::primitive::InstanceStore;
     use ui::widget::{
-        Align, Center, Column, Element, IntoElement, Length, Overlay, Rectangle, Row, Spacer,
-        Widget,
+        Align, Center, Column, Element, Length, Overlay, Rectangle, Row, Spacer, Widget,
     };
 
     // Leaf sizing
@@ -968,11 +967,11 @@ mod layout {
 
     /// Leaf widget that reports `f(width)` as its intrinsic height.
     /// Stays generic over M so the same struct works for any harness.
+    #[derive(Widget)]
     struct IntrinsicHeightLeaf {
         height_for_width: Box<dyn Fn(i32) -> i32>,
         slot: RectSlot,
     }
-
     impl IntrinsicHeightLeaf {
         fn new<F: Fn(i32) -> i32 + 'static>(f: F) -> (Self, RectSlot) {
             let slot: RectSlot = Rc::new(Cell::new(None));
@@ -985,9 +984,6 @@ mod layout {
             )
         }
     }
-
-    impl IntoElement for IntrinsicHeightLeaf {}
-
     impl Widget for IntrinsicHeightLeaf {
         fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
             Node {
@@ -1071,10 +1067,10 @@ mod layout {
         // existing min.height (set via Node.min), the engine should keep
         // the larger value. See the clamp in post_width_query:
         //   h.max(node.min.height).min(node.max.height)
+        #[derive(Widget)]
         struct LeafWithMin {
             slot: RectSlot,
         }
-        impl IntoElement for LeafWithMin {}
         impl Widget for LeafWithMin {
             fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
                 Node {
@@ -1121,10 +1117,10 @@ mod layout {
     fn post_width_query_respects_max_height_cap() {
         // If min_height_for_width returns a huge value, the clamp should
         // cap it at max.height. Test: leaf with max.height=30 reporting 1000.
+        #[derive(Widget)]
         struct LeafWithMax {
             slot: RectSlot,
         }
-        impl IntoElement for LeafWithMax {}
         impl Widget for LeafWithMax {
             fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
                 Node {
@@ -1174,10 +1170,10 @@ mod layout {
         // called on it, even if it overrides the method. Test with a
         // wrapper that panics in min_height_for_width; layout should
         // succeed (no panic).
+        #[derive(Widget)]
         struct WrapperThatWouldPanic {
             child: Element,
         }
-        impl IntoElement for WrapperThatWouldPanic {}
         impl Widget for WrapperThatWouldPanic {
             fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
                 Node {

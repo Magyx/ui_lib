@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use super::*;
 use crate::primitive::{Instanced, Primitive};
 
+#[derive(Widget)]
 pub struct SimpleCanvas<P: Instanced<Primitive>> {
     size: Size<Length>,
     with_handle: Option<fn(&mut EventCtx)>,
@@ -10,7 +11,6 @@ pub struct SimpleCanvas<P: Instanced<Primitive>> {
     max: Size<i32>,
     _pipeline: PhantomData<fn() -> P>,
 }
-
 impl<P: Instanced<Primitive>> SimpleCanvas<P> {
     /// Draw a full-bounds quad through `P`.
     pub fn new(size: Size<Length>, with_handle: Option<fn(&mut EventCtx)>) -> Self {
@@ -31,9 +31,6 @@ impl<P: Instanced<Primitive>> SimpleCanvas<P> {
         self
     }
 }
-
-impl<P: Instanced<Primitive>> IntoElement for SimpleCanvas<P> {}
-
 impl<P: Instanced<Primitive>> Widget for SimpleCanvas<P> {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

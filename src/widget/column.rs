@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Widget)]
 pub struct Column {
     children: Vec<Element>,
     spacing: i32,
@@ -11,7 +12,6 @@ pub struct Column {
     main_align: Align,
     cross_align: Align,
 }
-
 impl Column {
     pub fn empty() -> Self {
         Self::new::<Vec<_>, Element>(el!())
@@ -75,9 +75,6 @@ impl Column {
         self.children.push(element.into());
     }
 }
-
-impl IntoElement for Column {}
-
 impl Widget for Column {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
@@ -114,7 +111,6 @@ impl Widget for Column {
 }
 
 pub struct Center;
-
 impl Center {
     #![allow(clippy::new_ret_no_self)]
     pub fn new<E>(child: E) -> Column

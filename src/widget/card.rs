@@ -1,5 +1,6 @@
 use super::*;
 
+#[derive(Widget)]
 pub struct Card {
     children: Vec<Element>,
     spacing: i32,
@@ -8,7 +9,6 @@ pub struct Card {
     min: Size<i32>,
     max: Size<i32>,
 }
-
 impl Card {
     pub fn new<I, E>(children: I) -> Self
     where
@@ -45,9 +45,6 @@ impl Card {
         self
     }
 }
-
-impl IntoElement for Card {}
-
 impl Widget for Card {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {

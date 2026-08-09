@@ -6,6 +6,8 @@ use crate::{
     theme::{Env, Theme},
 };
 
+pub use ui_macros::Widget;
+
 #[derive(Clone, Copy, Debug, Default)]
 pub enum Length {
     #[default]
