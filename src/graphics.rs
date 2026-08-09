@@ -66,6 +66,81 @@ pub struct Gpu {
     pub queue: wgpu::Queue,
 }
 
+impl Gpu {
+    pub fn required_features(is_metal: bool) -> wgpu::Features {
+        let mut f = wgpu::Features::PUSH_CONSTANTS
+            | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER
+            | wgpu::Features::TEXTURE_BINDING_ARRAY
+            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
+        if !is_metal {
+            f |= wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY;
+        }
+        f
+    }
+
+    pub fn required_limits() -> wgpu::Limits {
+        wgpu::Limits {
+            max_push_constant_size: 128,
+            max_binding_array_elements_per_shader_stage: DEFAULT_MAX_TEXTURES,
+            ..Default::default()
+        }
+    }
+
+    pub fn headless() -> Option<Self> {
+        let backends = wgpu::Instance::enabled_backend_features();
+        if backends.is_empty() {
+            eprintln!(
+                "ui: no wgpu backend compiled in — build with `--features vulkan` \
+                 (or metal/dx12/gl)"
+            );
+            return None;
+        }
+
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends,
+            flags: crate::consts::default_instance_flags(),
+            ..Default::default()
+        });
+
+        let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::default(),
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }))
+        .ok()?;
+
+        let adapter_info = adapter.get_info();
+        let features = Self::required_features(adapter_info.backend == wgpu::Backend::Metal);
+
+        if !adapter.features().contains(features) {
+            eprintln!(
+                "ui: adapter {:?} is missing required features: {:?}",
+                adapter_info.name,
+                features - adapter.features()
+            );
+            return None;
+        }
+
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("ui headless"),
+            required_features: features,
+            required_limits: Self::required_limits(),
+            memory_hints: wgpu::MemoryHints::MemoryUsage,
+            trace: wgpu::Trace::Off,
+        }))
+        .inspect_err(|e| eprintln!("ui: request_device failed: {e}"))
+        .ok()?;
+
+        Some(Self {
+            instance: Some(instance),
+            adapter: Some(adapter),
+            adapter_info,
+            device,
+            queue,
+        })
+    }
+}
+
 pub struct Target<'a> {
     pub surface: wgpu::Surface<'a>,
     pub config: wgpu::SurfaceConfiguration,
@@ -131,9 +206,6 @@ impl<'a> Engine<'a> {
             _marker,
         } = builder;
 
-        let base_features =
-            wgpu::Features::PUSH_CONSTANTS | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER;
-
         let gpu = match gpu_source {
             GpuSource::Create => {
                 // Env overrides (UI_BACKEND / UI_WGPU_*) are applied here and so
@@ -155,20 +227,17 @@ impl<'a> Engine<'a> {
                 let adapter_info = adapter.get_info();
                 let is_metal = adapter_info.backend == wgpu::Backend::Metal;
 
-                let profile_features = profile
+                // Validates the profile; `Compat` is not yet implementable.
+                profile
                     .binding_array_features(is_metal)
                     .map_err(|_| crate::error::InitError::UnsupportedFeatureProfile)?;
 
-                let required_limits = limits_override(wgpu::Limits {
-                    max_push_constant_size: 128,
-                    max_binding_array_elements_per_shader_stage: DEFAULT_MAX_TEXTURES,
-                    ..Default::default()
-                });
+                let required_limits = limits_override(Gpu::required_limits());
 
                 let (device, queue) =
                     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                         label: None,
-                        required_features: base_features | profile_features | extra_features,
+                        required_features: Gpu::required_features(is_metal) | extra_features,
                         required_limits,
                         memory_hints: wgpu::MemoryHints::MemoryUsage,
                         trace: wgpu::Trace::Off,

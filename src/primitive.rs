@@ -353,7 +353,7 @@ impl InstanceStore {
         let end = start + std::mem::size_of::<D>() * batch.count as usize;
         bytemuck::cast_slice(&self.bytes()[start..end])
     }
-    pub(crate) fn bytes(&self) -> &[u8] {
+    pub fn bytes(&self) -> &[u8] {
         bytemuck::cast_slice(&self.data)
     }
 
