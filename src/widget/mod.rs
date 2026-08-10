@@ -16,7 +16,6 @@ pub enum Length {
     Grow,
     Weighted(f32),
 }
-
 impl Length {
     pub(crate) fn weight(self) -> Option<f32> {
         match self {
@@ -24,6 +23,14 @@ impl Length {
             Length::Weighted(w) => Some(w),
             _ => None,
         }
+    }
+}
+impl<T> From<T> for Length
+where
+    T: Into<i32>,
+{
+    fn from(value: T) -> Self {
+        Length::Fixed(value.into())
     }
 }
 
