@@ -151,7 +151,7 @@ impl Theme {
         }
         // ~6% per level, capped so deep nesting doesn't wash out.
         let t = (elevation as f32 * 0.06).min(0.6);
-        if self.surface.luminance() < 0.5 {
+        if self.surface.luma() < 0.5 {
             self.surface.lighten(t)
         } else {
             self.surface.darken(t)
@@ -161,13 +161,13 @@ impl Theme {
     /// whichever of the theme's on-colors (falling back to black/white)
     /// contrasts most with the elevated surface.
     pub fn on_surface_at(&self, elevation: u8) -> Color {
-        let s = self.surface_at(elevation).luminance();
+        let s = self.surface_at(elevation).luma();
         [self.on_surface, self.on_bg, Color::BLACK, Color::WHITE]
             .into_iter()
             .max_by(|a, b| {
-                (a.luminance() - s)
+                (a.luma() - s)
                     .abs()
-                    .total_cmp(&(b.luminance() - s).abs())
+                    .total_cmp(&(b.luma() - s).abs())
             })
             .unwrap_or(self.on_surface)
     }
@@ -180,7 +180,7 @@ impl Theme {
         self.interact(base, self.pressed_shift)
     }
     fn interact(&self, base: Color, t: f32) -> Color {
-        if base.luminance() < 0.5 {
+        if base.luma() < 0.5 {
             base.lighten(t)
         } else {
             base.darken(t)

@@ -16,6 +16,12 @@ use crate::{
     },
 };
 
+/// sRGB-encode a coverage value so the atlas's `*Srgb` format decodes it back
+/// to the original on sample.
+///
+/// Only needed where coverage lives in the *colour* channels: the alpha channel
+/// of an sRGB format is linear and passes through untouched, so plain masks
+/// need no round trip.
 fn linear_coverage_to_srgb_u8(c: u8) -> u8 {
     let f = c as f32 / 255.0;
     let encoded = if f <= 0.0031308 {
@@ -26,42 +32,52 @@ fn linear_coverage_to_srgb_u8(c: u8) -> u8 {
     (encoded * 255.0).round().clamp(0.0, 255.0) as u8
 }
 
-fn premul_rgba(img: &SwashImage) -> Vec<u8> {
+/// Convert a rasterised glyph to **straight** (unmultiplied) RGBA.
+///
+/// The shader premultiplies once at the end of `fs_main`, so uploading
+/// premultiplied data here would apply alpha twice — a glyph at 50% coverage
+/// would render at 25%, i.e. visibly thin text.
+fn straight_rgba(img: &SwashImage) -> Vec<u8> {
     match img.content {
         SwashContent::Mask => {
+            // Straight white at `coverage` alpha. RGB is a constant 1.0, which
+            // survives the atlas's sRGB decode unchanged, and alpha is linear
+            // in an sRGB format — so no encoding round trip is needed.
             let a = &img.data;
             let mut out = Vec::with_capacity(a.len() * 4);
             for &aa in a {
-                let aa = linear_coverage_to_srgb_u8(aa);
-                out.extend_from_slice(&[aa, aa, aa, aa]); // RGB=A, A=A
+                out.extend_from_slice(&[255, 255, 255, aa]);
             }
             out
         }
         SwashContent::SubpixelMask => {
+            // Per-channel coverage cannot be expressed with a single straight
+            // alpha, so normalise: RGB carries coverage relative to the
+            // strongest channel and A carries that maximum. The shader's
+            // premultiply then reconstitutes per-channel coverage exactly.
+            //
+            // RGB holds coverage in colour channels, so it does need the sRGB
+            // round trip to survive the atlas format.
             let m = &img.data;
             let mut out = Vec::with_capacity(m.len() / 3 * 4);
             for px in m.chunks_exact(3) {
-                let (r, g, b) = (
-                    linear_coverage_to_srgb_u8(px[0]),
-                    linear_coverage_to_srgb_u8(px[1]),
-                    linear_coverage_to_srgb_u8(px[2]),
-                );
-                let a = r.max(g).max(b);
-                out.extend_from_slice(&[r, g, b, a]); // RGB=RGB, A=max(R,G,B)
+                let a = px[0].max(px[1]).max(px[2]);
+                if a == 0 {
+                    out.extend_from_slice(&[0, 0, 0, 0]);
+                    continue;
+                }
+                let norm = |c: u8| {
+                    linear_coverage_to_srgb_u8(
+                        ((c as u32 * 255 + a as u32 / 2) / a as u32).min(255) as u8,
+                    )
+                };
+                out.extend_from_slice(&[norm(px[0]), norm(px[1]), norm(px[2]), a]);
             }
             out
         }
         SwashContent::Color => {
-            let p = &img.data;
-            let mut out = Vec::with_capacity(p.len());
-            for px in p.chunks_exact(4) {
-                let (r, g, b, a) = (px[0] as u16, px[1] as u16, px[2] as u16, px[3] as u16);
-                let pr = (r * a / 255) as u8;
-                let pg = (g * a / 255) as u8;
-                let pb = (b * a / 255) as u8;
-                out.extend_from_slice(&[pr, pg, pb, a as u8]); // RGB=RGB*A, A=A
-            }
-            out
+            // Already straight sRGB from the font; the atlas format decodes it.
+            img.data.clone()
         }
     }
 }
@@ -320,7 +336,7 @@ impl TextBuffer for CosmicBuffer {
                     glyph_atlas.touch(phys.cache_key);
                     handle
                 } else {
-                    let rgba = premul_rgba(img);
+                    let rgba = straight_rgba(img);
                     match glyph_atlas.upload(gpu, tex, phys.cache_key, w, h, &rgba) {
                         Some(handle) => handle,
                         None => continue, // oversized glyph; skip

@@ -107,6 +107,26 @@ fn fit_rect(
     }
 }
 
+/// Convert premultiplied RGBA8 in place to straight (unmultiplied) alpha.
+///
+/// Atlas contents are straight by convention; see the note at the top of
+/// `fs_main` in `ui_shader.wgsl`.
+fn demultiply_rgba8(pixels: &mut [u8]) {
+    for px in pixels.chunks_exact_mut(4) {
+        let a = px[3];
+        if a == 0 {
+            px[0] = 0;
+            px[1] = 0;
+            px[2] = 0;
+        } else if a != 255 {
+            let inv = 255.0 / a as f32;
+            for c in &mut px[..3] {
+                *c = ((*c as f32 * inv).round()).min(255.0) as u8;
+            }
+        }
+    }
+}
+
 #[derive(Widget)]
 pub struct Svg {
     size: Size<Length>,
@@ -215,7 +235,12 @@ impl Widget for Svg {
             &mut pixmap.as_mut(),
         );
 
-        let pixels = pixmap.data();
+        // `tiny_skia::Pixmap` is premultiplied; the shader premultiplies once
+        // at the end of `fs_main`, so uploading as-is would apply alpha twice —
+        // a 50%-alpha icon would render at 25%, with dark crunchy edges.
+        let mut pixels = pixmap.data().to_vec();
+        demultiply_rgba8(&mut pixels);
+        let pixels = &pixels[..];
         match state.handle {
             Some(handle) if handle.size_px == raster => {
                 ctx.texture.update_rgba8(ctx.gpu, handle, pixels);

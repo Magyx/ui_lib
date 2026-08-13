@@ -49,6 +49,28 @@ var<push_constant> globals: Globals;
 @group(0) @binding(1) var samp: sampler;
 @group(0) @binding(2) var<storage, read> gens: array<u32>;
 
+// Colors arrive as sRGB-encoded bytes.
+fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
+    let lo = c / 12.92;
+    let hi = pow((c + vec3(0.055)) / 1.055, vec3(2.4));
+    return select(hi, lo, c <= vec3(0.04045));
+}
+
+fn unpack_color(packed: u32) -> vec4<f32> {
+    let c = unpack4x8unorm(packed);
+    return vec4(srgb_to_linear(c.rgb), c.a);
+}
+
+// The blend state is `One / OneMinusSrcAlpha`, i.e. premultiplied. Every
+// fragment return must be premultiplied to match.
+//
+// Order matters: decode sRGB first, premultiply second. Premultiplying gamma
+// values and decoding afterwards is a different (wrong) result, and is a bug
+// egui shipped for a while.
+fn premultiply(c: vec4<f32>) -> vec4<f32> {
+    return vec4(c.rgb * c.a, c.a);
+}
+
 fn sd_rounded_box(p: vec2<f32>, half_size: vec2<f32>, radius: f32) -> f32 {
     let r = min(radius, min(half_size.x, half_size.y));
     let q = abs(p) - half_size + vec2(r);
@@ -81,15 +103,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.position = vec4<f32>(ndc, 0.0, 1.0);
     out.slot_plus_one = slot_plus_one;
     out.gen = gen;
-    out.color = unpack4x8unorm(in.style.x);
+    out.color = unpack_color(in.style.x);
     out.uv_tex = uv_tex;
 
     // SDF varyings
     out.local_uv = uv;
     out.rect_size_px = in.size * globals.scale;
     out.shape_params = in.style.y;
-    out.border_color = unpack4x8unorm(in.style.z);
-    out.aux_color = unpack4x8unorm(in.style.w);
+    out.border_color = unpack_color(in.style.z);
+    out.aux_color = unpack_color(in.style.w);
 
     return out;
 }
@@ -99,7 +121,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Fast path: no shape params — original flat/textured behavior, zero overhead.
     if in.shape_params == 0u {
         if in.slot_plus_one == 0u {
-            return in.color;
+            return premultiply(in.color);
         }
 
         let idx = in.slot_plus_one - 1u;
@@ -107,8 +129,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             return vec4<f32>(0.0);
         }
 
+        // `tex_arr` is an *Srgb format, so the sample is already linear, and
+        // its alpha is straight -- matching how the SDF path treats it below.
         let c = textureSample(tex_arr[idx], samp, in.uv_tex);
-        return c * in.color;
+        return premultiply(c * in.color);
     }
 
     // Unpack shape parameters
@@ -167,13 +191,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let inner_alpha = 1.0 - smoothstep(-0.5, 0.5, d_inner);
         let border_alpha = shape_alpha - inner_alpha;
 
-        // Premultiply
-        let fill_pm = vec4(fill.rgb * fill.a, fill.a) * inner_alpha;
-        let border_pm = vec4(in.border_color.rgb * in.border_color.a, in.border_color.a) * border_alpha;
+        let fill_pm = premultiply(fill) * inner_alpha;
+        let border_pm = premultiply(in.border_color) * border_alpha;
 
         result = fill_pm + border_pm;
     } else {
-        result = vec4(fill.rgb * fill.a, fill.a) * shape_alpha;
+        result = premultiply(fill) * shape_alpha;
     }
 
     // Shadow (outer glow)
@@ -181,8 +204,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let shadow_alpha_raw = 1.0 - smoothstep(0.0, shadow_radius, d);
         let shadow_alpha = shadow_alpha_raw * (1.0 - shape_alpha);
 
-        let shadow_color = in.aux_color;
-        let shadow_pm = vec4(shadow_color.rgb * shadow_color.a, shadow_color.a) * shadow_alpha;
+        let shadow_pm = premultiply(in.aux_color) * shadow_alpha;
 
         // Shadow behind shape
         result = result + shadow_pm * (1.0 - result.a);

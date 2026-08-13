@@ -86,6 +86,10 @@ image = { version = "0.25.8", features = ["jpeg"] }
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt"] }
 tracing-log = "0.2.0"
 
+[[test]]
+name = "shader_color"
+required-features = ["vulkan"]
+
 [[example]]
 name = "winit"
 required-features = ["winit"]
