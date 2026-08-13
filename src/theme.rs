@@ -84,11 +84,6 @@ impl Style {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Theme {
-    /// Root window / page background. The engine auto-fills this.
-    pub bg: Color,
-    /// Text and icons on `bg`.
-    pub on_bg: Color,
-
     /// Default container surface (cards, panels, sidebars).
     pub surface: Color,
     /// Text and icons on `surface`.
@@ -97,6 +92,12 @@ pub struct Theme {
     pub surface_variant: Color,
     /// Text and icons on `surface_variant`.
     pub on_surface_variant: Color,
+
+    pub surface_container_lowest: Color,
+    pub surface_container_low: Color,
+    pub surface_container: Color,
+    pub surface_container_high: Color,
+    pub surface_container_highest: Color,
 
     /// Primary action color: filled buttons, active indicators, links.
     pub primary: Color,
@@ -111,11 +112,19 @@ pub struct Theme {
     pub secondary: Color,
     /// Text/icons on `secondary`.
     pub on_secondary: Color,
+    /// Toned secondary container.
+    pub secondary_container: Color,
+    /// Text/icons on `secondary_container`.
+    pub on_secondary_container: Color,
 
     /// Error/danger: destructive actions, validation errors.
     pub error: Color,
     /// Text/icons on `error`.
     pub on_error: Color,
+    /// Low-emphasis error surface: validation banners, inline warnings.
+    pub error_container: Color,
+    /// Text/icons on `error_container`.
+    pub on_error_container: Color,
 
     /// Default outline/border color (used when a widget opts into borders).
     pub outline: Color,
@@ -140,35 +149,38 @@ pub struct Theme {
     pub typography: Typography,
 }
 
+pub const TEXT_CONTRAST_MIN: f32 = 4.5;
+
+pub fn contrast_ratio(a: Color, b: Color) -> f32 {
+    let (x, y) = (a.relative_luminance(), b.relative_luminance());
+    let (hi, lo) = if x > y { (x, y) } else { (y, x) };
+    (hi + 0.05) / (lo + 0.05)
+}
+
 impl Theme {
-    /// Surface color at a tonal `elevation`. Level 0 is the base `surface`;
-    /// each level nudges the surface toward its foreground — lighter on dark
-    /// themes, darker on light ones — so nested containers keep separating
-    /// instead of capping at the old `surface`/`surface_variant` pair.
+    /// Surface color at a tonal `elevation`, from the container ramp.
     pub fn surface_at(&self, elevation: u8) -> Color {
-        if elevation == 0 {
-            return self.surface;
-        }
-        // ~6% per level, capped so deep nesting doesn't wash out.
-        let t = (elevation as f32 * 0.06).min(0.6);
-        if self.surface.luma() < 0.5 {
-            self.surface.lighten(t)
-        } else {
-            self.surface.darken(t)
+        match elevation % 6 {
+            0 => self.surface,
+            1 => self.surface_container_low,
+            2 => self.surface_container,
+            3 => self.surface_container_high,
+            4 => self.surface_container_highest,
+            _ => self.surface_container_lowest,
         }
     }
     /// Readable foreground for [`surface_at(elevation)`](Self::surface_at):
-    /// whichever of the theme's on-colors (falling back to black/white)
-    /// contrasts most with the elevated surface.
+    /// whichever of the theme's on-colors contrasts most with the elevated surface.
     pub fn on_surface_at(&self, elevation: u8) -> Color {
-        let s = self.surface_at(elevation).luma();
-        [self.on_surface, self.on_bg, Color::BLACK, Color::WHITE]
+        let bg = self.surface_at(elevation);
+
+        if contrast_ratio(self.on_surface, bg) >= TEXT_CONTRAST_MIN {
+            return self.on_surface;
+        }
+
+        [self.on_surface, Color::BLACK, Color::WHITE]
             .into_iter()
-            .max_by(|a, b| {
-                (a.luma() - s)
-                    .abs()
-                    .total_cmp(&(b.luma() - s).abs())
-            })
+            .max_by(|a, b| contrast_ratio(*a, bg).total_cmp(&contrast_ratio(*b, bg)))
             .unwrap_or(self.on_surface)
     }
     /// Fill shade for a hovered interactive surface. (intensity = `hover_shift`).
@@ -201,28 +213,35 @@ impl Theme {
     /// Dark theme.
     pub fn dark() -> Self {
         Self {
-            bg: Color::rgb(24, 24, 30),
-            on_bg: Color::rgb(230, 230, 240),
+            surface: Color::from_hex(0x111418),
+            on_surface: Color::from_hex(0xE1E2E8),
+            surface_variant: Color::from_hex(0x43474E),
+            on_surface_variant: Color::from_hex(0xC3C6CF),
 
-            surface: Color::rgb(40, 40, 48),
-            on_surface: Color::rgb(220, 220, 230),
-            surface_variant: Color::rgb(55, 55, 65),
-            on_surface_variant: Color::rgb(180, 180, 195),
+            surface_container_lowest: Color::from_hex(0x0B0E13),
+            surface_container_low: Color::from_hex(0x191C20),
+            surface_container: Color::from_hex(0x1D2024),
+            surface_container_high: Color::from_hex(0x272A2F),
+            surface_container_highest: Color::from_hex(0x32353A),
 
-            primary: Color::rgb(45, 150, 245),
-            on_primary: Color::rgb(255, 255, 255),
-            primary_container: Color::rgb(30, 60, 100),
-            on_primary_container: Color::rgb(180, 215, 255),
+            primary: Color::from_hex(0xA2C9FE),
+            on_primary: Color::from_hex(0x00325B),
+            primary_container: Color::from_hex(0x1D4875),
+            on_primary_container: Color::from_hex(0xD3E4FF),
 
-            secondary: Color::rgb(140, 140, 160),
-            on_secondary: Color::rgb(255, 255, 255),
+            secondary: Color::from_hex(0xBBC7DB),
+            on_secondary: Color::from_hex(0x263141),
+            secondary_container: Color::from_hex(0x3C4858),
+            on_secondary_container: Color::from_hex(0xD7E3F8),
 
-            error: Color::rgb(220, 60, 60),
-            on_error: Color::rgb(255, 255, 255),
+            error: Color::from_hex(0xFFB4AB),
+            on_error: Color::from_hex(0x690005),
+            error_container: Color::from_hex(0x93000A),
+            on_error_container: Color::from_hex(0xFFDAD6),
 
-            outline: Color::rgb(70, 70, 85),
-            outline_variant: Color::rgb(50, 50, 60),
-            focus_outline: Color::rgb(90, 130, 220),
+            outline: Color::from_hex(0x8D9199),
+            outline_variant: Color::from_hex(0x43474E),
+            focus_outline: Color::from_hex(0xA2C9FE),
 
             corner_radius: 0.0,
             border_width: 1,
@@ -237,28 +256,35 @@ impl Theme {
     /// Light theme.
     pub fn light() -> Self {
         Self {
-            bg: Color::rgb(224, 228, 235),
-            on_bg: Color::rgb(26, 30, 39),
+            surface: Color::from_hex(0xF8F9FF),
+            on_surface: Color::from_hex(0x191C20),
+            surface_variant: Color::from_hex(0xDFE2EB),
+            on_surface_variant: Color::from_hex(0x43474E),
 
-            surface: Color::rgb(249, 250, 253),
-            on_surface: Color::rgb(28, 32, 42),
-            surface_variant: Color::rgb(220, 224, 232),
-            on_surface_variant: Color::rgb(90, 97, 112),
+            surface_container_lowest: Color::from_hex(0xFFFFFF),
+            surface_container_low: Color::from_hex(0xF2F3FA),
+            surface_container: Color::from_hex(0xECEDF4),
+            surface_container_high: Color::from_hex(0xE7E8EE),
+            surface_container_highest: Color::from_hex(0xE1E2E8),
 
-            primary: Color::rgb(40, 112, 222),
-            on_primary: Color::rgb(255, 255, 255),
-            primary_container: Color::rgb(210, 227, 250),
-            on_primary_container: Color::rgb(10, 48, 108),
+            primary: Color::from_hex(0x38608F),
+            on_primary: Color::from_hex(0xFFFFFF),
+            primary_container: Color::from_hex(0xD3E4FF),
+            on_primary_container: Color::from_hex(0x001C38),
 
-            secondary: Color::rgb(94, 103, 126),
-            on_secondary: Color::rgb(255, 255, 255),
+            secondary: Color::from_hex(0x545F70),
+            on_secondary: Color::from_hex(0xFFFFFF),
+            secondary_container: Color::from_hex(0xD7E3F8),
+            on_secondary_container: Color::from_hex(0x101C2B),
 
-            error: Color::rgb(201, 58, 58),
-            on_error: Color::rgb(255, 255, 255),
+            error: Color::from_hex(0xBA1A1A),
+            on_error: Color::from_hex(0xFFFFFF),
+            error_container: Color::from_hex(0xFFDAD6),
+            on_error_container: Color::from_hex(0x410002),
 
-            outline: Color::rgb(196, 202, 213),
-            outline_variant: Color::rgb(218, 223, 231),
-            focus_outline: Color::rgb(58, 120, 230),
+            outline: Color::from_hex(0x73777F),
+            outline_variant: Color::from_hex(0xC3C6CF),
+            focus_outline: Color::from_hex(0x38608F),
 
             corner_radius: 0.0,
             border_width: 1,
@@ -299,15 +325,22 @@ macro_rules! with_property {
 }
 
 impl Theme {
-    with_color_property!(with_bg, bg);
-    with_color_property!(with_on_bg, on_bg);
     with_color_property!(with_surface, surface);
     with_color_property!(with_on_surface, on_surface);
     with_color_property!(with_surface_variant, surface_variant);
+    with_color_property!(with_surface_container_lowest, surface_container_lowest);
+    with_color_property!(with_surface_container_low, surface_container_low);
+    with_color_property!(with_surface_container, surface_container);
+    with_color_property!(with_surface_container_high, surface_container_high);
+    with_color_property!(with_surface_container_highest, surface_container_highest);
     with_color_property!(with_primary, primary);
     with_color_property!(with_on_primary, on_primary);
     with_color_property!(with_secondary, secondary);
+    with_color_property!(with_secondary_container, secondary_container);
+    with_color_property!(with_error, error);
+    with_color_property!(with_error_container, error_container);
     with_color_property!(with_outline, outline);
+    with_color_property!(with_outline_variant, outline_variant);
     with_color_property!(with_focus_outline, focus_outline);
     with_property!(with_corner_radius, corner_radius, Option<f32>);
     with_property!(with_border_width, border_width, Option<i32>);
@@ -328,12 +361,8 @@ mod tests {
     #[test]
     fn with_chain_overrides_only_specified_fields() {
         let base = Theme::dark();
-        let modified = base
-            .with_bg(Some(Color::RED))
-            .with_corner_radius(Some(8.0))
-            .with_surface(None);
+        let modified = base.with_corner_radius(Some(8.0)).with_surface(None);
 
-        assert_eq!(modified.bg, Color::RED);
         assert_eq!(modified.corner_radius, 8.0);
         assert_eq!(
             modified.surface, base.surface,
@@ -345,7 +374,6 @@ mod tests {
     fn with_chain_all_none_is_identity() {
         let base = Theme::dark();
         let same = base
-            .with_bg(None)
             .with_surface(None)
             .with_primary(None)
             .with_corner_radius(None)
@@ -353,13 +381,133 @@ mod tests {
         assert_eq!(same, base);
     }
 
+    const DIVIDER_MIN: f32 = 1.5;
+    const FOCUS_MIN: f32 = 3.0;
+    const STEP_MIN: f32 = 1.03;
+    const RAMP_PERIOD: u8 = 5;
+
+    fn check(name: &str, t: &Theme) {
+        for (label, fg, bg) in [
+            ("on_surface/surface", t.on_surface, t.surface),
+            (
+                "on_surface_variant/surface_variant",
+                t.on_surface_variant,
+                t.surface_variant,
+            ),
+            ("on_primary/primary", t.on_primary, t.primary),
+            (
+                "on_primary_container/primary_container",
+                t.on_primary_container,
+                t.primary_container,
+            ),
+            ("on_secondary/secondary", t.on_secondary, t.secondary),
+            (
+                "on_secondary_container/secondary_container",
+                t.on_secondary_container,
+                t.secondary_container,
+            ),
+            ("on_error/error", t.on_error, t.error),
+            (
+                "on_error_container/error_container",
+                t.on_error_container,
+                t.error_container,
+            ),
+        ] {
+            let r = contrast_ratio(fg, bg);
+            assert!(
+                r >= TEXT_CONTRAST_MIN,
+                "{name}: {label} is {r:.2}, need {TEXT_CONTRAST_MIN}"
+            );
+        }
+
+        for (label, c) in [
+            ("outline", t.outline),
+            ("outline_variant", t.outline_variant),
+        ] {
+            let r = contrast_ratio(c, t.surface);
+            assert!(
+                r >= DIVIDER_MIN,
+                "{name}: {label} is {r:.2} against surface, need {DIVIDER_MIN}"
+            );
+        }
+
+        let r = contrast_ratio(t.focus_outline, t.surface);
+        assert!(
+            r >= FOCUS_MIN,
+            "{name}: focus_outline is {r:.2} against bg, need {FOCUS_MIN}"
+        );
+    }
+
+    #[test]
+    fn dark_theme_meets_contrast_targets() {
+        check("dark", &Theme::dark());
+    }
+
+    #[test]
+    fn light_theme_meets_contrast_targets() {
+        check("light", &Theme::light());
+    }
+
+    // elevation ramp
+
+    /// The property that makes cycling safe: every level separates from the
+    /// one below, *including across the wrap*. Saturating failed exactly here.
+    #[test]
+    fn every_adjacent_elevation_separates() {
+        for (name, t) in [("dark", Theme::dark()), ("light", Theme::light())] {
+            // Two full turns, so the wrap is exercised more than once.
+            for level in 1..=(RAMP_PERIOD * 2 + 1) {
+                let r = contrast_ratio(t.surface_at(level - 1), t.surface_at(level));
+                assert!(
+                    r >= STEP_MIN,
+                    "{name}: elevation {level} is {r:.3} against {}, levels have merged",
+                    level - 1
+                );
+            }
+        }
+    }
+
+    /// Every tone the cycle claims to use is reachable. A defined token that no
+    /// elevation produces is dead weight — this caught `surface_container_highest`
+    /// being stranded by an off-by-one in the ramp order.
+    #[test]
+    fn the_cycle_reaches_every_tone_it_claims() {
+        let t = Theme::dark();
+        let seen: Vec<Color> = (0..RAMP_PERIOD).map(|l| t.surface_at(l)).collect();
+        for (name, c) in [
+            ("surface", t.surface),
+            ("surface_container_low", t.surface_container_low),
+            ("surface_container", t.surface_container),
+            ("surface_container_high", t.surface_container_high),
+            ("surface_container_highest", t.surface_container_highest),
+        ] {
+            assert!(seen.contains(&c), "{name} is never produced by surface_at");
+        }
+    }
+
+    // foreground selection
+
+    /// An overridden ramp must still get a readable foreground.
+    #[test]
+    fn foreground_falls_back_when_the_ramp_is_overridden() {
+        // Elevation 3 maps to `surface_container_high`.
+        let t = Theme::dark().with_surface_container_high(Some(Color::WHITE));
+        let bg = t.surface_at(3);
+        assert_eq!(bg, Color::WHITE, "the override never reached the ramp");
+
+        let fg = t.on_surface_at(3);
+        let r = contrast_ratio(fg, bg);
+        assert!(
+            r >= TEXT_CONTRAST_MIN,
+            "a white container kept a light foreground ({fg:?}, {r:.2})"
+        );
+    }
+
     #[test]
     fn light_theme_has_distinct_values() {
         let dark = Theme::dark();
         let light = Theme::light();
-        assert_ne!(dark.bg, light.bg);
         assert_ne!(dark.surface, light.surface);
-        assert_ne!(dark.on_bg, light.on_bg);
     }
 
     #[test]

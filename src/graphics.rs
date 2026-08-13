@@ -892,7 +892,7 @@ impl<'a> Engine<'a> {
             self.instance_buf.push(Instance::ui(
                 Position::default(),
                 Size::from(target.globals.window_size),
-                self.theme.bg,
+                self.theme.surface,
             ));
 
             layout::paint_tree(

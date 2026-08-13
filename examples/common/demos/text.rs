@@ -26,7 +26,7 @@ pub fn view(state: &State) -> Element {
     ])
     .spacing(space::XS)
     .padding(Vec4::splat(space::SM))
-    .color(t.surface)
+    .color(t.surface_at(1))
     .size(Size::new(Weighted(0.2), Grow));
 
     // Top bar (fixed height)
@@ -45,7 +45,7 @@ pub fn view(state: &State) -> Element {
             .size(Size::new(Fit, Grow)),
     ])
     .padding(Vec4::new(space::LG, space::MD, space::LG, space::MD))
-    .color(t.surface_variant)
+    .color(t.surface_at(1))
     .size(Size::new(Grow, Fixed(52)));
 
     // Main content
@@ -101,18 +101,18 @@ pub fn view(state: &State) -> Element {
         Row::new(el![
             Column::new(el![Text::label("Builds"), Text::h1("128").color(t.primary),])
                 .padding(Vec4::splat(space::MD))
-                .color(t.surface)
+                .color(t.surface_at(1))
                 .size(Size::new(Grow, Fixed(88))),
             Column::new(el![
                 Text::label("Warnings"),
                 Text::h1("3").color(t.secondary),
             ])
             .padding(Vec4::splat(space::MD))
-            .color(t.surface)
+            .color(t.surface_at(1))
             .size(Size::new(Grow, Fixed(88))),
             Column::new(el![Text::label("Errors"), Text::h1("0").color(t.error),])
                 .padding(Vec4::splat(space::MD))
-                .color(t.surface)
+                .color(t.surface_at(1))
                 .size(Size::new(Grow, Fixed(88))),
         ])
         .spacing(space::MD)
@@ -138,7 +138,7 @@ pub fn view(state: &State) -> Element {
     ])
     .spacing(space::MD)
     .padding(Vec4::splat(space::MD))
-    .color(t.bg)
+    .color(t.surface)
     .size(Size::new(Grow, Grow))
     .into()
 }

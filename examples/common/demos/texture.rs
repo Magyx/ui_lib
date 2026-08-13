@@ -28,7 +28,7 @@ pub fn view(state: &State) -> Element {
     ])
     .spacing(space::SM)
     .padding(Vec4::splat(space::MD))
-    .color(t.surface)
+    .color(t.surface_at(1))
     .size(Size::new(Grow, Fit));
 
     #[cfg(feature = "svg")]
@@ -53,7 +53,7 @@ pub fn view(state: &State) -> Element {
         ])
         .spacing(space::SM)
         .padding(Vec4::splat(space::MD))
-        .color(t.surface)
+        .color(t.surface_at(1))
         .size(Size::new(Grow, Fit))
     };
 
@@ -64,7 +64,7 @@ pub fn view(state: &State) -> Element {
     ])
     .spacing(space::SM)
     .padding(Vec4::splat(space::MD))
-    .color(t.surface)
+    .color(t.surface_at(1))
     .size(Size::new(Grow, Fit));
 
     let two_col = Row::new(el![png_panel, svg_panel])

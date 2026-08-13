@@ -87,12 +87,10 @@ pub fn view(state: &State) -> Element {
         ])
         .spacing(space::SM)
         .padding(Vec4::splat(space::MD))
-        .color(t.surface)
         .size(Size::new(Grow, Fit)),
     ])
     .spacing(space::MD)
     .padding(Vec4::splat(space::MD))
-    .color(t.surface)
     .size(Size::new(Grow, Fit));
 
     // -- Layout --
@@ -105,7 +103,6 @@ pub fn view(state: &State) -> Element {
     ])
     .spacing(space::MD)
     .padding(Vec4::splat(space::LG))
-    .color(t.bg)
     .size(Size::new(Grow, Grow))
     .into()
 }

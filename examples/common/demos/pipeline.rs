@@ -30,7 +30,7 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
         .padding(Vec4::splat(space::SM))
         .size(Size::new(Grow, Fit)),
     ])
-    .color(t.bg)
+    .color(t.surface)
     .padding(Vec4::splat(0))
     .size(Size::new(Grow, Grow))
     .into()

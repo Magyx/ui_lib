@@ -29,10 +29,10 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
         Row::new(el![flat_panel(t), nested_panel(t),])
             .spacing(space::MD)
             .padding(Vec4::splat(space::MD))
-            .color(t.bg)
+            .color(t.surface_at(1))
             .size(Size::new(Grow, Grow)),
     ])
-    .color(t.bg)
+    .color(t.surface)
     .size(Size::new(Grow, Grow))
     .into()
 }
@@ -95,7 +95,7 @@ fn nested_panel(t: &Theme) -> Element {
                 .size(Size::new(Grow, Fit)),
         )
         .size(Size::new(Grow, Fixed(220)))
-        .bg(t.bg),
+        .bg(t.surface_at(1)),
         filler_block(t, "Filler 3", 120),
         filler_block(t, "Filler 4", 120),
         section_text(t, "Bottom of outer scrollable."),

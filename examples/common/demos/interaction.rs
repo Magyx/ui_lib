@@ -27,7 +27,7 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
         ])
         .padding(Vec4::splat(space::SM))
         .spacing(space::SM)
-        .color(t.surface)
+        .color(t.surface_at(1))
         .size(Size::new(Grow, Fixed(60))),
         Row::new(el![
             Button::new_with(
@@ -44,7 +44,7 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
         ])
         .padding(Vec4::splat(space::SM))
         .spacing(space::SM)
-        .color(t.surface)
+        .color(t.surface_at(1))
         .size(Size::new(Grow, Fixed(60))),
     ])
     .color(Color::TRANSPARENT)
@@ -67,7 +67,7 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
     ])
     .spacing(space::SM)
     .padding(Vec4::splat(space::SM))
-    .color(t.surface)
+    .color(t.surface_at(1))
     .size(Size::new(Grow, Fixed(size::HEADER_H)));
 
     /* 3) text input */
@@ -94,13 +94,13 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
     ])
     .spacing(space::SM)
     .padding(Vec4::splat(space::SM))
-    .color(t.surface)
+    .color(t.surface_at(1))
     .size(Size::new(Grow, Fit));
 
     Column::new(el![buttons, slider_row, inputs,])
         .spacing(space::SM)
         .padding(Vec4::splat(space::LG))
-        .color(t.bg)
+        .color(t.surface)
         .size(Size::new(Grow, Grow))
         .into()
 }
