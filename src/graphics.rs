@@ -484,17 +484,16 @@ impl<'a> Engine<'a> {
                 self.renderer.textures.layout(),
                 &self.push_constant_ranges,
             );
-
-            let fmt = target.config.format;
-            for reg in std::mem::take(&mut self.pending_pipelines) {
-                self.pipeline_registry.register(
-                    reg,
-                    &self.gpu,
-                    &fmt,
-                    self.renderer.textures.layout(),
-                    &self.push_constant_ranges,
-                );
-            }
+        }
+        let fmt = target.config.format;
+        for reg in std::mem::take(&mut self.pending_pipelines) {
+            self.pipeline_registry.register(
+                reg,
+                &self.gpu,
+                &fmt,
+                self.renderer.textures.layout(),
+                &self.push_constant_ranges,
+            );
         }
 
         let tid = self.target_alloc.alloc();
@@ -656,7 +655,8 @@ impl<'a> Engine<'a> {
         let fmt = if let Some(t) = self.primary_target() {
             t.config.format
         } else {
-            return; // TODO: we should definitely return a result here
+            self.pending_pipelines.push(reg);
+            return;
         };
 
         self.pipeline_registry.register(
