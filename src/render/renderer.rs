@@ -130,6 +130,8 @@ impl Renderer {
                     continue;
                 }
                 let Some(pipeline) = pipeline_registry.get_mut(batch.id) else {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("batch emitted for an unregistered pipeline: {:?}", batch.id);
                     debug_assert!(false, "batch emitted for an unregistered pipeline");
                     continue;
                 };

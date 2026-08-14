@@ -1,12 +1,14 @@
 use crate::graphics::{Globals, Gpu};
 use core::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+use std::{collections::BTreeMap, sync::Mutex};
 
 pub mod ui;
 pub use ui_macros::Pipeline;
 
-pub type SlotAlloc = extern "C" fn() -> u32;
+pub type SlotAlloc = extern "C" fn(u64) -> u32;
 
 static NEXT_INDEX: AtomicU32 = AtomicU32::new(1);
+static KEYS: Mutex<BTreeMap<u64, u32>> = Mutex::new(BTreeMap::new());
 
 // State encoding:
 // 0           = Uninitialized (neither foreign nor local allocator has been locked in)
@@ -26,8 +28,23 @@ pub fn set_slot_alloc(f: SlotAlloc) -> bool {
         .is_ok()
 }
 
-extern "C" fn local_alloc() -> u32 {
-    NEXT_INDEX.fetch_add(1, Ordering::Relaxed)
+const fn fnv1a(s: &str) -> u64 {
+    let bytes = s.as_bytes();
+    let mut hash = 0xcbf2_9ce4_8422_2325;
+    let mut i = 0;
+    while i < bytes.len() {
+        hash ^= bytes[i] as u64;
+        hash = hash.wrapping_mul(0x1000_0000_01b3);
+        i += 1;
+    }
+    hash
+}
+
+extern "C" fn local_alloc(key: u64) -> u32 {
+    let mut keys = KEYS.lock().unwrap();
+    *keys
+        .entry(key)
+        .or_insert_with(|| NEXT_INDEX.fetch_add(1, Ordering::Relaxed))
 }
 
 pub fn slot_alloc() -> SlotAlloc {
@@ -36,7 +53,8 @@ pub fn slot_alloc() -> SlotAlloc {
 
 #[cold]
 #[inline(never)]
-fn assign(memo: &AtomicU32) -> u32 {
+fn assign<P: PipelineSlot>(memo: &AtomicU32) -> u32 {
+    let key = fnv1a(core::any::type_name::<P>());
     let candidate = loop {
         match ALLOCATOR_STATE.load(Ordering::Acquire) {
             // Uninitialized: attempt to lock in the LOCAL allocator atomically
@@ -45,16 +63,16 @@ fn assign(memo: &AtomicU32) -> u32 {
                     .compare_exchange(0, STATE_LOCAL, Ordering::AcqRel, Ordering::Acquire)
                     .is_ok()
                 {
-                    break local_alloc();
+                    break local_alloc(key);
                 }
                 // If CAS failed, another thread set state to Foreign or Local simultaneously; loop to re-read.
             }
             // State is locked to Local
-            STATE_LOCAL => break local_alloc(),
+            STATE_LOCAL => break local_alloc(key),
             // State is set to Foreign pointer
             foreign_ptr => {
                 let f: SlotAlloc = unsafe { core::mem::transmute(foreign_ptr) };
-                break f();
+                break f(key);
             }
         }
     };
@@ -93,7 +111,7 @@ impl PipelineId {
         if v != 0 {
             return Self(v - 1);
         }
-        Self(assign(memo))
+        Self(assign::<P>(memo))
     }
 
     #[inline(always)]
@@ -106,21 +124,27 @@ impl PipelineId {
 pub struct PipelineRegistration(
     fn(
         &mut PipelineRegistry,
+        PipelineId,
         &Gpu,
         &wgpu::TextureFormat,
         &wgpu::BindGroupLayout,
         &[wgpu::PushConstantRange],
     ),
+    pub PipelineId,
 );
 
 impl PipelineRegistration {
     pub fn of<P: Pipeline>() -> Self {
-        Self(|registry, gpu, surface_format, texture_bgl, ranges| {
-            registry.insert(
-                PipelineId::of::<P>(),
-                Box::new(P::new(gpu, surface_format, texture_bgl, ranges)),
-            );
-        })
+        let id = PipelineId::of::<P>();
+        Self(
+            |registry, id, gpu, surface_format, texture_bgl, ranges| {
+                registry.insert(
+                    id,
+                    Box::new(P::new(gpu, surface_format, texture_bgl, ranges)),
+                );
+            },
+            id,
+        )
     }
 }
 
@@ -199,7 +223,14 @@ impl PipelineRegistry {
         texture_bgl: &wgpu::BindGroupLayout,
         push_constant_ranges: &[wgpu::PushConstantRange],
     ) {
-        (reg.0)(self, gpu, surface_format, texture_bgl, push_constant_ranges);
+        (reg.0)(
+            self,
+            reg.1,
+            gpu,
+            surface_format,
+            texture_bgl,
+            push_constant_ranges,
+        );
     }
 
     fn insert(&mut self, id: PipelineId, pipeline: Box<dyn Pipeline>) {
