@@ -12,7 +12,7 @@ use crate::{
     primitive::{Instance, InstanceStore},
     render::{
         AllocatorKind,
-        pipeline::{PipelineRegistration, PipelineRegistry},
+        pipeline::{Pipeline, PipelineId, PipelineRegistration, PipelineRegistry},
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
     },
@@ -666,6 +666,14 @@ impl<'a> Engine<'a> {
             self.renderer.textures.layout(),
             &self.push_constant_ranges,
         );
+    }
+
+    pub fn unregister(&mut self, id: PipelineId) -> Option<Box<dyn Pipeline>> {
+        self.pipeline_registry.remove(id)
+    }
+
+    pub fn unregister_pipeline<P: Pipeline>(&mut self) -> Option<Box<dyn Pipeline>> {
+        self.unregister(PipelineId::of::<P>())
     }
 
     pub fn load_texture_rgba8(&mut self, width: u32, height: u32, pixels: &[u8]) -> TextureHandle {

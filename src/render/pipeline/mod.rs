@@ -249,6 +249,10 @@ impl PipelineRegistry {
         self.slots[idx] = Some(pipeline);
     }
 
+    pub(crate) fn remove(&mut self, id: PipelineId) -> Option<Box<dyn Pipeline>> {
+        self.slots.get_mut(id.index()).and_then(Option::take)
+    }
+
     pub(crate) fn reload(
         &mut self,
         gpu: &Gpu,
