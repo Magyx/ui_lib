@@ -1,11 +1,72 @@
 use crate::graphics::{Globals, Gpu};
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
 pub mod ui;
-
 pub use ui_macros::Pipeline;
 
+pub type SlotAlloc = extern "C" fn() -> u32;
+
 static NEXT_INDEX: AtomicU32 = AtomicU32::new(1);
+
+// State encoding:
+// 0           = Uninitialized (neither foreign nor local allocator has been locked in)
+// 1           = Locked to LOCAL allocator
+// ptr (> 1)   = Configured to FOREIGN allocator function pointer
+static ALLOCATOR_STATE: AtomicUsize = AtomicUsize::new(0);
+const STATE_LOCAL: usize = 1;
+
+/// Configures a foreign slot allocator.
+/// Returns `true` if registered successfully, or `false` if an allocation has already occurred.
+#[must_use]
+pub fn set_slot_alloc(f: SlotAlloc) -> bool {
+    let f_ptr = f as usize;
+
+    ALLOCATOR_STATE
+        .compare_exchange(0, f_ptr, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+}
+
+extern "C" fn local_alloc() -> u32 {
+    NEXT_INDEX.fetch_add(1, Ordering::Relaxed)
+}
+
+pub fn slot_alloc() -> SlotAlloc {
+    local_alloc
+}
+
+#[cold]
+#[inline(never)]
+fn assign(memo: &AtomicU32) -> u32 {
+    let candidate = loop {
+        match ALLOCATOR_STATE.load(Ordering::Acquire) {
+            // Uninitialized: attempt to lock in the LOCAL allocator atomically
+            0 => {
+                if ALLOCATOR_STATE
+                    .compare_exchange(0, STATE_LOCAL, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+                {
+                    break local_alloc();
+                }
+                // If CAS failed, another thread set state to Foreign or Local simultaneously; loop to re-read.
+            }
+            // State is locked to Local
+            STATE_LOCAL => break local_alloc(),
+            // State is set to Foreign pointer
+            foreign_ptr => {
+                let f: SlotAlloc = unsafe { core::mem::transmute(foreign_ptr) };
+                break f();
+            }
+        }
+    };
+    assert!(candidate != 0, "pipeline index space exhausted");
+
+    // Two threads racing on the same type both take a candidate; the loser's
+    // is simply never claimed, leaving one permanent hole in every registry.
+    match memo.compare_exchange(0, candidate, Ordering::Relaxed, Ordering::Relaxed) {
+        Ok(_) => candidate - 1,
+        Err(actual) => actual - 1,
+    }
+}
 
 /// Do not implement this by hand — use
 /// [`impl_pipeline_slot!`](crate::impl_pipeline_slot). Every implementation
@@ -61,20 +122,6 @@ impl PipelineRegistration {
                 Box::new(P::new(gpu, surface_format, texture_bgl, ranges)),
             );
         })
-    }
-}
-
-#[cold]
-#[inline(never)]
-fn assign(memo: &AtomicU32) -> u32 {
-    let candidate = NEXT_INDEX.fetch_add(1, Ordering::Relaxed);
-    assert!(candidate != 0, "pipeline index space exhausted");
-
-    // Two threads racing on the same type both take a candidate; the loser's
-    // is simply never claimed, leaving one permanent hole in every registry.
-    match memo.compare_exchange(0, candidate, Ordering::Relaxed, Ordering::Relaxed) {
-        Ok(_) => candidate - 1,
-        Err(actual) => actual - 1,
     }
 }
 
