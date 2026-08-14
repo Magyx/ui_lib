@@ -68,9 +68,8 @@ fn assign(memo: &AtomicU32) -> u32 {
     }
 }
 
-/// Do not implement this by hand — use
-/// [`impl_pipeline_slot!`](crate::impl_pipeline_slot). Every implementation
-/// MUST return a distinct `static`; two types sharing one would collide on the
+/// Do not implement this by hand — derive it using [`#[derive(Pipeline)]`](Pipeline).
+/// Every implementation MUST return a distinct `static`; two types sharing one would collide on the
 /// same registry slot and silently draw with the wrong pipeline.
 #[doc(hidden)]
 pub trait PipelineSlot {
