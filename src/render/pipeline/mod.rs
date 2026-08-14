@@ -17,6 +17,7 @@ pub trait PipelineSlot {
     where
         Self: Sized;
 
+    fn as_any(&self) -> &dyn core::any::Any;
     fn as_any_mut(&mut self) -> &mut dyn core::any::Any;
 }
 
@@ -159,6 +160,14 @@ impl PipelineRegistry {
         let idx = id.index();
         if self.slots.len() <= idx {
             self.slots.resize_with(idx + 1, || None);
+        }
+        if let Some(existing) = self.slots[idx].as_deref_mut() {
+            assert_eq!(
+                existing.as_any().type_id(),
+                pipeline.as_any().type_id(),
+                "two pipeline types claimed slot {idx}; if you dlopen plugins, \
+             each copy of ui_lib has its own slot counter — see <docs link>",
+            );
         }
         self.slots[idx] = Some(pipeline);
     }
