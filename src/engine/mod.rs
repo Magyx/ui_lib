@@ -34,7 +34,7 @@ pub struct Engine<'a> {
     target_alloc: TargetIdAlloc,
     primary_target: Option<TargetId>,
     targets: HashMap<TargetId, Target<'a>>,
-    pub(crate) push_constant_ranges: Vec<wgpu::PushConstantRange>,
+    immediate_size: u32,
     pipeline_registry: PipelineRegistry,
     renderer: Renderer,
     text: Box<dyn TextBackend>,
@@ -76,10 +76,10 @@ impl<'a> Engine<'a> {
             GpuSource::Create => {
                 // Env overrides (UI_BACKEND / UI_WGPU_*) are applied here and so
                 // win last over any builder intent.
-                let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+                let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
                     backends: default_backends(),
                     flags: default_instance_flags(),
-                    ..Default::default()
+                    ..wgpu::InstanceDescriptor::new_without_display_handle()
                 });
 
                 let adapter =
@@ -87,6 +87,7 @@ impl<'a> Engine<'a> {
                         power_preference,
                         compatible_surface: None,
                         force_fallback_adapter,
+                        apply_limit_buckets: false,
                     }))
                     .map_err(|_| crate::error::InitError::NoAdapter)?;
 
@@ -105,13 +106,14 @@ impl<'a> Engine<'a> {
                         label: None,
                         required_features: Gpu::required_features(is_metal) | extra_features,
                         required_limits,
+                        experimental_features: wgpu::ExperimentalFeatures::disabled(),
                         memory_hints: wgpu::MemoryHints::MemoryUsage,
                         trace: wgpu::Trace::Off,
                     }))
                     .map_err(crate::error::InitError::RequestDevice)?;
 
                 #[cfg(feature = "tracing")]
-                device.on_uncaptured_error(Box::new(|err| {
+                device.on_uncaptured_error(Arc::new(|err| {
                     tracing::warn!("wgpu uncaptured error: {err}");
                 }));
 
@@ -139,17 +141,14 @@ impl<'a> Engine<'a> {
                 Gpu {
                     instance: None,
                     adapter: None,
-                    adapter_info,
+                    adapter_info: *adapter_info,
                     device,
                     queue,
                 }
             }
         };
 
-        let push_constant_ranges = vec![wgpu::PushConstantRange {
-            stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            range: 0..std::mem::size_of::<Globals>() as u32,
-        }];
+        let immediate_size = std::mem::size_of::<Globals>() as u32;
 
         let pipeline_registry = PipelineRegistry::new();
         let renderer = Renderer::with_capacity(&gpu.device, max_instances);
@@ -178,7 +177,7 @@ impl<'a> Engine<'a> {
             target_alloc: TargetIdAlloc::default(),
             primary_target: None,
             targets: HashMap::with_capacity(1),
-            push_constant_ranges,
+            immediate_size,
             pipeline_registry,
             renderer,
             text,
@@ -227,7 +226,7 @@ impl<'a> Engine<'a> {
             &self.gpu,
             &fmt,
             self.renderer.textures.layout(),
-            &self.push_constant_ranges,
+            self.immediate_size,
         );
     }
 
@@ -276,7 +275,7 @@ impl<'a> Engine<'a> {
             &self.gpu,
             &fmt,
             self.renderer.textures.layout(),
-            &self.push_constant_ranges,
+            self.immediate_size,
         );
     }
 

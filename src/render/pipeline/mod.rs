@@ -41,7 +41,7 @@ pub trait Pipeline: PipelineSlot + 'static {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
     ) -> Self
     where
         Self: Sized;
@@ -51,7 +51,7 @@ pub trait Pipeline: PipelineSlot + 'static {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
     );
 
     fn bind(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>);
@@ -73,7 +73,7 @@ macro_rules! impl_stub_pipeline {
                 _: &$crate::gpu::Gpu,
                 _: &wgpu::TextureFormat,
                 _: &wgpu::BindGroupLayout,
-                _: &[wgpu::PushConstantRange],
+                _: u32,
             ) -> Self {
                 unreachable!("test stub is never built")
             }
@@ -82,7 +82,7 @@ macro_rules! impl_stub_pipeline {
                 _: &$crate::gpu::Gpu,
                 _: &wgpu::TextureFormat,
                 _: &wgpu::BindGroupLayout,
-                _: &[wgpu::PushConstantRange],
+                _: u32,
             ) {
             }
             fn bind(

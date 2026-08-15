@@ -128,6 +128,7 @@ impl<'a> Engine<'a> {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
+            color_space: wgpu::SurfaceColorSpace::Auto,
             width: physical_size.width,
             height: physical_size.height,
             present_mode,
@@ -152,6 +153,7 @@ impl<'a> Engine<'a> {
                 mouse_buttons: 0,
                 frame: 0,
                 scale: sf as f32,
+                _pad: 0.0,
             },
             ctx: Context::new(),
 
@@ -166,7 +168,7 @@ impl<'a> Engine<'a> {
                 &self.gpu,
                 &target.config.format,
                 self.renderer.textures.layout(),
-                &self.push_constant_ranges,
+                self.immediate_size,
             );
         }
         let fmt = target.config.format;
@@ -176,7 +178,7 @@ impl<'a> Engine<'a> {
                 &self.gpu,
                 &fmt,
                 self.renderer.textures.layout(),
-                &self.push_constant_ranges,
+                self.immediate_size,
             );
         }
 

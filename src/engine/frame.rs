@@ -4,6 +4,7 @@ use crate::{
     event::{Event, KeyState, ScrollDelta, ToEvent},
     model::{Position, Size},
     primitive::Instance,
+    render::renderer::SurfaceLost,
     task::{Task, UploadCtx},
     tree,
     widget::Element,
@@ -202,7 +203,7 @@ impl<'a> Engine<'a> {
                 &mut self.renderer.textures,
                 &mut self.pipeline_registry,
                 target.config.format,
-                &self.push_constant_ranges,
+                self.immediate_size,
                 &self.layout_engine,
                 &mut target.ctx.view_state,
                 &self.theme,
@@ -269,15 +270,10 @@ impl<'a> Engine<'a> {
             &self.instance_buf,
         ) {
             Ok(()) => Ok(RenderOutcome::Rendered),
-            Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+            Err(SurfaceLost) => {
                 target.surface.configure(&self.gpu.device, &target.config);
                 Ok(RenderOutcome::NeedsRerender)
             }
-            Err(wgpu::SurfaceError::Timeout) => Ok(RenderOutcome::Skipped),
-            Err(wgpu::SurfaceError::OutOfMemory) => {
-                Err(crate::error::EngineError::OutOfMemory.into())
-            }
-            Err(_) => Err(crate::error::EngineError::OutOfMemory.into()),
         }
     }
     pub fn handle_platform_event<S, P, M: 'static, E: ToEvent<M, E> + std::fmt::Debug>(

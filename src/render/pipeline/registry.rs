@@ -3,24 +3,17 @@ use crate::gpu::Gpu;
 
 #[derive(Copy, Clone)]
 pub struct PipelineRegistration(
-    fn(
-        &mut PipelineRegistry,
-        PipelineId,
-        &Gpu,
-        &wgpu::TextureFormat,
-        &wgpu::BindGroupLayout,
-        &[wgpu::PushConstantRange],
-    ),
+    fn(&mut PipelineRegistry, PipelineId, &Gpu, &wgpu::TextureFormat, &wgpu::BindGroupLayout, u32),
     pub PipelineId,
 );
 impl PipelineRegistration {
     pub fn of<P: Pipeline>() -> Self {
         let id = PipelineId::of::<P>();
         Self(
-            |registry, id, gpu, surface_format, texture_bgl, ranges| {
+            |registry, id, gpu, surface_format, texture_bgl, immediate_size| {
                 registry.insert(
                     id,
-                    Box::new(P::new(gpu, surface_format, texture_bgl, ranges)),
+                    Box::new(P::new(gpu, surface_format, texture_bgl, immediate_size)),
                 );
             },
             id,
@@ -41,7 +34,7 @@ impl PipelineRegistry {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
     ) {
         self.insert(
             PipelineId::of::<ui::UiPipeline>(),
@@ -49,7 +42,7 @@ impl PipelineRegistry {
                 gpu,
                 surface_format,
                 texture_bgl,
-                push_constant_ranges,
+                immediate_size,
             )),
         );
     }
@@ -64,7 +57,7 @@ impl PipelineRegistry {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
     ) {
         (reg.0)(
             self,
@@ -72,7 +65,7 @@ impl PipelineRegistry {
             gpu,
             surface_format,
             texture_bgl,
-            push_constant_ranges,
+            immediate_size,
         );
     }
 
@@ -101,10 +94,10 @@ impl PipelineRegistry {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
     ) {
         for pipeline in self.slots.iter_mut().flatten() {
-            pipeline.reload(gpu, surface_format, texture_bgl, push_constant_ranges);
+            pipeline.reload(gpu, surface_format, texture_bgl, immediate_size);
         }
     }
 
@@ -123,7 +116,7 @@ impl PipelineRegistry {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        push_constant_ranges: u32,
     ) -> &mut P {
         let idx = PipelineId::of::<P>().index();
         if self.slots.len() <= idx {

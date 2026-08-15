@@ -11,13 +11,13 @@ impl Pipeline for PlanetPipeline {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
     ) -> Self {
         let mut p = Self {
             render_pipeline: None,
             geometry: QuadGeometry::new(&gpu.device),
         };
-        p.reload(gpu, surface_format, texture_bgl, push_constant_ranges);
+        p.reload(gpu, surface_format, texture_bgl, immediate_size);
         p
     }
 
@@ -26,7 +26,7 @@ impl Pipeline for PlanetPipeline {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         _texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
     ) {
         let shader_module = gpu
             .device
@@ -40,7 +40,7 @@ impl Pipeline for PlanetPipeline {
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Planet Layout"),
                 bind_group_layouts: &[],
-                push_constant_ranges,
+                immediate_size,
             });
 
         self.render_pipeline = Some(gpu.device.create_render_pipeline(
@@ -50,7 +50,7 @@ impl Pipeline for PlanetPipeline {
                 vertex: wgpu::VertexState {
                     module: &shader_module,
                     entry_point: Some("vs_main"),
-                    buffers: &[Vertex::layout(), Primitive::layout()],
+                    buffers: &[Some(Vertex::layout()), Some(Primitive::layout())],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -89,7 +89,7 @@ impl Pipeline for PlanetPipeline {
                     mask: !0,
                     alpha_to_coverage_enabled: false,
                 },
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             },
         ));
@@ -97,11 +97,7 @@ impl Pipeline for PlanetPipeline {
 
     fn bind(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>) {
         pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
-        pass.set_push_constants(
-            wgpu::ShaderStages::VERTEX_FRAGMENT,
-            0,
-            bytemuck::bytes_of(ctx.globals),
-        );
+        pass.set_immediates(0, bytemuck::bytes_of(ctx.globals));
         self.geometry.bind(pass);
     }
 

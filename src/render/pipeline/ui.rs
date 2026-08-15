@@ -8,6 +8,8 @@ use crate::{
 };
 use wgpu::RenderPipeline;
 
+const UI_SHADER: &str = include_str!("../../../shaders/ui_shader.wgsl");
+
 /// The built-in pipeline every stock widget draws through.
 #[derive(Pipeline)]
 pub struct UiPipeline {
@@ -21,14 +23,14 @@ impl Pipeline for UiPipeline {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
     ) -> Self {
         let mut pipeline = Self {
             render_pipeline: None,
             layout: None,
             geometry: QuadGeometry::new(&gpu.device),
         };
-        pipeline.reload(gpu, surface_format, texture_bgl, push_constant_ranges);
+        pipeline.reload(gpu, surface_format, texture_bgl, immediate_size);
 
         pipeline
     }
@@ -38,23 +40,22 @@ impl Pipeline for UiPipeline {
         gpu: &Gpu,
         surface_format: &wgpu::TextureFormat,
         texture_bgl: &wgpu::BindGroupLayout,
-        push_constant_ranges: &[wgpu::PushConstantRange],
+        immediate_size: u32,
     ) {
+        let source = format!("enable wgpu_binding_array;\n{UI_SHADER}");
         let shader_module = gpu
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("UI Shader"),
-                source: wgpu::ShaderSource::Wgsl(
-                    include_str!("../../../shaders/ui_shader.wgsl").into(),
-                ),
+                source: wgpu::ShaderSource::Wgsl(source.into()),
             });
 
         let layout = gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("UI Render Pipeline Layout"),
-                push_constant_ranges,
-                bind_group_layouts: &[texture_bgl],
+                immediate_size,
+                bind_group_layouts: &[Some(texture_bgl)],
             });
         self.layout = Some(layout);
 
@@ -65,7 +66,7 @@ impl Pipeline for UiPipeline {
                 vertex: wgpu::VertexState {
                     module: &shader_module,
                     entry_point: Some("vs_main"),
-                    buffers: &[Vertex::layout(), Primitive::layout()],
+                    buffers: &[Some(Vertex::layout()), Some(Primitive::layout())],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -92,7 +93,7 @@ impl Pipeline for UiPipeline {
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             },
         ));
@@ -101,11 +102,7 @@ impl Pipeline for UiPipeline {
     fn bind(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>) {
         pass.set_bind_group(0, ctx.textures, &[]);
         pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
-        pass.set_push_constants(
-            wgpu::ShaderStages::VERTEX_FRAGMENT,
-            0,
-            bytemuck::bytes_of(ctx.globals),
-        );
+        pass.set_immediates(0, bytemuck::bytes_of(ctx.globals));
         self.geometry.bind(pass);
     }
 

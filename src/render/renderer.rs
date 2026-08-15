@@ -9,6 +9,8 @@ use crate::{
     },
 };
 
+pub struct SurfaceLost;
+
 pub(crate) struct Renderer {
     instance_buffer: wgpu::Buffer,
     instance_capacity: u64,
@@ -60,16 +62,19 @@ impl Renderer {
         pipeline_registry: &mut PipelineRegistry,
         globals: &Globals,
         store: &InstanceStore,
-    ) -> Result<(), wgpu::SurfaceError> {
+    ) -> Result<(), SurfaceLost> {
         let output = {
             crate::scope!("wgpu:get_current_texture");
             match surface.get_current_texture() {
-                Ok(o) => o,
-                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    return Err(wgpu::SurfaceError::Outdated);
-                }
-                Err(wgpu::SurfaceError::Timeout) => return Ok(()),
-                Err(e) => return Err(e),
+                wgpu::CurrentSurfaceTexture::Success(o) => o,
+                // Reconfigure and retry next frame.
+                wgpu::CurrentSurfaceTexture::Suboptimal(_)
+                | wgpu::CurrentSurfaceTexture::Outdated
+                | wgpu::CurrentSurfaceTexture::Lost => return Err(SurfaceLost),
+                // Skip this frame.
+                wgpu::CurrentSurfaceTexture::Timeout
+                | wgpu::CurrentSurfaceTexture::Occluded
+                | wgpu::CurrentSurfaceTexture::Validation => return Ok(()),
             }
         };
 
@@ -94,6 +99,7 @@ impl Renderer {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
@@ -101,8 +107,9 @@ impl Renderer {
                     },
                 })],
                 depth_stencil_attachment: None,
-                occlusion_query_set: None,
                 timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             let ctx = DrawCtx {
@@ -150,7 +157,7 @@ impl Renderer {
         }
 
         gpu.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
+        gpu.queue.present(output);
 
         crate::plot!("ui.batches", store.batches().len() as f64);
 

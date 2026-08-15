@@ -45,6 +45,7 @@ fn globals() -> Globals {
         delta_time: 0.0,
         frame: 0,
         scale: 1.0,
+        _pad: 0.0,
     }
 }
 
@@ -60,12 +61,9 @@ fn render_texel(
     store: &InstanceStore,
 ) -> [u8; 4] {
     let textures = TextureRegistry::new(&gpu.device);
-    let ranges = [wgpu::PushConstantRange {
-        stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-        range: 0..std::mem::size_of::<Globals>() as u32,
-    }];
 
-    let mut pipeline = UiPipeline::new(gpu, &format, textures.layout(), &ranges);
+    let immediate_size = std::mem::size_of::<Globals>() as u32;
+    let mut pipeline = UiPipeline::new(gpu, &format, textures.layout(), immediate_size);
 
     let target = gpu.device.create_texture(&wgpu::TextureDescriptor {
         label: Some("readback target"),
@@ -108,6 +106,7 @@ fn render_texel(
             label: Some("colour test pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(clear),
@@ -117,6 +116,7 @@ fn render_texel(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         let ctx = DrawCtx {
@@ -157,9 +157,14 @@ fn render_texel(
 
     let slice = readback.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| {});
-    gpu.device.poll(wgpu::PollType::Wait).unwrap();
+    gpu.device
+        .poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: Some(std::time::Duration::from_secs(60)),
+        })
+        .unwrap();
 
-    let data = slice.get_mapped_range();
+    let data = slice.get_mapped_range().unwrap();
     let texel = [data[0], data[1], data[2], data[3]];
     drop(data);
     readback.unmap();

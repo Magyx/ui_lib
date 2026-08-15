@@ -79,7 +79,7 @@ pub(crate) enum GpuSource {
     Injected {
         device: wgpu::Device,
         queue: wgpu::Queue,
-        adapter_info: wgpu::AdapterInfo,
+        adapter_info: Box<wgpu::AdapterInfo>,
     },
 }
 impl GpuSource {}
@@ -220,7 +220,7 @@ impl<M: 'static> EngineBuilder<M> {
         self.gpu_source = GpuSource::Injected {
             device,
             queue,
-            adapter_info,
+            adapter_info: Box::new(adapter_info),
         };
         self
     }

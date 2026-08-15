@@ -23,8 +23,9 @@ struct Globals {
     delta_time: f32,
     frame: u32,
     scale: f32,
+    _pad: f32,
 };
-var<push_constant> globals : Globals;
+var<immediate> globals: Globals;
 
 /* -------------------- math & utils -------------------- */
 fn radians(a: f32) -> f32 { return a * 3.14159265359 / 180.0; }
@@ -61,18 +62,15 @@ fn linear_to_srgb(c_in: vec3<f32>) -> vec3<f32> {
 /* -------------------- ray & camera -------------------- */
 struct Ray {
     origin: vec3<f32>,
-    dir: vec3<f32>
-};
+    dir: vec3<f32>};
 struct Sphere {
     origin: vec3<f32>,
-    radius: f32
-};
+    radius: f32};
 struct Hit {
     t: f32,
     ok: bool,
     p: vec3<f32>,
-    n: vec3<f32>
-};
+    n: vec3<f32>};
 const NO_HIT: Hit = Hit(1e9, false, vec3<f32>(0.0, 0.0, 0.0), vec3<f32>(0.0, 0.0, 0.0));
 
 fn primary_ray(cam_pt: vec3<f32>, eye: vec3<f32>, look_at: vec3<f32>) -> Ray {
@@ -85,8 +83,7 @@ fn primary_ray(cam_pt: vec3<f32>, eye: vec3<f32>, look_at: vec3<f32>) -> Ray {
 
 struct Camera {
     eye: vec3<f32>,
-    look_at: vec3<f32>
-};
+    look_at: vec3<f32>};
 fn setup_camera() -> Camera {
     return Camera(vec3<f32>(0.0, 0.0, -2.5), vec3<f32>(0.0, 0.0, 2.0));
 }

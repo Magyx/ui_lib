@@ -167,6 +167,7 @@ mod harness {
                     delta_time: 0.0,
                     frame: 0,
                     scale: 1.0,
+                    _pad: 0.0,
                 },
                 ctx: Context::new(),
                 text: TextCosmic::default(),

@@ -41,9 +41,10 @@ struct Globals {
     delta_time: f32,
     frame: u32,
     scale: f32,
+    _pad: f32,
 };
 
-var<push_constant> globals: Globals;
+var<immediate> globals: Globals;
 
 @group(0) @binding(0) var tex_arr: binding_array<texture_2d<f32>>;
 @group(0) @binding(1) var samp: sampler;

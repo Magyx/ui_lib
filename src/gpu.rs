@@ -10,6 +10,7 @@ pub struct Globals {
     pub delta_time: f32,       // seconds since last frame
     pub frame: u32,            // frame counter
     pub scale: f32,            // device-pixel ratio
+    pub _pad: f32,
 }
 
 pub struct Gpu {
@@ -22,7 +23,7 @@ pub struct Gpu {
 
 impl Gpu {
     pub fn required_features(is_metal: bool) -> wgpu::Features {
-        let mut f = wgpu::Features::PUSH_CONSTANTS
+        let mut f = wgpu::Features::IMMEDIATES
             | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgpu::Features::TEXTURE_BINDING_ARRAY
             | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
@@ -34,7 +35,7 @@ impl Gpu {
 
     pub fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_push_constant_size: 128,
+            max_immediate_size: 64,
             max_binding_array_elements_per_shader_stage: DEFAULT_MAX_TEXTURES,
             ..Default::default()
         }
@@ -50,16 +51,17 @@ impl Gpu {
             return None;
         }
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends,
             flags: crate::gpu::default_instance_flags(),
-            ..Default::default()
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
         });
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
             compatible_surface: None,
             force_fallback_adapter: false,
+            apply_limit_buckets: false,
         }))
         .ok()?;
 
@@ -79,6 +81,7 @@ impl Gpu {
             label: Some("ui headless"),
             required_features: features,
             required_limits: Self::required_limits(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
         }))

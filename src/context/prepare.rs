@@ -18,7 +18,7 @@ pub struct PrepareCtx<'a> {
     pub texture: &'a mut TextureRegistry,
     pub(crate) pipelines: &'a mut PipelineRegistry,
     pub(crate) surface_format: wgpu::TextureFormat,
-    pub(crate) push_constant_ranges: &'a [wgpu::PushConstantRange],
+    pub(crate) immediate_size: u32,
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
     pub(crate) offset: Position<i32>,
@@ -36,7 +36,7 @@ impl<'a> PrepareCtx<'a> {
         texture: &'a mut TextureRegistry,
         pipelines: &'a mut PipelineRegistry,
         surface_format: wgpu::TextureFormat,
-        push_constant_ranges: &'a [wgpu::PushConstantRange],
+        immediate_size: u32,
         layout: &'a LayoutEngine,
         view_state: &'a mut ViewState,
         theme: &'a Theme,
@@ -48,7 +48,7 @@ impl<'a> PrepareCtx<'a> {
             texture,
             pipelines,
             surface_format,
-            push_constant_ranges,
+            immediate_size,
             layout,
             current_node: 0,
             offset: Position::splat(0),
@@ -63,7 +63,7 @@ impl<'a> PrepareCtx<'a> {
             self.gpu,
             &self.surface_format,
             self.texture.layout(),
-            self.push_constant_ranges,
+            self.immediate_size,
         )
     }
 
