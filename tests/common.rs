@@ -9,16 +9,15 @@ mod harness {
     use std::{any::Any, cell::Cell, rc::Rc, sync::Arc};
 
     use ui::{
-        context::{BasicMessageSink, Context, EventCtx, LayoutCtx, MessageSink, PaintCtx},
+        context::{BasicMessageSink, Context, MessageSink},
         event::UiEventRef,
         graphics::Globals,
         layout::LayoutEngine,
         prelude::*,
-        primitive::InstanceStore,
         render::text_cosmic::TextCosmic,
         theme::Theme,
         tree::{handle_tree, paint_tree, run_layout},
-        widget::Widget,
+        widget::prelude::*,
     };
 
     pub trait TestEvent: Any + fmt::Debug {

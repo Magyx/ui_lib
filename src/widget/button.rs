@@ -1,9 +1,8 @@
 use crate::{
     event::{KeyState, LogicalKey, MouseButton, UiEventRef},
     theme::Style,
+    widget::prelude::*,
 };
-
-use super::*;
 
 struct ButtonState {
     hovered: bool,

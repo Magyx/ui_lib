@@ -2,10 +2,9 @@ use std::borrow::Cow;
 
 use crate::{
     text::{Family, FontStyle, RunStyle, TextBackend, TextBuffer, TextMetrics, Weight, Wrap},
-    theme::{TextStyle, Theme, Typography},
+    theme::{TextStyle, Typography},
+    widget::prelude::*,
 };
-
-use super::*;
 
 pub(super) struct TextViewState {
     pub(super) buffer: Box<dyn TextBuffer>,

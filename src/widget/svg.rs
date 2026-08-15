@@ -1,12 +1,14 @@
-use super::*;
-use crate::render::texture::TextureHandle;
-
-use resvg::{tiny_skia, usvg};
-
 use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+use crate::{
+    render::texture::TextureHandle,
+    widget::{ContentFit, prelude::*},
+};
+
+use resvg::{tiny_skia, usvg};
 
 #[derive(Default)]
 struct SvgState {

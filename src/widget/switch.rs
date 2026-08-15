@@ -1,8 +1,10 @@
-use crate::event::{KeyState, LogicalKey, MouseButton, UiEventRef};
-
-use super::*;
-
 use std::borrow::Cow;
+
+use super::Text;
+use crate::{
+    event::{KeyState, LogicalKey, MouseButton, UiEventRef},
+    widget::prelude::*,
+};
 
 const TRACK_W: i32 = 40;
 const TRACK_H: i32 = 22;

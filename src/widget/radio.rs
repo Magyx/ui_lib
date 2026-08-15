@@ -1,8 +1,10 @@
-use crate::event::{KeyState, LogicalKey, MouseButton, UiEventRef};
-
-use super::*;
-
 use std::borrow::Cow;
+
+use super::Text;
+use crate::{
+    event::{KeyState, LogicalKey, MouseButton, UiEventRef},
+    widget::prelude::*,
+};
 
 const SIZE: i32 = 18;
 const DOT: i32 = 8;

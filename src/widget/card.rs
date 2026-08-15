@@ -1,4 +1,4 @@
-use super::*;
+use crate::widget::prelude::*;
 
 #[derive(Widget)]
 pub struct Card {

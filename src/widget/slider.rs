@@ -1,6 +1,4 @@
-use crate::event::MouseButton;
-
-use super::*;
+use crate::{event::MouseButton, widget::prelude::*};
 
 struct SliderViewState {
     grab: Option<f32>,

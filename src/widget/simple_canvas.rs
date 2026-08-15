@@ -1,7 +1,9 @@
 use std::marker::PhantomData;
 
-use super::*;
-use crate::primitive::{Instanced, Primitive};
+use crate::{
+    primitive::{Instanced, Primitive},
+    widget::prelude::*,
+};
 
 #[derive(Widget)]
 pub struct SimpleCanvas<P: Instanced<Primitive>> {
@@ -9,7 +11,7 @@ pub struct SimpleCanvas<P: Instanced<Primitive>> {
     with_handle: Option<fn(&mut EventCtx)>,
     min: Size<i32>,
     max: Size<i32>,
-    _pipeline: PhantomData<fn() -> P>,
+    _pipeline: PhantomData<P>,
 }
 impl<P: Instanced<Primitive>> SimpleCanvas<P> {
     /// Draw a full-bounds quad through `P`.

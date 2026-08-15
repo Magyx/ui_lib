@@ -1,6 +1,7 @@
 use std::num::NonZero;
 
-use super::*;
+use super::Row;
+use crate::widget::prelude::*;
 
 #[derive(Widget)]
 pub struct WrappingRows {

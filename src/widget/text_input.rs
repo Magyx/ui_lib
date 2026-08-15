@@ -1,12 +1,11 @@
-use std::any::TypeId;
-use std::borrow::Cow;
-use std::marker::PhantomData;
+use std::{any::TypeId, borrow::Cow, marker::PhantomData};
 
-use super::*;
+use super::{Text, text::TextViewState};
 use crate::{
     event::{KeyState, LogicalKey, MouseButton, UiEventRef},
     text::{Family, FontStyle, Motion, TextCursor, Weight, Wrap},
     tree::mix64,
+    widget::prelude::*,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -360,7 +359,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         }
 
         let new = view_state
-            .get_mut::<text::TextViewState>(&mix64(id, 1))
+            .get_mut::<TextViewState>(&mix64(id, 1))
             .and_then(|tv| tv.buffer.cursor_motion(cursor, motion));
 
         if let Some(nc) = new
@@ -450,7 +449,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         let cy = ctx.ui.mouse_pos.y - t as f32;
         ctx.ui
             .view_state
-            .get::<text::TextViewState>(&mix64(id, 1))
+            .get::<TextViewState>(&mix64(id, 1))
             .and_then(|tv| tv.buffer.hit(cx, cy))
     }
 }
@@ -551,7 +550,7 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
         }
         let rect = if focused {
             ctx.view_state
-                .get::<text::TextViewState>(&mix64(id, 1))
+                .get::<TextViewState>(&mix64(id, 1))
                 .and_then(|tv| tv.buffer.cursor_rect(cursor))
                 .map(|r| (l as f32 + r.x, t as f32 + r.y, r.height))
         } else {
@@ -605,7 +604,7 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
             let sel_color = Color::rgba(p.r(), p.g(), p.b(), SELECTION_ALPHA);
             if let Some(buf) = ctx
                 .view_state
-                .get::<text::TextViewState>(&mix64(id, 1))
+                .get::<TextViewState>(&mix64(id, 1))
                 .map(|tv| &tv.buffer)
             {
                 for r in buf.selection_rects(start, end) {

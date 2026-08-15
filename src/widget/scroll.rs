@@ -1,7 +1,7 @@
-use super::*;
 use crate::{
     event::{MouseButton, ScrollUnits, UiEventRef},
     primitive::Instance,
+    widget::prelude::*,
 };
 
 #[derive(Debug)]

@@ -1,11 +1,11 @@
 use std::borrow::Cow;
 
+use super::Text;
 use crate::{
     event::{KeyState, LogicalKey, MouseButton, UiEventRef},
     text::{FontStyle, RunStyle, TextBuffer, TextMetrics, Weight, Wrap},
+    widget::prelude::*,
 };
-
-use super::*;
 
 /// Font size used to shape glyph-backed marks.
 const MARK_FONT: f32 = 14.0;
