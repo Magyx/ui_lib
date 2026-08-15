@@ -92,19 +92,15 @@ impl<'a> Engine<'a> {
                     .map_err(|_| crate::error::InitError::NoAdapter)?;
 
                 let adapter_info = adapter.get_info();
-                let is_metal = adapter_info.backend == wgpu::Backend::Metal;
-
-                // Validates the profile; `Compat` is not yet implementable.
-                profile
-                    .binding_array_features(is_metal)
+                let features = profile
+                    .binding_array_features()
                     .map_err(|_| crate::error::InitError::UnsupportedFeatureProfile)?;
-
-                let required_limits = limits_override(Gpu::required_limits());
+                let required_limits = limits_override(Gpu::required_limits(&adapter));
 
                 let (device, queue) =
                     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                         label: None,
-                        required_features: Gpu::required_features(is_metal) | extra_features,
+                        required_features: features | extra_features,
                         required_limits,
                         experimental_features: wgpu::ExperimentalFeatures::disabled(),
                         memory_hints: wgpu::MemoryHints::MemoryUsage,
@@ -133,9 +129,8 @@ impl<'a> Engine<'a> {
                 // The embedder already created the device with whatever features
                 // it needs; profile/limits/power-preference are not ours to apply.
                 // We still validate the profile so `Compat` fails consistently.
-                let is_metal = adapter_info.backend == wgpu::Backend::Metal;
                 profile
-                    .binding_array_features(is_metal)
+                    .binding_array_features()
                     .map_err(|_| crate::error::InitError::UnsupportedFeatureProfile)?;
 
                 Gpu {

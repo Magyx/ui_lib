@@ -5,6 +5,7 @@ use super::Engine;
 use crate::{
     context::MessageSink,
     defaults::DEFAULT_MAX_INSTANCES,
+    gpu::Gpu,
     render::{AllocatorKind, pipeline::PipelineRegistration},
     text::TextBackend,
     theme::Theme,
@@ -12,9 +13,7 @@ use crate::{
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FeatureProfile {
-    /// Current set: texture binding array + non-uniform indexing + partially
-    /// bound binding array (dropped on Metal) + push constants. Desktop
-    /// Vulkan / Metal / DX12.
+    /// bound binding array + immediates. Desktop Vulkan / Metal / DX12.
     #[default]
     Bindless,
     /// Downlevel, binding-array-free path. Not yet implemented.
@@ -23,21 +22,13 @@ pub enum FeatureProfile {
 
 impl FeatureProfile {
     /// The binding-array features this profile adds on top of the always-on
-    /// base (`PUSH_CONSTANTS | ADDRESS_MODE_CLAMP_TO_BORDER`). `is_metal`
-    /// suppresses `PARTIALLY_BOUND_BINDING_ARRAY`, which Metal does not expose.
+    /// base (`IMMEDIATES | ADDRESS_MODE_CLAMP_TO_BORDER`).
     ///
     /// Returns `Err` for profiles that are not yet implementable so `build()`
     /// can convert it into a typed error.
-    pub(crate) fn binding_array_features(self, is_metal: bool) -> Result<wgpu::Features, ()> {
+    pub(crate) fn binding_array_features(self) -> Result<wgpu::Features, ()> {
         match self {
-            FeatureProfile::Bindless => {
-                let mut f = wgpu::Features::TEXTURE_BINDING_ARRAY
-                    | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
-                if !is_metal {
-                    f |= wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY;
-                }
-                Ok(f)
-            }
+            FeatureProfile::Bindless => Ok(Gpu::required_features()),
             FeatureProfile::Compat => Err(()),
         }
     }

@@ -22,21 +22,19 @@ pub struct Gpu {
 }
 
 impl Gpu {
-    pub fn required_features(is_metal: bool) -> wgpu::Features {
-        let mut f = wgpu::Features::IMMEDIATES
+    pub fn required_features() -> wgpu::Features {
+        wgpu::Features::IMMEDIATES
             | wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgpu::Features::TEXTURE_BINDING_ARRAY
-            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
-        if !is_metal {
-            f |= wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY;
-        }
-        f
+            | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+            | wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY
     }
 
-    pub fn required_limits() -> wgpu::Limits {
+    pub fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
         wgpu::Limits {
             max_immediate_size: 64,
-            max_binding_array_elements_per_shader_stage: DEFAULT_MAX_TEXTURES,
+            max_binding_array_elements_per_shader_stage: DEFAULT_MAX_TEXTURES
+                .min(adapter.limits().max_binding_array_elements_per_shader_stage),
             ..Default::default()
         }
     }
@@ -66,7 +64,7 @@ impl Gpu {
         .ok()?;
 
         let adapter_info = adapter.get_info();
-        let features = Self::required_features(adapter_info.backend == wgpu::Backend::Metal);
+        let features = Self::required_features();
 
         if !adapter.features().contains(features) {
             eprintln!(
@@ -80,7 +78,7 @@ impl Gpu {
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("ui headless"),
             required_features: features,
-            required_limits: Self::required_limits(),
+            required_limits: Self::required_limits(&adapter),
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
