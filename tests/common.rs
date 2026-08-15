@@ -11,7 +11,7 @@ mod harness {
     use ui::{
         context::{BasicMessageSink, Context, MessageSink},
         event::UiEventRef,
-        graphics::Globals,
+        gpu::Globals,
         layout::LayoutEngine,
         prelude::*,
         render::text_cosmic::TextCosmic,

@@ -1,4 +1,4 @@
-use ui::graphics::Gpu;
+use ui::gpu::Gpu;
 use ui::primitive::{InstanceData, Primitive};
 use ui::render::pipeline::{DrawCtx, Pipeline};
 use ui::render::quad::{QuadGeometry, Vertex};

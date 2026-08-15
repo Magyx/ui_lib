@@ -1,10 +1,8 @@
 use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer};
 use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
-    graphics::{Engine, TargetId},
-    model::Size,
+    prelude::*,
     sctk::{LayerOptions, SctkApp, SctkEvent, SctkLoop},
-    task::Task,
 };
 
 #[path = "../common/mod.rs"]
@@ -48,6 +46,5 @@ fn main() -> ui::Result<()> {
         output: Some(ui::sctk::OutputSet::All),
     };
 
-    SctkApp::layer(State::default(), view, update, opts)
-        .run()
+    SctkApp::layer(State::default(), view, update, opts).run()
 }

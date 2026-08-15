@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use cosmic_text::CacheKey;
 
 use crate::{
-    graphics::Gpu,
+    gpu::Gpu,
     render::{
         alloc::AllocatorKind,
         texture::{Atlas, TextureHandle, TextureRegistry},

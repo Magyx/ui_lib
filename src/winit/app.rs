@@ -6,8 +6,8 @@ use std::{
 use super::*;
 
 use crate::{
+    engine::{Engine, TargetId},
     event::Event,
-    graphics::{Engine, TargetId},
     render::pipeline::{Pipeline, PipelineRegistration},
     task::Task,
     widget::Element,

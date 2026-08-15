@@ -35,13 +35,12 @@ use smithay_client_toolkit::{
 };
 
 use ui::{
-    graphics::{Engine, RenderOutcome, TargetId},
-    model::Size,
+    engine::frame::RenderOutcome,
+    prelude::*,
     sctk::{
         Anchor, DefaultHandler, KeyboardInteractivity, Layer, LayerOptions, OutputSelector,
         OutputSet, RawWaylandHandles, SctkEvent, erased, state::SctkState,
     },
-    widget::{Element, Rectangle},
 };
 
 /// Minimal message + state. We never produce a message; the view is a single

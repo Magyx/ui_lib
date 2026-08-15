@@ -2,7 +2,7 @@ use super::{Context, Id, MessageSink};
 use crate::{
     event::{KeyState, MouseButton, UiEventRef},
     focus::{Dir, ScopeId},
-    graphics::Globals,
+    gpu::Globals,
     layout::LayoutEngine,
     model::{Position, Rect},
     text::TextBackend,

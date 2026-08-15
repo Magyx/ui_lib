@@ -1,4 +1,4 @@
-use crate::graphics::{Globals, Gpu};
+use crate::gpu::{Globals, Gpu};
 
 pub mod ui;
 pub use ui_macros::Pipeline;
@@ -50,7 +50,7 @@ macro_rules! impl_stub_pipeline {
     ($ty:ident) => {
         impl $crate::render::pipeline::Pipeline for $ty {
             fn new(
-                _: &$crate::graphics::Gpu,
+                _: &$crate::gpu::Gpu,
                 _: &wgpu::TextureFormat,
                 _: &wgpu::BindGroupLayout,
                 _: &[wgpu::PushConstantRange],
@@ -59,7 +59,7 @@ macro_rules! impl_stub_pipeline {
             }
             fn reload(
                 &mut self,
-                _: &$crate::graphics::Gpu,
+                _: &$crate::gpu::Gpu,
                 _: &wgpu::TextureFormat,
                 _: &wgpu::BindGroupLayout,
                 _: &[wgpu::PushConstantRange],

@@ -1,5 +1,5 @@
 use super::{Pipeline, PipelineId, ui};
-use crate::graphics::Gpu;
+use crate::gpu::Gpu;
 
 #[derive(Copy, Clone)]
 pub struct PipelineRegistration(

@@ -1,5 +1,5 @@
 use crate::{
-    graphics::Gpu,
+    gpu::Gpu,
     primitive::{InstanceData, Primitive},
     render::{
         pipeline::*,

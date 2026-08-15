@@ -4,7 +4,7 @@ use std::{
 };
 
 use super::Id;
-use crate::{graphics::Gpu, render::texture::TextureRegistry};
+use crate::{gpu::Gpu, render::texture::TextureRegistry};
 
 pub struct SweepCtx<'a> {
     pub gpu: &'a Gpu,

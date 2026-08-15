@@ -27,7 +27,7 @@ impl SvgState {
         &mut self,
         path: &Path,
         texture: &mut crate::render::texture::TextureRegistry,
-        gpu: &crate::graphics::Gpu,
+        gpu: &crate::gpu::Gpu,
     ) {
         if self.path.as_deref() == Some(path) && self.tree.is_some() {
             return;

@@ -1,9 +1,10 @@
 use std::marker::PhantomData;
 
+use super::Engine;
+
 use crate::{
     context::MessageSink,
     defaults::DEFAULT_MAX_INSTANCES,
-    graphics::Engine,
     render::{AllocatorKind, pipeline::PipelineRegistration},
     text::TextBackend,
     theme::Theme,
@@ -81,6 +82,7 @@ pub(crate) enum GpuSource {
         adapter_info: wgpu::AdapterInfo,
     },
 }
+impl GpuSource {}
 
 type LimitsFn = Box<dyn FnOnce(wgpu::Limits) -> wgpu::Limits>;
 

@@ -7,7 +7,7 @@ use cosmic_text::{
 };
 
 use crate::{
-    graphics::Gpu,
+    gpu::Gpu,
     model::{Color, Position, Size},
     render::{AllocatorKind, glyph_atlas::GlyphAtlas, texture::TextureRegistry},
     text::{

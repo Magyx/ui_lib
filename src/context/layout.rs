@@ -1,5 +1,5 @@
 use super::{Env, Id, ViewState};
-use crate::{graphics::Globals, model::Size, text::TextBackend, theme::Theme};
+use crate::{gpu::Globals, model::Size, text::TextBackend, theme::Theme};
 
 pub struct LayoutCtx<'a> {
     pub globals: &'a Globals,

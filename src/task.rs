@@ -6,7 +6,8 @@ use std::{
 };
 
 use crate::{
-    graphics::{Gpu, TargetId},
+    engine::TargetId,
+    gpu::Gpu,
     render::texture::{TextureHandle, TextureRegistry},
 };
 

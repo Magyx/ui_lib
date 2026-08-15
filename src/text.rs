@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    graphics::Gpu,
+    gpu::Gpu,
     model::{Color, Position, Size},
     render::texture::{TextureHandle, TextureRegistry},
     theme::TextStyle,

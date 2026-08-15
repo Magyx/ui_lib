@@ -10,11 +10,11 @@ use std::{
 
 use crate::{
     context::MessageSink,
+    engine::{Engine, TargetId},
     event::{
         Event, KeyEvent, KeyLocation, KeyState, Modifiers, MouseButton, PhysicalKey, ScrollDelta,
         ScrollUnits, ToEvent,
     },
-    graphics::{Engine, TargetId},
     model::{Position, Size},
     render::pipeline::{Pipeline, PipelineRegistration},
     task::{BoxWork, Payload, Task, TaskId, TaskRunner},

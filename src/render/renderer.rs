@@ -1,5 +1,7 @@
+use wgpu::Surface;
+
 use crate::{
-    graphics::{Globals, Gpu, Target},
+    gpu::{Globals, Gpu},
     primitive::{InstanceStore, Primitive},
     render::{
         pipeline::{DrawCtx, PipelineId, PipelineRegistry},
@@ -54,14 +56,14 @@ impl Renderer {
     pub fn render<'a>(
         &mut self,
         gpu: &Gpu,
-        target: &Target<'a>,
+        surface: &Surface<'a>,
         pipeline_registry: &mut PipelineRegistry,
         globals: &Globals,
         store: &InstanceStore,
     ) -> Result<(), wgpu::SurfaceError> {
         let output = {
             crate::scope!("wgpu:get_current_texture");
-            match target.surface.get_current_texture() {
+            match surface.get_current_texture() {
                 Ok(o) => o,
                 Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
                     return Err(wgpu::SurfaceError::Outdated);

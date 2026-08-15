@@ -1,7 +1,7 @@
 use super::{Atlas, TextureHandle};
 use crate::{
     defaults::DEFAULT_MAX_TEXTURES,
-    graphics::Gpu,
+    gpu::Gpu,
     model::Size,
     render::{
         AllocatorKind,

@@ -22,7 +22,7 @@
 //! metal/dx12/gl). `Gpu::headless` prints the reason to stderr whenever it
 //! returns `None`, so check for a `ui:` line if these seem suspiciously fast.
 
-use ui::graphics::{Globals, Gpu};
+use ui::gpu::{Globals, Gpu};
 use ui::model::{Color, Position, Size};
 use ui::primitive::{Instance, InstanceStore};
 use ui::render::pipeline::{DrawCtx, Pipeline, ui::UiPipeline};

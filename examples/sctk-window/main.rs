@@ -1,8 +1,7 @@
 use ui::{
     event::{Event, KeyEvent, KeyState, LogicalKey},
-    graphics::{Engine, TargetId},
+    prelude::*,
     sctk::{SctkApp, SctkEvent, SctkLoop, XdgOptions},
-    task::Task,
 };
 
 #[path = "../common/mod.rs"]
@@ -42,6 +41,5 @@ fn main() -> ui::Result<()> {
         ..Default::default()
     };
 
-    SctkApp::window(State::default(), view, update, opts)
-        .run()
+    SctkApp::window(State::default(), view, update, opts).run()
 }

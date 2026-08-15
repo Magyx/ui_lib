@@ -6,12 +6,12 @@ pub use wgpu;
 
 pub(crate) mod defaults;
 
-pub mod builder;
 pub mod context;
+pub mod engine;
 pub mod error;
 pub mod event;
 pub mod focus;
-pub mod graphics;
+pub mod gpu;
 pub mod layout;
 pub mod model;
 pub mod primitive;
@@ -45,7 +45,7 @@ pub mod prelude {
         Spinner, Switch, Text, TextArea, TextField, TextRole, WrappingRows,
     };
 
-    pub use crate::graphics::{Engine, TargetId};
+    pub use crate::engine::{Engine, TargetId};
     pub use crate::task::{RawImage, Task, TaskRunner, UploadCtx};
 
     pub use crate::model::*;

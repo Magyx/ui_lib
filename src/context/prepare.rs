@@ -1,6 +1,6 @@
 use super::{Env, Id, ViewState};
 use crate::{
-    graphics::{Globals, Gpu},
+    gpu::{Globals, Gpu},
     layout::LayoutEngine,
     model::{Position, Rect, Size},
     render::{

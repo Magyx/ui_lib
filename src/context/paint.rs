@@ -1,7 +1,7 @@
 use super::{Env, Id, ViewState};
 use crate::{
     focus::Focus,
-    graphics::Globals,
+    gpu::Globals,
     layout::LayoutEngine,
     model::{Color, Position, Rect, Size},
     primitive::{Instance, InstanceStore},
