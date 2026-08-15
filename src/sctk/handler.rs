@@ -1,8 +1,65 @@
-use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
+use smithay_client_toolkit::{
+    reexports::client::{Connection, Proxy, QueueHandle},
+    shell::WaylandSurface,
+};
+
+pub struct DefaultHandler;
+impl<M> SctkHandler<M> for DefaultHandler {}
 
 pub enum Emit<M> {
     None,
     One(M),
+}
+
+pub(super) enum RunnerEvent {
+    SurfaceDestroyed(u32),
+    OutputCreated,
+    LockFinished,
+}
+
+pub(super) struct RunnerHandler;
+impl SctkHandler<RunnerEvent> for RunnerHandler {
+    fn new_output(
+        _conn: &Connection,
+        _qh: &QueueHandle<super::state::SctkState>,
+        _output: smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+    ) -> Emit<RunnerEvent> {
+        Emit::One(RunnerEvent::OutputCreated)
+    }
+    fn update_output(
+        _conn: &Connection,
+        _qh: &QueueHandle<super::state::SctkState>,
+        _output: smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput,
+    ) -> Emit<RunnerEvent> {
+        Emit::One(RunnerEvent::OutputCreated)
+    }
+    fn closed(
+        _conn: &Connection,
+        _qh: &QueueHandle<super::state::SctkState>,
+        layer: &smithay_client_toolkit::shell::wlr_layer::LayerSurface,
+    ) -> Emit<RunnerEvent> {
+        Emit::One(RunnerEvent::SurfaceDestroyed(
+            layer.wl_surface().id().protocol_id(),
+        ))
+    }
+
+    fn request_close(
+        _conn: &Connection,
+        _qh: &QueueHandle<super::state::SctkState>,
+        window: &smithay_client_toolkit::shell::xdg::window::Window,
+    ) -> Emit<RunnerEvent> {
+        Emit::One(RunnerEvent::SurfaceDestroyed(
+            window.wl_surface().id().protocol_id(),
+        ))
+    }
+
+    fn finished(
+        _conn: &Connection,
+        _qh: &QueueHandle<super::state::SctkState>,
+        _session_lock: smithay_client_toolkit::session_lock::SessionLock,
+    ) -> Emit<RunnerEvent> {
+        Emit::One(RunnerEvent::LockFinished)
+    }
 }
 
 #[allow(

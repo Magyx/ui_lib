@@ -36,12 +36,13 @@ use smithay_client_toolkit::{
     },
 };
 
-use crate::{
-    model::{Position, Size},
-    sctk::{LayerOptions, LockOptions, OutputSelector, OutputSet, SurfaceId, XdgOptions},
+use super::{
+    SctkEvent, SurfaceId,
+    erased::SctkErased,
+    error, helpers,
+    options::{LayerOptions, LockOptions, OutputSelector, OutputSet, XdgOptions},
 };
-
-use super::{SctkEvent, erased::SctkErased, error, helpers};
+use crate::model::{Position, Size};
 
 #[allow(dead_code)]
 enum SurfaceRole {
@@ -206,7 +207,7 @@ impl SctkState {
         opts: LayerOptions,
     ) -> Vec<SurfaceId> {
         let layer_shell = self._layer_shell.as_ref().expect("Layer shell not bound");
-        let chosen = super::helpers::pick_outputs(
+        let chosen = helpers::pick_outputs(
             &self.outputs,
             opts.output.as_ref().unwrap_or(&OutputSet::Active),
         );
@@ -305,11 +306,8 @@ impl SctkState {
         window.set_max_size(None);
         window.commit();
 
-        let output = super::helpers::pick_output(
-            &outputs,
-            &opts.output.unwrap_or(super::OutputSelector::First),
-        )
-        .ok();
+        let output =
+            helpers::pick_output(&outputs, &opts.output.unwrap_or(OutputSelector::First)).ok();
 
         let mut surfaces = HashMap::with_capacity(1);
         let mut by_surface_id = HashMap::with_capacity(1);

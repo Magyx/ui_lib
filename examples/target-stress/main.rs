@@ -38,8 +38,8 @@ use ui::{
     engine::frame::RenderOutcome,
     prelude::*,
     sctk::{
-        Anchor, DefaultHandler, KeyboardInteractivity, Layer, LayerOptions, OutputSelector,
-        OutputSet, RawWaylandHandles, SctkEvent, erased, state::SctkState,
+        Anchor, KeyboardInteractivity, Layer, LayerOptions, OutputSelector, OutputSet, SctkEvent,
+        erased, handler::DefaultHandler, raw::WaylandHandles, state::SctkState,
     },
 };
 
@@ -160,7 +160,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             (phys, sf)
         };
         eprintln!("iter {i}: attach {}x{} sf={sf}", phys.width, phys.height);
-        let handles = RawWaylandHandles::new(&conn, &state.surfaces[&sid].wl_surface);
+        let handles = WaylandHandles::new(&conn, &state.surfaces[&sid].wl_surface);
         let tid = engine.attach_target(Arc::new(handles), phys, sf);
 
         // --- render at least one frame (configures swapchain + presents) ---

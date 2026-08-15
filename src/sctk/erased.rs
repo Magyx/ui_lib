@@ -342,17 +342,17 @@ pub(super) struct SctkMuxAdapter<H, M, FU, FR>
 where
     H: SctkHandler<M>,
     FU: FnMut(M),
-    FR: FnMut(super::RunnerEvent),
+    FR: FnMut(super::handler::RunnerEvent),
 {
     user: SctkAdapter<H, M, FU>,
-    runner: SctkAdapter<super::RunnerHandler, super::RunnerEvent, FR>,
+    runner: SctkAdapter<super::handler::RunnerHandler, super::handler::RunnerEvent, FR>,
 }
 
 impl<H, M, FU, FR> SctkMuxAdapter<H, M, FU, FR>
 where
     H: SctkHandler<M>,
     FU: FnMut(M),
-    FR: FnMut(super::RunnerEvent),
+    FR: FnMut(super::handler::RunnerEvent),
 {
     pub fn new(user_sink: FU, runner_sink: FR) -> Self {
         Self {
@@ -366,7 +366,7 @@ impl<H, M, FU, FR> SctkErased for SctkMuxAdapter<H, M, FU, FR>
 where
     H: SctkHandler<M>,
     FU: FnMut(M),
-    FR: FnMut(super::RunnerEvent),
+    FR: FnMut(super::handler::RunnerEvent),
 {
     fn runtime_add_global(
         &mut self,
@@ -559,7 +559,7 @@ where
     H: SctkHandler<M> + 'static,
     M: 'static,
     FU: FnMut(M) + 'static,
-    FR: FnMut(super::RunnerEvent) + 'static,
+    FR: FnMut(super::handler::RunnerEvent) + 'static,
 {
     Box::new(SctkMuxAdapter::<H, M, _, _>::new(user_sink, runner_sink))
 }
