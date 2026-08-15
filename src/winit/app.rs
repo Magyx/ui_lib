@@ -6,7 +6,7 @@ use std::{
 use super::*;
 
 use crate::{
-    engine::{Engine, TargetId},
+    engine::{Engine, TargetId, frame::RenderOutcome},
     event::Event,
     render::pipeline::{Pipeline, PipelineRegistration},
     task::Task,
@@ -170,12 +170,23 @@ where
                     &mut self.state,
                     event_loop,
                 );
-                _ = engine.render_if_needed(
+                match engine.render_if_needed(
                     &self.target.unwrap(),
                     should_redraw,
                     &self.view,
                     &mut self.state,
-                );
+                ) {
+                    Ok(RenderOutcome::NeedsRerender) | Ok(RenderOutcome::RenderedSuboptimal) => {
+                        if let Some(window) = self.window.as_ref() {
+                            window.request_redraw();
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        #[cfg(feature = "tracing")]
+                        tracing::error!("render failed: {e:?}");
+                    }
+                }
                 if should_redraw {
                     crate::profile::frame_mark();
                 }
@@ -187,6 +198,7 @@ where
                     | WindowEvent::Resized(..) => {
                         if let Some(window) = self.window.as_ref() {
                             self.frame_interval = frame_interval_from_monitor(window);
+                            window.request_redraw();
                         }
                     }
                     _ => (),

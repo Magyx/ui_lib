@@ -4,7 +4,7 @@ use crate::{
     event::{Event, KeyState, ScrollDelta, ToEvent},
     model::{Position, Size},
     primitive::Instance,
-    render::renderer::SurfaceLost,
+    render::renderer::Presented,
     task::{Task, UploadCtx},
     tree,
     widget::Element,
@@ -19,6 +19,8 @@ pub enum RenderOutcome {
     /// The surface was Lost or Outdated; `surface.configure()` has been called
     /// and the caller should try rendering again.
     NeedsRerender,
+    /// A frame was rendered, but the surface wants reconfiguring for the next one.
+    RenderedSuboptimal,
 }
 
 impl<'a> Engine<'a> {
@@ -269,8 +271,12 @@ impl<'a> Engine<'a> {
             &target.globals,
             &self.instance_buf,
         ) {
-            Ok(()) => Ok(RenderOutcome::Rendered),
-            Err(SurfaceLost) => {
+            Presented::Ok => Ok(RenderOutcome::Rendered),
+            Presented::Suboptimal => {
+                target.surface.configure(&self.gpu.device, &target.config);
+                Ok(RenderOutcome::RenderedSuboptimal)
+            }
+            Presented::SurfaceLost => {
                 target.surface.configure(&self.gpu.device, &target.config);
                 Ok(RenderOutcome::NeedsRerender)
             }

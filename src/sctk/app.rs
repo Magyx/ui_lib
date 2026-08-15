@@ -1,7 +1,7 @@
 use std::{any::Any, collections::HashMap, sync::Arc};
 
 use crate::{
-    engine::{Engine, TargetId},
+    engine::{Engine, TargetId, frame::RenderOutcome},
     event::Event,
     model::Size,
     render::pipeline::{Pipeline, PipelineRegistration},
@@ -304,9 +304,15 @@ where
                     &mut state,
                     &loop_ctl,
                 );
-            if let Err(e) = engine.render_if_needed(&tid, need, &view, &mut state) {
-                #[cfg(feature = "tracing")]
-                tracing::error!("error dialog render failed: {e:?}");
+            match engine.render_if_needed(&tid, need, &view, &mut state) {
+                Ok(RenderOutcome::NeedsRerender) | Ok(RenderOutcome::RenderedSuboptimal) => {
+                    event_loop.get_signal().wakeup();
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::error!("error dialog render failed: {e:?}");
+                }
             }
             any_rendered |= need;
         }

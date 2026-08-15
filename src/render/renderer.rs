@@ -9,7 +9,11 @@ use crate::{
     },
 };
 
-pub struct SurfaceLost;
+pub(crate) enum Presented {
+    Ok,
+    Suboptimal,
+    SurfaceLost,
+}
 
 pub(crate) struct Renderer {
     instance_buffer: wgpu::Buffer,
@@ -62,19 +66,24 @@ impl Renderer {
         pipeline_registry: &mut PipelineRegistry,
         globals: &Globals,
         store: &InstanceStore,
-    ) -> Result<(), SurfaceLost> {
+    ) -> Presented {
+        let mut suboptimal = false;
         let output = {
             crate::scope!("wgpu:get_current_texture");
             match surface.get_current_texture() {
                 wgpu::CurrentSurfaceTexture::Success(o) => o,
                 // Reconfigure and retry next frame.
-                wgpu::CurrentSurfaceTexture::Suboptimal(_)
-                | wgpu::CurrentSurfaceTexture::Outdated
-                | wgpu::CurrentSurfaceTexture::Lost => return Err(SurfaceLost),
+                wgpu::CurrentSurfaceTexture::Suboptimal(o) => {
+                    suboptimal = true;
+                    o
+                }
+                wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                    return Presented::SurfaceLost;
+                }
                 // Skip this frame.
                 wgpu::CurrentSurfaceTexture::Timeout
                 | wgpu::CurrentSurfaceTexture::Occluded
-                | wgpu::CurrentSurfaceTexture::Validation => return Ok(()),
+                | wgpu::CurrentSurfaceTexture::Validation => return Presented::Ok,
             }
         };
 
@@ -161,6 +170,10 @@ impl Renderer {
 
         crate::plot!("ui.batches", store.batches().len() as f64);
 
-        Ok(())
+        if !suboptimal {
+            Presented::Ok
+        } else {
+            Presented::Suboptimal
+        }
     }
 }
