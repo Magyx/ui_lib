@@ -6,10 +6,11 @@ use cosmic_text::{
     Weight as CWeight, Wrap as CWrap,
 };
 
+use super::atlas::GlyphAtlas;
 use crate::{
     gpu::Gpu,
     model::{Color, Position, Size},
-    render::{AllocatorKind, glyph_atlas::GlyphAtlas, texture::TextureRegistry},
+    render::{AllocatorKind, texture::TextureRegistry},
     text::{
         CursorRect, Family, FontStyle, LineMetrics, Measured, Motion, PaintGlyph, RunStyle,
         SelectionRect, TextBackend, TextBuffer, TextCursor, TextMetrics, Weight, Wrap,

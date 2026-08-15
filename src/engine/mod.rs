@@ -157,7 +157,7 @@ impl<'a> Engine<'a> {
         let text = text_backend.unwrap_or_else(|| {
             #[cfg(feature = "text_cosmic")]
             {
-                Box::new(crate::render::text_cosmic::TextCosmic::new(allocator))
+                Box::new(crate::text::cosmic::TextCosmic::new(allocator))
             }
             #[cfg(not(feature = "text_cosmic"))]
             {

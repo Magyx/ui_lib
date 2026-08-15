@@ -14,7 +14,7 @@ mod harness {
         gpu::Globals,
         layout::LayoutEngine,
         prelude::*,
-        render::text_cosmic::TextCosmic,
+        text::cosmic::TextCosmic,
         theme::Theme,
         tree::{handle_tree, paint_tree, run_layout},
         widget::prelude::*,
