@@ -37,6 +37,8 @@ pub mod prelude {
     pub use crate::el;
 
     pub use crate::layout::{Align, Axis, Length, Padding};
+    #[cfg(feature = "svg")]
+    pub use crate::widget::Svg;
     pub use crate::widget::{
         Button, Center, CheckState, Checkbox, Column, ContentFit, Element, Image, Keyed, Mark,
         Overlay, ProgressBar, RadioGroup, Rectangle, Row, Scrollable, SimpleCanvas, Slider, Spacer,
@@ -46,11 +48,8 @@ pub mod prelude {
     pub use crate::graphics::{Engine, TargetId};
     pub use crate::task::{RawImage, Task, TaskRunner, UploadCtx};
 
-    #[cfg(feature = "svg")]
-    pub use crate::widget::Svg;
-
     pub use crate::model::*;
-    pub use crate::text::{FontStyle, Weight, Wrap};
+    pub use crate::text::{Family, FontStyle, Weight, Wrap};
     pub use crate::theme::Theme;
 }
 

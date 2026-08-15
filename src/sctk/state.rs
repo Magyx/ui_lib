@@ -41,7 +41,7 @@ use crate::{
     sctk::{LayerOptions, LockOptions, OutputSelector, OutputSet, SurfaceId, XdgOptions},
 };
 
-use super::{SctkEvent, erased::SctkErased, helpers};
+use super::{SctkEvent, erased::SctkErased, error, helpers};
 
 #[allow(dead_code)]
 enum SurfaceRole {
@@ -407,7 +407,7 @@ impl SctkState {
         let lock = self
             .session_lock
             .lock(qh)
-            .map_err(crate::error::SctkError::session_lock)?;
+            .map_err(error::SctkError::session_lock)?;
         let chosen: Vec<WlOutput> = super::helpers::pick_outputs(
             &self.outputs,
             opts.output.as_ref().unwrap_or(&OutputSet::Active),

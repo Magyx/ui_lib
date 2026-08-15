@@ -37,12 +37,16 @@ use smithay_client_toolkit::{
     shell::{WaylandSurface, wlr_layer::LayerShell, xdg::XdgShell},
 };
 
+pub use smithay_client_toolkit;
 pub use smithay_client_toolkit::shell::{
     wlr_layer::{Anchor, KeyboardInteractivity, Layer},
     xdg::window::WindowDecorations,
 };
 
+pub use error::SctkError;
+
 pub mod erased;
+mod error;
 pub mod handler;
 mod helpers;
 pub mod state;
@@ -454,16 +458,15 @@ where
     F: FnOnce(&mut Engine<'_>),
 {
     // 1) Wayland connection + queue
-    let conn = Connection::connect_to_env().map_err(crate::error::SctkError::connect)?;
+    let conn = Connection::connect_to_env().map_err(error::SctkError::connect)?;
     let (globals, event_queue) =
-        registry_queue_init(&conn).map_err(crate::error::SctkError::registry_init)?;
+        registry_queue_init(&conn).map_err(error::SctkError::registry_init)?;
 
     let qh: QueueHandle<state::SctkState> = event_queue.handle();
 
     // 2) Bind globals
     let registry = RegistryState::new(&globals);
-    let compositor =
-        CompositorState::bind(&globals, &qh).map_err(crate::error::SctkError::bind_global)?;
+    let compositor = CompositorState::bind(&globals, &qh).map_err(error::SctkError::bind_global)?;
 
     let outputs = OutputState::new(&globals, &qh);
     let seats = SeatState::new(&globals, &qh);
@@ -495,7 +498,7 @@ where
     let mut st = match opts {
         Options::Layer(layer_options) => {
             let layer_shell =
-                LayerShell::bind(&globals, &qh).map_err(crate::error::SctkError::bind_global)?;
+                LayerShell::bind(&globals, &qh).map_err(error::SctkError::bind_global)?;
 
             state::SctkState::new_for_layer(
                 &qh,
@@ -511,8 +514,7 @@ where
             )?
         }
         Options::Xdg(xdg_options) => {
-            let xdg_shell =
-                XdgShell::bind(&globals, &qh).map_err(crate::error::SctkError::bind_global)?;
+            let xdg_shell = XdgShell::bind(&globals, &qh).map_err(error::SctkError::bind_global)?;
 
             state::SctkState::new_for_window(
                 &qh,
@@ -551,7 +553,7 @@ where
     let mut sid_to_tid = HashMap::new();
     let mut engine = {
         let Some(sid) = st.surfaces.keys().next() else {
-            return Err(crate::error::SctkError::SurfaceSetup.into());
+            return Err(error::SctkError::SurfaceSetup.into());
         };
 
         let mut engine = Engine::builder::<M>()
@@ -587,11 +589,11 @@ where
 
     // 5) Main loop
     let mut event_loop: EventLoop<state::SctkState> =
-        EventLoop::try_new().map_err(crate::error::SctkError::event_loop)?;
+        EventLoop::try_new().map_err(error::SctkError::event_loop)?;
 
     WaylandSource::new(conn.clone(), event_queue)
         .insert(event_loop.handle())
-        .map_err(|e| crate::error::SctkError::event_loop(e.error))?;
+        .map_err(|e| error::SctkError::event_loop(e.error))?;
 
     event_loop
         .handle()
@@ -600,7 +602,7 @@ where
                 sink.emit(msg);
             }
         })
-        .map_err(|e| crate::error::SctkError::event_loop(e.error))?;
+        .map_err(|e| error::SctkError::event_loop(e.error))?;
 
     event_loop
         .handle()
@@ -609,12 +611,12 @@ where
                 task_inbox.borrow_mut().push_back(item);
             }
         })
-        .map_err(|e| crate::error::SctkError::event_loop(e.error))?;
+        .map_err(|e| error::SctkError::event_loop(e.error))?;
 
     while !loop_ctl.should_exit() {
         event_loop
             .dispatch(None, &mut st)
-            .map_err(crate::error::SctkError::dispatch)?;
+            .map_err(error::SctkError::dispatch)?;
 
         let mut any_rendered = false;
 
