@@ -53,8 +53,7 @@ pub mod prelude {
     pub use crate::theme::Theme;
 }
 
-/// Build a list of pipelines for
-/// [`pipelines`](crate::winit::WinitApp::pipelines), naming only the types.
+/// Build a list of pipelines.
 ///
 /// ```ignore
 /// .pipelines(ui::pipelines![PlanetPipeline, StarfieldPipeline])

@@ -67,8 +67,8 @@ pub struct Measured {
 }
 
 /// A glyph ready to draw, in buffer-local logical pixels (the widget offsets by
-/// its own position). Produced by [`TextBuffer::glyphs`] after
-/// [`TextBuffer::prepare`] has uploaded it to the atlas.
+/// its own position). Produced by [`super::TextBuffer::glyphs`] after
+/// [`super::TextBuffer::prepare`] has uploaded it to the atlas.
 #[derive(Clone, Copy, Debug)]
 pub struct PaintGlyph {
     pub pos: Position<f32>,

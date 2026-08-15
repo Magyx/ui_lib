@@ -153,7 +153,7 @@ impl<M: 'static> Checkbox<M> {
         self.size = n;
         self
     }
-    /// Emitted on toggle with the *next* state (see [`CheckState::toggled`]).
+    /// Emitted on toggle with the next state.
     pub fn on_toggle<F>(mut self, f: F) -> Self
     where
         F: Fn(CheckState) -> M + 'static,

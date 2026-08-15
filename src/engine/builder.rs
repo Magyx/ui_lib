@@ -86,7 +86,7 @@ impl GpuSource {}
 
 type LimitsFn = Box<dyn FnOnce(wgpu::Limits) -> wgpu::Limits>;
 
-/// Accumulating builder for [`Engine`]. See the [module docs](crate::builder).
+/// Accumulating builder for [`Engine`]. See the [module docs](crate::engine::builder).
 pub struct EngineBuilder<M> {
     pub(crate) power_preference: wgpu::PowerPreference,
     pub(crate) force_fallback_adapter: bool,
@@ -183,7 +183,7 @@ impl<M: 'static> EngineBuilder<M> {
     }
 
     /// Inject a custom text backend. When unset, the engine creates a
-    /// [`TextCosmic`](crate::render::TextCosmic) using the configured
+    /// [`TextCosmic`](crate::text::cosmic::TextCosmic) using the configured
     /// [`allocator`](Self::allocator) for its glyph atlas.
     pub fn text_backend(mut self, backend: Box<dyn TextBackend>) -> Self {
         self.text_backend = Some(backend);

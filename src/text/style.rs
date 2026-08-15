@@ -102,7 +102,7 @@ impl From<&TextStyle> for TextMetrics {
     }
 }
 
-/// Everything a [`TextBuffer`] needs to shape a run. Self-contained so the
+/// Everything a [`super::TextBuffer`] needs to shape a run. Self-contained so the
 /// boundary doesn't depend on the shape of `crate::theme::TextStyle`.
 #[derive(Clone, Debug)]
 pub struct RunStyle {

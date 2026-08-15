@@ -48,7 +48,7 @@ pub struct Engine<'a> {
 }
 impl<'a> Engine<'a> {
     /// Start an [`EngineBuilder`]. This is the configurable entry point; see
-    /// [`crate::builder`] for the full set of knobs.
+    /// [`crate::engine::builder`] for the full set of knobs.
     pub fn builder<M: 'static>() -> EngineBuilder<M> {
         EngineBuilder::default()
     }
@@ -255,7 +255,7 @@ impl<'a> Engine<'a> {
     /// Register a pipeline for `P` after startup.
     ///
     /// No-ops if no target exists yet, since the surface format isn't known
-    /// until then; use [`EngineBuilder::pipeline`](crate::builder::EngineBuilder::pipeline)
+    /// until then; use [`EngineBuilder::pipeline`](crate::engine::builder::EngineBuilder::pipeline)
     /// for pipelines known up front.
     pub fn register_pipeline<P: crate::render::pipeline::Pipeline>(&mut self) {
         self.register(PipelineRegistration::of::<P>());

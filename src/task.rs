@@ -29,7 +29,7 @@ pub struct UploadCtx<'e> {
 
 impl UploadCtx<'_> {
     /// Upload an RGBA8 image and return a handle to it. Mirrors
-    /// [`Engine::load_texture_rgba8`](crate::graphics::Engine::load_texture_rgba8).
+    /// [`Engine::load_texture_rgba8`](crate::engine::Engine::load_texture_rgba8).
     pub fn load_rgba8(&mut self, width: u32, height: u32, pixels_rgba8: &[u8]) -> TextureHandle {
         self.textures
             .load_rgba8(self.gpu, width, height, pixels_rgba8)
@@ -166,14 +166,14 @@ pub(crate) fn erase<M: 'static>(finish: Finish<M>) -> ErasedFinish {
 /// *wake path*: on a frame-polled loop (winit) delivery need only be drainable
 /// next frame; on a blocking loop (calloop) delivery must also wake the loop.
 /// Swap the default via
-/// [`EngineBuilder::with_task_runner`](crate::builder::EngineBuilder::with_task_runner).
+/// [`EngineBuilder::with_task_runner`](crate::engine::builder::EngineBuilder::with_task_runner).
 pub trait TaskRunner {
     /// Begin driving `run`. On completion, arrange for `(target, id, payload)`
     /// to become drainable via [`drain`](TaskRunner::drain) on the main thread.
     fn spawn(&self, target: TargetId, id: TaskId, run: BoxWork);
 
     /// Move every payload completed since the last call into `out`. Main-thread
-    /// only; called once near the top of each [`poll`](crate::graphics::Engine::poll).
+    /// only; called once near the top of each [`poll`](crate::engine::Engine::poll).
     fn drain(&self, out: &mut Vec<(TargetId, TaskId, Payload)>);
 }
 

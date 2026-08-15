@@ -65,7 +65,7 @@ pub trait TextBuffer {
     fn selection_rects(&self, start: TextCursor, end: TextCursor) -> Vec<SelectionRect>;
 }
 
-/// A swappable text system. See the [module docs](crate::render::text).
+/// A swappable text system. See the [module docs](crate::text).
 pub trait TextBackend {
     /// Create an empty buffer with the given starting metrics.
     fn create_buffer(&mut self, metrics: TextMetrics) -> Box<dyn TextBuffer>;
