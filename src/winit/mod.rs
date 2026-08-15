@@ -11,3 +11,11 @@ pub use app::WinitApp;
 
 mod app;
 mod convert;
+
+/// App-facing winit entry points, re-exported from
+/// [`ui::prelude`](crate::prelude) when the `winit` feature is on.
+pub mod prelude {
+    pub use super::{
+        ActiveEventLoop, ControlFlow, Window, WindowAttributes, WindowEvent, WinitApp,
+    };
+}

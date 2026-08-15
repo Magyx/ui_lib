@@ -1,9 +1,4 @@
-use ui::{
-    event::{Event, KeyEvent, KeyState, LogicalKey},
-    prelude::*,
-    winit::WinitApp,
-};
-use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::WindowAttributes};
+use ui::prelude::*;
 
 #[path = "../common/mod.rs"]
 mod common;

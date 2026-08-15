@@ -1,13 +1,33 @@
 use crate::gpu::{Globals, Gpu};
 
-pub mod ui;
+pub use registry::*;
+pub use slot::*;
 pub use ui_macros::Pipeline;
 
-pub mod slot;
-pub use slot::*;
-
 pub mod registry;
-pub use registry::*;
+pub mod slot;
+pub mod ui;
+
+/// Everything needed to implement a custom [`Pipeline`].
+///
+/// ```ignore
+/// use ui::render::pipeline::prelude::*;
+///
+/// #[derive(Pipeline)]
+/// struct PlanetPipeline { /* ... */ }
+/// ```
+pub mod prelude {
+    pub use super::{DrawCtx, Pipeline};
+    pub use crate::{
+        gpu::{Globals, Gpu},
+        primitive::{Instance, InstanceData, Instanced, Primitive},
+        render::quad::{QUAD_INDICES, QUAD_VERTICES, QuadGeometry, Vertex},
+    };
+
+    // Version-matched to the `ui` build; a custom pipeline cannot compile
+    // against a different `wgpu`, and `InstanceData` impls need `bytemuck`.
+    pub use crate::{bytemuck, wgpu};
+}
 
 /// Shared per-frame resources a pipeline may bind.
 pub struct DrawCtx<'a> {

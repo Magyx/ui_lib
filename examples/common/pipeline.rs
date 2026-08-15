@@ -1,7 +1,4 @@
-use ui::gpu::Gpu;
-use ui::primitive::{InstanceData, Primitive};
-use ui::render::pipeline::{DrawCtx, Pipeline};
-use ui::render::quad::{QuadGeometry, Vertex};
+use ui::render::pipeline::prelude::*;
 
 #[derive(Pipeline)]
 pub struct PlanetPipeline {

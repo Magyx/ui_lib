@@ -1,6 +1,5 @@
 use super::*;
 use std::num::NonZero;
-use ui::widget::{ContentFit, Image};
 
 pub fn view(state: &State) -> Element {
     use Length::{Fit, Fixed, Grow};

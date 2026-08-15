@@ -46,11 +46,17 @@ pub mod prelude {
     };
 
     pub use crate::engine::{Engine, TargetId};
+    pub use crate::event::{Event, KeyEvent, KeyState, LogicalKey, Modifiers, MouseButton};
     pub use crate::task::{RawImage, Task, TaskRunner, UploadCtx};
 
     pub use crate::model::*;
     pub use crate::text::{Family, FontStyle, Weight, Wrap};
     pub use crate::theme::Theme;
+
+    #[cfg(feature = "sctk")]
+    pub use crate::sctk::prelude::*;
+    #[cfg(feature = "winit")]
+    pub use crate::winit::prelude::*;
 }
 
 /// Build a list of pipelines.

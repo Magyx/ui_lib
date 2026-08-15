@@ -1,9 +1,4 @@
-use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer};
-use ui::{
-    event::{Event, KeyEvent, KeyState, LogicalKey},
-    prelude::*,
-    sctk::{LayerOptions, SctkApp, SctkEvent, SctkLoop},
-};
+use ui::prelude::*;
 
 #[path = "../common/mod.rs"]
 mod common;

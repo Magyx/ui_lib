@@ -37,10 +37,7 @@ use smithay_client_toolkit::{
 use ui::{
     engine::frame::RenderOutcome,
     prelude::*,
-    sctk::{
-        Anchor, KeyboardInteractivity, Layer, LayerOptions, OutputSelector, OutputSet, SctkEvent,
-        erased, handler::DefaultHandler, raw::WaylandHandles, state::SctkState,
-    },
+    sctk::{erased, handler::DefaultHandler, raw::WaylandHandles, state::SctkState},
 };
 
 /// Minimal message + state. We never produce a message; the view is a single

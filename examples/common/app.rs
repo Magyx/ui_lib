@@ -1,6 +1,5 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use ui::event::{KeyEvent, KeyState, LogicalKey};
 use ui::prelude::*;
 
 use super::demos;

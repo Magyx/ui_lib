@@ -1,6 +1,5 @@
 use super::super::pipeline::PlanetPipeline;
 use super::*;
-use ui::widget::SimpleCanvas;
 
 pub fn view(tid: &TargetId, state: &State) -> Element {
     use Length::{Fit, Grow};

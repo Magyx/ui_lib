@@ -1,8 +1,4 @@
-use ui::{
-    event::{Event, KeyEvent, KeyState, LogicalKey},
-    prelude::*,
-    sctk::{SctkApp, SctkEvent, SctkLoop, XdgOptions},
-};
+use ui::prelude::*;
 
 #[path = "../common/mod.rs"]
 mod common;

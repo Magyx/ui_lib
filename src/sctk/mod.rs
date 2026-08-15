@@ -22,6 +22,15 @@ pub mod raw;
 pub mod runner;
 pub mod state;
 
+/// App-facing SCTK entry points, re-exported from
+/// [`ui::prelude`](crate::prelude) when the `sctk` feature is on.
+pub mod prelude {
+    pub use super::{
+        Anchor, KeyboardInteractivity, Layer, LayerOptions, LockOptions, Options, OutputSelector,
+        OutputSet, SctkApp, SctkEvent, SctkLoop, SurfaceId, WindowDecorations, XdgOptions,
+    };
+}
+
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct SurfaceId(u32);
 
