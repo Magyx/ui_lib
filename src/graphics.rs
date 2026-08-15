@@ -2,10 +2,10 @@ use std::{collections::HashMap, sync::Arc, time::Instant};
 
 use crate::{
     builder::{EngineBuilder, GpuSource, TargetConfig},
-    consts::*,
     context::{
         BasicMessageSink, Context, EventCtx, LayoutCtx, MessageSink, PaintCtx, PrepareCtx, SweepCtx,
     },
+    defaults::*,
     event::{Event, KeyState, Modifiers, ScrollDelta, ToEvent},
     layout::{self, LayoutEngine},
     model::*,
@@ -98,7 +98,7 @@ impl Gpu {
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends,
-            flags: crate::consts::default_instance_flags(),
+            flags: crate::defaults::default_instance_flags(),
             ..Default::default()
         });
 
@@ -211,8 +211,8 @@ impl<'a> Engine<'a> {
                 // Env overrides (UI_BACKEND / UI_WGPU_*) are applied here and so
                 // win last over any builder intent.
                 let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-                    backends: crate::consts::default_backends(),
-                    flags: crate::consts::default_instance_flags(),
+                    backends: crate::defaults::default_backends(),
+                    flags: crate::defaults::default_instance_flags(),
                     ..Default::default()
                 });
 

@@ -1,6 +1,6 @@
 use std::{
     any::Any,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
 };
 
 use crate::{
@@ -14,9 +14,9 @@ use crate::{
         pipeline::{Pipeline, PipelineRegistry},
         texture::TextureRegistry,
     },
-    task::{ErasedFinish, Payload, TaskId},
+    task::TaskStore,
     text::TextBackend,
-    theme::{Env, Theme},
+    theme::{TextStyle, Theme},
 };
 
 pub type Id = u64;
@@ -167,21 +167,6 @@ impl MessageSink for BasicMessageSink {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct TaskStore {
-    pub(crate) inbox: VecDeque<(TaskId, Payload)>,
-    pub(crate) finishers: HashMap<TaskId, ErasedFinish>,
-    next_id: TaskId,
-}
-
-impl TaskStore {
-    pub(crate) fn alloc_id(&mut self) -> TaskId {
-        let id = self.next_id;
-        self.next_id = self.next_id.wrapping_add(1);
-        id
-    }
-}
-
 pub struct Context {
     pub mouse_pos: Position<f32>,
     pub mouse_buttons_down: u32,
@@ -242,6 +227,19 @@ impl Context {
         let vs = &self.view_state;
         self.focus.sweep(|id| vs.was_touched(&id));
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Env {
+    /// Tonal elevation for surface-color resolution.
+    pub elevation: u8,
+    /// Inherited foreground (text/icon) color; widgets resolve their default
+    /// content color from this instead of hardcoding `theme.on_surface`.
+    pub foreground: Color,
+    /// Inherited default text style.
+    pub text: TextStyle,
+    /// Focus scope the subtree belongs to.
+    pub focus_scope: ScopeId,
 }
 
 pub struct LayoutCtx<'a> {
@@ -508,7 +506,7 @@ impl<'a> PaintCtx<'a> {
     }
 
     pub fn focus_ring(&self, out: &mut InstanceStore, (x, y, w, h): (i32, i32, i32, i32)) {
-        use crate::focus::{GAP, RING_WIDTH};
+        use crate::theme::{GAP, RING_WIDTH};
         out.push(Instance::ui_rounded(
             Position::new((x - GAP) as f32, (y - GAP) as f32),
             Size::new((w + GAP * 2) as f32, (h + GAP * 2) as f32),

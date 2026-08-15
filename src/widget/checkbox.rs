@@ -244,7 +244,7 @@ impl<M: 'static> Widget for Checkbox<M> {
         !self.disabled
     }
     fn paint_focus_ring(&self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        use crate::focus::{GAP, RING_WIDTH};
+        use crate::theme::{GAP, RING_WIDTH};
         let r = ctx.rect();
         out.push(Instance::ui_rounded(
             Position::new((r.x - GAP) as f32, (r.y - GAP) as f32),

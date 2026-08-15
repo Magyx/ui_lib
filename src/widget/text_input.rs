@@ -6,7 +6,7 @@ use super::*;
 use crate::{
     event::{KeyState, LogicalKey, MouseButton, UiEventRef},
     layout::mix64,
-    text::{FontStyle, Motion, TextCursor, Weight, Wrap},
+    text::{Family, FontStyle, Motion, TextCursor, Weight, Wrap},
 };
 
 #[derive(Clone, Copy, PartialEq)]

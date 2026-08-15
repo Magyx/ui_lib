@@ -4,7 +4,7 @@ pub use bytemuck;
 pub use error::{Error, Result};
 pub use wgpu;
 
-pub(crate) mod consts;
+pub(crate) mod defaults;
 
 pub mod builder;
 pub mod context;

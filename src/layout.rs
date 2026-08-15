@@ -2,12 +2,11 @@
 use std::cmp::{max, min};
 
 use crate::{
-    context::{Id, LayoutCtx, PaintCtx, PrepareCtx},
+    context::{Env, Id, LayoutCtx, PaintCtx, PrepareCtx},
     event::{KeyState, LogicalKey, UiEventRef},
     focus::{Dir, ScopeId},
     model::{Color, Position, Size},
     primitive::{Instance, InstanceStore},
-    theme::Env,
     widget::{Align, Axis, Length, Padding, Widget},
 };
 

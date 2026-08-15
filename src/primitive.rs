@@ -3,8 +3,9 @@ use std::mem;
 use crate::{
     model::{Color, Position, Size},
     render::{
+        pack::{pack_shape_params, pack_unorm4x8, shape_flags},
         pipeline::{Pipeline, PipelineId, ui::UiPipeline},
-        texture::{TextureHandle, pack_unorm4x8},
+        texture::TextureHandle,
     },
 };
 
@@ -69,34 +70,6 @@ impl InstanceData for Primitive {
             ],
         }
     }
-}
-
-pub mod shape_flags {
-    pub const HAS_BORDER: u8 = 1 << 0;
-    pub const HAS_SHADOW: u8 = 1 << 1;
-    pub const GRADIENT_V: u8 = 1 << 2;
-}
-
-#[inline]
-pub fn pack_shape_params(
-    corner_radius: f32,
-    border_width: f32,
-    shadow_radius: f32,
-    flags: u8,
-) -> u32 {
-    let r = corner_radius.clamp(0.0, 255.0) as u32;
-    let b = (border_width * 4.0).clamp(0.0, 255.0) as u32;
-    let s = shadow_radius.clamp(0.0, 255.0) as u32;
-    r | (b << 8) | (s << 16) | ((flags as u32) << 24)
-}
-
-#[inline]
-pub fn unpack_shape_params(packed: u32) -> (f32, f32, f32, u8) {
-    let r = (packed & 0xFF) as f32;
-    let b = ((packed >> 8) & 0xFF) as f32 * 0.25;
-    let s = ((packed >> 16) & 0xFF) as f32;
-    let flags = ((packed >> 24) & 0xFF) as u8;
-    (r, b, s, flags)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -407,6 +380,7 @@ impl InstanceStore {
 mod tests {
     use super::*;
     use crate::model::{Color, Position, Size};
+    use crate::render::pack::unpack_shape_params;
     use crate::render::pipeline::impl_stub_pipeline;
 
     #[repr(C)]
@@ -536,44 +510,6 @@ mod tests {
         let inst = Instance::ui(Position::new(10.3, 20.7), Size::new(5.5, 8.0), Color::WHITE);
         assert_eq!(inst.data.position, [10.3, 20.7]);
         assert_eq!(inst.data.size, [5.5, 8.0]);
-    }
-
-    #[test]
-    fn pack_shape_params_roundtrip() {
-        let packed = pack_shape_params(8.0, 1.5, 12.0, shape_flags::HAS_BORDER);
-        let (r, b, s, f) = unpack_shape_params(packed);
-        assert_eq!(r, 8.0);
-        assert_eq!(b, 1.5);
-        assert_eq!(s, 12.0);
-        assert_eq!(f, shape_flags::HAS_BORDER);
-    }
-
-    #[test]
-    fn pack_shape_params_zero_is_zero() {
-        assert_eq!(pack_shape_params(0.0, 0.0, 0.0, 0), 0);
-    }
-
-    #[test]
-    fn pack_shape_params_clamps_overflow() {
-        let packed = pack_shape_params(300.0, 100.0, 999.0, 0xFF);
-        let (r, b, s, f) = unpack_shape_params(packed);
-        assert_eq!(r, 255.0);
-        assert_eq!(b, 63.75); // 255 * 0.25
-        assert_eq!(s, 255.0);
-        assert_eq!(f, 0xFF);
-    }
-
-    #[test]
-    fn pack_shape_params_quarter_pixel_precision() {
-        // 0.25px border → stored as 1 in the byte
-        let packed = pack_shape_params(0.0, 0.25, 0.0, 0);
-        let (_, b, _, _) = unpack_shape_params(packed);
-        assert_eq!(b, 0.25);
-
-        // 2.75px border
-        let packed = pack_shape_params(0.0, 2.75, 0.0, 0);
-        let (_, b, _, _) = unpack_shape_params(packed);
-        assert_eq!(b, 2.75);
     }
 
     #[test]

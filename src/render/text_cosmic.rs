@@ -8,11 +8,11 @@ use cosmic_text::{
 
 use crate::{
     graphics::Gpu,
-    model::{Color, Family, Position, Size},
+    model::{Color, Position, Size},
     render::{AllocatorKind, glyph_atlas::GlyphAtlas, texture::TextureRegistry},
     text::{
-        CursorRect, FontStyle, LineMetrics, Measured, Motion, PaintGlyph, RunStyle, SelectionRect,
-        TextBackend, TextBuffer, TextCursor, TextMetrics, Weight, Wrap,
+        CursorRect, Family, FontStyle, LineMetrics, Measured, Motion, PaintGlyph, RunStyle,
+        SelectionRect, TextBackend, TextBuffer, TextCursor, TextMetrics, Weight, Wrap,
     },
 };
 

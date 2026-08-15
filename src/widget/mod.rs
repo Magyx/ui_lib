@@ -3,7 +3,7 @@ use crate::{
     layout::Node,
     model::*,
     primitive::{Instance, InstanceStore},
-    theme::{Env, Theme},
+    theme::Theme,
 };
 
 pub use ui_macros::Widget;

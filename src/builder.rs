@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use crate::{
-    consts::DEFAULT_MAX_INSTANCES,
     context::MessageSink,
+    defaults::DEFAULT_MAX_INSTANCES,
     graphics::Engine,
     render::{AllocatorKind, pipeline::PipelineRegistration},
     text::TextBackend,

@@ -2,8 +2,8 @@ use crate::{
     graphics::Gpu,
     primitive::{InstanceData, Primitive},
     render::{
-        geometry::{QuadGeometry, Vertex},
         pipeline::*,
+        quad::{QuadGeometry, Vertex},
     },
 };
 use wgpu::RenderPipeline;

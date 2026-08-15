@@ -1,4 +1,9 @@
-use std::{any::Any, future::Future, pin::Pin};
+use std::{
+    any::Any,
+    collections::{HashMap, VecDeque},
+    future::Future,
+    pin::Pin,
+};
 
 use crate::{
     graphics::{Gpu, TargetId},
@@ -208,5 +213,20 @@ impl TaskRunner for ThreadRunner {
         while let Ok(item) = self.rx.try_recv() {
             out.push(item);
         }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct TaskStore {
+    pub(crate) inbox: VecDeque<(TaskId, Payload)>,
+    pub(crate) finishers: HashMap<TaskId, ErasedFinish>,
+    next_id: TaskId,
+}
+
+impl TaskStore {
+    pub(crate) fn alloc_id(&mut self) -> TaskId {
+        let id = self.next_id;
+        self.next_id = self.next_id.wrapping_add(1);
+        id
     }
 }

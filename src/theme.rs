@@ -1,5 +1,5 @@
 use crate::{
-    focus::ScopeId,
+    context::Env,
     layout::ROOT_SEED,
     model::Color,
     text::{FontStyle, Weight},
@@ -11,21 +11,6 @@ pub struct TextStyle {
     pub line_height: f32,
     pub weight: Weight,
     pub style: FontStyle,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Env {
-    /// Tonal elevation for surface-color resolution.
-    pub elevation: u8,
-    /// Inherited foreground (text/icon) color; widgets resolve their default
-    /// content color from this instead of hardcoding `theme.on_surface`.
-    pub foreground: Color,
-    /// Inherited default text style.
-    pub text: TextStyle,
-    /// Focus scope the subtree belongs to. Root subtree is
-    /// [`ROOT_SEED`](crate::layout::ROOT_SEED); a trapping container (a modal
-    /// overlay) rebinds this to its own id for its descendants.
-    pub focus_scope: ScopeId,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -81,6 +66,10 @@ impl Style {
         self.foreground.unwrap_or(base)
     }
 }
+
+// TODO: These should be fields in Theme.
+pub const GAP: i32 = 2;
+pub const RING_WIDTH: i32 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Theme {

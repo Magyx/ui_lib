@@ -425,16 +425,6 @@ impl Color {
     }
 }
 
-use std::borrow::Cow;
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Family {
-    Monospace,
-    SansSerif,
-    Serif,
-    Name(Cow<'static, str>),
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

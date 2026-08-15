@@ -1,9 +1,19 @@
+use std::borrow::Cow;
+
 use crate::{
     graphics::Gpu,
-    model::{Color, Family, Position, Size},
+    model::{Color, Position, Size},
     render::texture::{TextureHandle, TextureRegistry},
     theme::TextStyle,
 };
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Family {
+    Monospace,
+    SansSerif,
+    Serif,
+    Name(Cow<'static, str>),
+}
 
 /// Specifies the weight of glyphs in the font, their degree of blackness or stroke thickness.
 #[derive(Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Debug, Hash)]
