@@ -1,67 +1,12 @@
 use crate::{
     context::*,
-    layout::Node,
+    layout::{Align, Axis, Length, Node, Padding},
     model::*,
     primitive::{Instance, InstanceStore},
     theme::Theme,
 };
 
 pub use ui_macros::Widget;
-
-#[derive(Clone, Copy, Debug, Default)]
-pub enum Length {
-    #[default]
-    Fit,
-    Fixed(i32),
-    Grow,
-    Weighted(f32),
-}
-impl Length {
-    pub(crate) fn weight(self) -> Option<f32> {
-        match self {
-            Length::Grow => Some(1.0),
-            Length::Weighted(w) => Some(w),
-            _ => None,
-        }
-    }
-}
-impl<T> From<T> for Length
-where
-    T: Into<i32>,
-{
-    fn from(value: T) -> Self {
-        Length::Fixed(value.into())
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Align {
-    #[default]
-    Start,
-    Center,
-    End,
-    SpaceBetween,
-    SpaceAround,
-    SpaceEvenly,
-    /// Cross-axis only: fill the container's cross size. Resolved in the
-    /// assign pass (not `place`) so the stretched child's subtree reflows.
-    Stretch,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub enum Axis {
-    #[default]
-    Horizontal,
-    Vertical,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Padding {
-    pub left: i32,
-    pub top: i32,
-    pub right: i32,
-    pub bottom: i32,
-}
 
 pub trait IntoElement {}
 

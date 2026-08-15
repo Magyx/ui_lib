@@ -7,16 +7,10 @@ mod common;
 mod layout {
     use super::common::*;
 
-    use std::cell::Cell;
-    use std::rc::Rc;
+    use std::{cell::Cell, rc::Rc};
 
-    use ui::context::LayoutCtx;
-    use ui::el;
-    use ui::layout::Node;
-    use ui::model::{Color, Size, Vec4};
-    use ui::primitive::InstanceStore;
-    use ui::widget::{
-        Align, Center, Column, Element, Length, Overlay, Rectangle, Row, Spacer, Widget,
+    use ui::{
+        context::LayoutCtx, el, layout::Node, prelude::*, primitive::InstanceStore, widget::Widget,
     };
 
     // Leaf sizing

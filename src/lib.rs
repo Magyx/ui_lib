@@ -22,6 +22,7 @@ pub mod sctk;
 pub mod task;
 pub mod text;
 pub mod theme;
+pub mod tree;
 pub mod widget;
 #[cfg(feature = "winit")]
 pub mod winit;
@@ -35,11 +36,11 @@ pub mod winit;
 pub mod prelude {
     pub use crate::el;
 
+    pub use crate::layout::{Align, Axis, Length, Padding};
     pub use crate::widget::{
-        Align, Axis, Button, Center, CheckState, Checkbox, Column, ContentFit, Element, Image,
-        Keyed, Length, Mark, Overlay, Padding, ProgressBar, RadioGroup, Rectangle, Row, Scrollable,
-        SimpleCanvas, Slider, Spacer, Spinner, Switch, Text, TextArea, TextField, TextRole,
-        WrappingRows,
+        Button, Center, CheckState, Checkbox, Column, ContentFit, Element, Image, Keyed, Mark,
+        Overlay, ProgressBar, RadioGroup, Rectangle, Row, Scrollable, SimpleCanvas, Slider, Spacer,
+        Spinner, Switch, Text, TextArea, TextField, TextRole, WrappingRows,
     };
 
     pub use crate::graphics::{Engine, TargetId};

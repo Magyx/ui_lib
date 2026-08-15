@@ -1,8 +1,8 @@
 use crate::{
     context::Env,
-    layout::ROOT_SEED,
     model::Color,
     text::{FontStyle, Weight},
+    tree::ROOT_SEED,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]

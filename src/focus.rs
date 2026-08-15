@@ -1,4 +1,4 @@
-use crate::{context::Id, layout::ROOT_SEED};
+use crate::{context::Id, tree::ROOT_SEED};
 
 /// A focus scope is identified by the path-hash [`Id`] of the widget that
 /// introduces it. Scopes are therefore stable across frames for free. The root
@@ -232,7 +232,6 @@ impl Focus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::layout::ROOT_SEED;
 
     const A: Id = 10;
     const B: Id = 20;

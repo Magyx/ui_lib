@@ -7,10 +7,12 @@ mod common;
 mod view_state_sweep {
     use super::common::*;
 
-    use ui::context::Context;
-    use ui::event::{ScrollDelta, ScrollUnits, UiEventRef};
-    use ui::model::{Color, Position, Size};
-    use ui::widget::{Length, Rectangle, ScrollViewState, Scrollable};
+    use ui::{
+        context::Context,
+        event::{ScrollDelta, ScrollUnits, UiEventRef},
+        prelude::*,
+        widget::ScrollViewState,
+    };
 
     /// Run a frame on `root`: layout, handle, paint, sweep.
     /// SweepCx needs a Gpu + TextureRegistry which the harness doesn't
@@ -31,7 +33,7 @@ mod view_state_sweep {
     fn removed_scrollable_is_swept_and_re_added_one_starts_fresh() {
         fn get_scroll_y(ctx: &Context) -> i32 {
             ctx.view_state
-                .get::<ScrollViewState>(&ui::layout::ROOT_SEED)
+                .get::<ScrollViewState>(&ui::tree::ROOT_SEED)
                 .map_or(0, |s| s.y)
         }
 

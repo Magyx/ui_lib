@@ -7,9 +7,10 @@ mod common;
 mod widget_interaction {
     use super::common::*;
 
-    use ui::event::{KeyState, MouseButton, UiEventRef};
-    use ui::model::{Color, Position, Size};
-    use ui::widget::{Button, Length};
+    use ui::{
+        event::{KeyState, MouseButton, UiEventRef},
+        prelude::*,
+    };
 
     #[derive(Debug, Clone, PartialEq)]
     enum Msg {

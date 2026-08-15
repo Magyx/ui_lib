@@ -5,8 +5,8 @@ use std::marker::PhantomData;
 use super::*;
 use crate::{
     event::{KeyState, LogicalKey, MouseButton, UiEventRef},
-    layout::mix64,
     text::{Family, FontStyle, Motion, TextCursor, Weight, Wrap},
+    tree::mix64,
 };
 
 #[derive(Clone, Copy, PartialEq)]

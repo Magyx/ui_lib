@@ -7,7 +7,7 @@ use crate::{
     },
     defaults::*,
     event::{Event, KeyState, Modifiers, ScrollDelta, ToEvent},
-    layout::{self, LayoutEngine},
+    layout::LayoutEngine,
     model::*,
     primitive::{Instance, InstanceStore},
     render::{
@@ -19,6 +19,7 @@ use crate::{
     task::{Payload, Task, TaskId, TaskRunner, ThreadRunner, UploadCtx},
     text::TextBackend,
     theme::Theme,
+    tree,
     widget::Element,
 };
 
@@ -760,7 +761,7 @@ impl<'a> Engine<'a> {
                 &mut *self.message_sink,
             );
             let mut cursor = 0usize;
-            layout::handle_tree(root.as_mut(), &mut event_cx, &mut cursor);
+            tree::handle_tree(root.as_mut(), &mut event_cx, &mut cursor);
             target.ctx.mouse_buttons_pressed = 0;
             target.ctx.mouse_buttons_released = 0;
         } else {
@@ -849,7 +850,7 @@ impl<'a> Engine<'a> {
                 &mut *self.text,
                 &self.theme,
             );
-            layout::run_layout(
+            tree::run_layout(
                 &mut self.layout_engine,
                 &mut layout_ctx,
                 root.as_mut(),
@@ -875,7 +876,7 @@ impl<'a> Engine<'a> {
                 &self.theme,
             );
             let mut cursor = root_id;
-            layout::prepare_tree(root.as_mut(), &mut prepare_ctx, &mut cursor);
+            tree::prepare_tree(root.as_mut(), &mut prepare_ctx, &mut cursor);
         }
 
         {
@@ -903,7 +904,7 @@ impl<'a> Engine<'a> {
                 self.theme.surface,
             ));
 
-            layout::paint_tree(
+            tree::paint_tree(
                 root.as_mut(),
                 &mut paint_ctx,
                 &self.layout_engine,
@@ -1065,7 +1066,7 @@ impl<'a> Engine<'a> {
                     &mut *self.message_sink,
                 );
                 let mut cursor = 0usize;
-                layout::handle_tree(root.as_mut(), &mut ctx, &mut cursor);
+                tree::handle_tree(root.as_mut(), &mut ctx, &mut cursor);
             }
         }
 

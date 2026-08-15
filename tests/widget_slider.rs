@@ -7,9 +7,10 @@ mod common;
 mod widget_slider {
     use super::common::*;
 
-    use ui::event::{KeyState, MouseButton, UiEventRef};
-    use ui::model::{Position, Size};
-    use ui::widget::{Length, Slider};
+    use ui::{
+        event::{KeyState, MouseButton, UiEventRef},
+        prelude::*,
+    };
 
     #[derive(Debug, Clone, PartialEq)]
     enum Msg {

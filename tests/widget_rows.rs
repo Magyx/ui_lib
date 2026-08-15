@@ -7,8 +7,7 @@ mod common;
 mod widget_grid {
     use std::num::NonZero;
 
-    use ui::model::{Color, Size};
-    use ui::widget::{Element, Length, Rectangle, Widget, WrappingRows};
+    use ui::{prelude::*, widget::Widget};
 
     /// Build N Fixed-size rectangles for grid cells.
     fn rects(n: usize) -> Vec<Element> {

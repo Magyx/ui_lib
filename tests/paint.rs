@@ -9,9 +9,7 @@ mod common;
 mod paint {
     use super::common::*;
 
-    use ui::model::{Color, Size};
-    use ui::primitive::Primitive;
-    use ui::widget::{Column, Element, Length, Rectangle, Row, Scrollable};
+    use ui::{prelude::*, primitive::Primitive};
 
     // Rectangle paint output
 

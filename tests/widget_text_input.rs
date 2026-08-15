@@ -12,12 +12,13 @@ mod common;
 mod text_input {
     use super::common::*;
 
-    use ui::event::{
-        KeyEvent, KeyLocation, KeyState, LogicalKey, MouseButton, PhysicalKey,
-        TextInput as TextInputEvent, UiEventRef,
+    use ui::{
+        event::{
+            KeyEvent, KeyLocation, KeyState, LogicalKey, MouseButton, PhysicalKey,
+            TextInput as TextInputEvent, UiEventRef,
+        },
+        prelude::*,
     };
-    use ui::model::{Position, Size};
-    use ui::widget::{Length, TextArea, TextField};
 
     #[derive(Debug, Clone, PartialEq)]
     enum Msg {

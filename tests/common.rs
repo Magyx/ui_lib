@@ -12,12 +12,13 @@ mod harness {
         context::{BasicMessageSink, Context, EventCtx, LayoutCtx, MessageSink, PaintCtx},
         event::UiEventRef,
         graphics::Globals,
-        layout::{LayoutEngine, handle_tree, paint_tree, run_layout},
-        model::{Color, Size},
-        primitive::{Instance, InstanceStore},
+        layout::LayoutEngine,
+        prelude::*,
+        primitive::InstanceStore,
         render::text_cosmic::TextCosmic,
         theme::Theme,
-        widget::{Element, IntoElement, Length, Rectangle, Widget},
+        tree::{handle_tree, paint_tree, run_layout},
+        widget::Widget,
     };
 
     pub trait TestEvent: Any + fmt::Debug {
