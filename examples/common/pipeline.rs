@@ -7,27 +7,21 @@ pub struct PlanetPipeline {
 }
 
 impl Pipeline for PlanetPipeline {
-    fn new(
-        gpu: &Gpu,
-        surface_format: &wgpu::TextureFormat,
-        texture_bgl: &wgpu::BindGroupLayout,
-        immediate_size: u32,
-    ) -> Self {
+    fn new(ctx: &PipelineCtx) -> Self {
         let mut p = Self {
             render_pipeline: None,
-            geometry: QuadGeometry::new(&gpu.device),
+            geometry: QuadGeometry::new(&ctx.gpu.device),
         };
-        p.reload(gpu, surface_format, texture_bgl, immediate_size);
+        p.reload(ctx);
         p
     }
 
-    fn reload(
-        &mut self,
-        gpu: &Gpu,
-        surface_format: &wgpu::TextureFormat,
-        _texture_bgl: &wgpu::BindGroupLayout,
-        immediate_size: u32,
-    ) {
+    fn reload(&mut self, ctx: &PipelineCtx) {
+        let &PipelineCtx {
+            gpu,
+            immediate_size,
+            ..
+        } = ctx;
         let shader_module = gpu
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -43,56 +37,35 @@ impl Pipeline for PlanetPipeline {
                 immediate_size,
             });
 
-        self.render_pipeline = Some(gpu.device.create_render_pipeline(
-            &wgpu::RenderPipelineDescriptor {
-                label: Some("Planet Render Pipeline"),
-                layout: Some(&layout),
-                vertex: wgpu::VertexState {
-                    module: &shader_module,
-                    entry_point: Some("vs_main"),
-                    buffers: &[Some(Vertex::layout()), Some(Primitive::layout())],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader_module,
-                    entry_point: Some("fs_main"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: *surface_format,
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::One,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                                operation: wgpu::BlendOperation::Add,
-                            },
-                            alpha: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::One,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                                operation: wgpu::BlendOperation::Add,
-                            },
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                    compilation_options: wgpu::PipelineCompilationOptions::default(),
-                }),
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleList,
-                    strip_index_format: None,
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
-                    polygon_mode: wgpu::PolygonMode::Fill,
-                    unclipped_depth: false,
-                    conservative: false,
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState {
-                    count: 1,
-                    mask: !0,
-                    alpha_to_coverage_enabled: false,
-                },
-                multiview_mask: None,
-                cache: None,
+        self.render_pipeline = Some(ctx.create_render_pipeline(wgpu::RenderPipelineDescriptor {
+            label: Some("Planet Render Pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader_module,
+                entry_point: Some("vs_main"),
+                buffers: &[Some(Vertex::layout()), Some(Primitive::layout())],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
-        ));
+            fragment: Some(wgpu::FragmentState {
+                module: &shader_module,
+                entry_point: Some("fs_main"),
+                targets: &[Some(ctx.color_target(None))],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        }));
     }
 
     fn bind(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>) {
@@ -101,13 +74,8 @@ impl Pipeline for PlanetPipeline {
         self.geometry.bind(pass);
     }
 
-    fn draw(
-        &mut self,
-        ctx: &DrawCtx,
-        pass: &mut wgpu::RenderPass<'_>,
-        byte_offset: u64,
-        count: u32,
-    ) {
-        self.geometry.draw(pass, ctx.instances, byte_offset, count);
+    fn draw(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>, batch: &Batch) {
+        self.geometry
+            .draw(pass, ctx.instances, batch.byte_offset, batch.count);
     }
 }

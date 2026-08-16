@@ -267,6 +267,7 @@ impl<'a> Engine<'a> {
         match self.renderer.render(
             &self.gpu,
             &target.surface,
+            &mut target.attachments,
             &mut self.pipeline_registry,
             &target.globals,
             &self.instance_buf,

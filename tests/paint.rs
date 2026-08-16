@@ -175,13 +175,13 @@ mod paint {
 
         // The invariant the renderer depends on: batches tile the byte buffer
         // exactly, and their counts sum to the instance count.
-        let stride = std::mem::size_of::<Primitive>() as u32;
-        let mut next = 0u32;
+        let stride = std::mem::size_of::<Primitive>() as u64;
+        let mut next = 0u64;
         let mut total = 0usize;
         for batch in instances.batches() {
             assert_eq!(batch.byte_offset, next, "gap or overlap between batches");
             assert!(batch.count > 0, "empty batch");
-            next += batch.count * stride;
+            next += batch.count as u64 * stride;
             total += batch.count as usize;
         }
         assert_eq!(total, instances.len());

@@ -15,14 +15,18 @@ pub struct SimpleCanvas<P: Instanced<Primitive>> {
 }
 impl<P: Instanced<Primitive>> SimpleCanvas<P> {
     /// Draw a full-bounds quad through `P`.
-    pub fn new(size: Size<Length>, with_handle: Option<fn(&mut EventCtx)>) -> Self {
+    pub fn new(size: Size<Length>) -> Self {
         Self {
             size,
-            with_handle,
+            with_handle: None,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
             _pipeline: PhantomData,
         }
+    }
+    pub fn with_handle(mut self, func: fn(&mut EventCtx)) -> Self {
+        self.with_handle = Some(func);
+        self
     }
     pub fn min(mut self, s: Size<i32>) -> Self {
         self.min = s;

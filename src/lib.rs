@@ -41,8 +41,9 @@ pub mod prelude {
     pub use crate::widget::Svg;
     pub use crate::widget::{
         Button, Center, CheckState, Checkbox, Column, ContentFit, Element, Image, Keyed, Mark,
-        Overlay, ProgressBar, RadioGroup, Rectangle, Row, Scrollable, SimpleCanvas, Slider, Spacer,
-        Spinner, Switch, Text, TextArea, TextField, TextRole, WrappingRows,
+        MeshCanvas, MeshItem, Overlay, ProgressBar, RadioGroup, Rectangle, Row, Scrollable,
+        SimpleCanvas, Slider, Spacer, Spinner, Switch, Text, TextArea, TextField, TextRole,
+        WrappingRows,
     };
 
     pub use crate::engine::{Engine, TargetId};

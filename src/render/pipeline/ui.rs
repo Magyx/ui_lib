@@ -1,14 +1,11 @@
 use crate::{
-    gpu::Gpu,
-    primitive::{InstanceData, Primitive},
+    primitive::{Batch, InstanceData, Primitive},
     render::{
         pipeline::*,
         quad::{QuadGeometry, Vertex},
     },
 };
 use wgpu::RenderPipeline;
-
-const UI_SHADER: &str = include_str!("../../../shaders/ui_shader.wgsl");
 
 /// The built-in pipeline every stock widget draws through.
 #[derive(Pipeline)]
@@ -19,47 +16,47 @@ pub struct UiPipeline {
 }
 
 impl Pipeline for UiPipeline {
-    fn new(
-        gpu: &Gpu,
-        surface_format: &wgpu::TextureFormat,
-        texture_bgl: &wgpu::BindGroupLayout,
-        immediate_size: u32,
-    ) -> Self {
+    // Declares nothing: the UI is painter-ordered 2D. It still has to *match*
+    // whatever the pass turns out to be, which `ctx.depth_state_passthrough()`
+    // handles below.
+    fn requirements() -> PassRequirements {
+        PassRequirements::NONE
+    }
+
+    fn new(ctx: &PipelineCtx) -> Self {
         let mut pipeline = Self {
             render_pipeline: None,
             layout: None,
-            geometry: QuadGeometry::new(&gpu.device),
+            geometry: QuadGeometry::new(&ctx.gpu.device),
         };
-        pipeline.reload(gpu, surface_format, texture_bgl, immediate_size);
-
+        pipeline.reload(ctx);
         pipeline
     }
 
-    fn reload(
-        &mut self,
-        gpu: &Gpu,
-        surface_format: &wgpu::TextureFormat,
-        texture_bgl: &wgpu::BindGroupLayout,
-        immediate_size: u32,
-    ) {
-        let source = format!("enable wgpu_binding_array;\n{UI_SHADER}");
-        let shader_module = gpu
+    fn reload(&mut self, ctx: &PipelineCtx) {
+        let source = format!(
+            "enable wgpu_binding_array;\n{}",
+            include_str!("../../../shaders/ui_shader.wgsl")
+        );
+        let shader_module = ctx
+            .gpu
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("UI Shader"),
                 source: wgpu::ShaderSource::Wgsl(source.into()),
             });
 
-        let layout = gpu
+        let layout = ctx
+            .gpu
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("UI Render Pipeline Layout"),
-                immediate_size,
-                bind_group_layouts: &[Some(texture_bgl)],
+                immediate_size: ctx.immediate_size,
+                bind_group_layouts: &[Some(ctx.texture_bgl)],
             });
         self.layout = Some(layout);
 
-        self.render_pipeline = Some(gpu.device.create_render_pipeline(
+        self.render_pipeline = Some(ctx.gpu.device.create_render_pipeline(
             &wgpu::RenderPipelineDescriptor {
                 label: Some("UI Render Pipeline"),
                 layout: self.layout.as_ref(),
@@ -72,27 +69,14 @@ impl Pipeline for UiPipeline {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader_module,
                     entry_point: Some("fs_main"),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: *surface_format,
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::One,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                                operation: wgpu::BlendOperation::Add,
-                            },
-                            alpha: wgpu::BlendComponent {
-                                src_factor: wgpu::BlendFactor::One,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                                operation: wgpu::BlendOperation::Add,
-                            },
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
+                    targets: &[Some(ctx.color_target(None))],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 }),
                 primitive: wgpu::PrimitiveState::default(),
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
+                // Never tests, never writes — but must declare the pass's
+                // format when the pass has one.
+                depth_stencil: ctx.depth_state_passthrough(),
+                multisample: ctx.multisample_state(),
                 multiview_mask: None,
                 cache: None,
             },
@@ -106,13 +90,8 @@ impl Pipeline for UiPipeline {
         self.geometry.bind(pass);
     }
 
-    fn draw(
-        &mut self,
-        ctx: &DrawCtx,
-        pass: &mut wgpu::RenderPass<'_>,
-        byte_offset: u64,
-        count: u32,
-    ) {
-        self.geometry.draw(pass, ctx.instances, byte_offset, count);
+    fn draw(&mut self, ctx: &DrawCtx, pass: &mut wgpu::RenderPass<'_>, batch: &Batch) {
+        self.geometry
+            .draw(pass, ctx.instances, batch.byte_offset, batch.count);
     }
 }

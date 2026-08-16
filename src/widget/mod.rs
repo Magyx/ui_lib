@@ -40,6 +40,9 @@ pub use button::Button;
 mod simple_canvas;
 pub use simple_canvas::SimpleCanvas;
 
+mod mesh_canvas;
+pub use mesh_canvas::{MeshCanvas, MeshItem};
+
 mod image;
 pub use image::{ContentFit, Image};
 

@@ -281,7 +281,7 @@ impl Instance<Primitive> {
 /// One run of instances sharing a pipeline and a clip.
 pub struct Batch {
     pub id: PipelineId,
-    pub byte_offset: u32,
+    pub byte_offset: u64,
     pub count: u32,
     pub clip: Option<[i32; 4]>,
 }
@@ -351,7 +351,7 @@ impl InstanceStore {
             "instance data must be at least 4-byte aligned"
         );
 
-        let byte_offset = (self.data.len() * 4) as u32;
+        let byte_offset = (self.data.len() * 4) as u64;
         self.data
             .extend_from_slice(bytemuck::cast_slice(std::slice::from_ref(&i.data)));
         self.count += 1;
@@ -360,7 +360,7 @@ impl InstanceStore {
             Some(b) if b.id == i.kind && b.clip == self.clip => {
                 debug_assert_eq!(
                     byte_offset,
-                    b.byte_offset + b.count * std::mem::size_of::<D>() as u32,
+                    b.byte_offset + b.count as u64 * std::mem::size_of::<D>() as u64,
                     "instances in one batch must be contiguous and equally sized; \
                      does this pipeline implement Instanced for more than one type?"
                 );
@@ -643,8 +643,8 @@ mod batching {
     /// Every batch here is `Primitive`-sized; mixed strides are covered by
     /// `mixed_instance_formats_share_one_buffer`.
     fn assert_covers_all(store: &InstanceStore) {
-        let stride = std::mem::size_of::<Primitive>() as u32;
-        let mut next = 0u32;
+        let stride = std::mem::size_of::<Primitive>() as u64;
+        let mut next = 0u64;
         let mut total = 0usize;
         for b in store.batches() {
             assert_eq!(
@@ -652,7 +652,7 @@ mod batching {
                 "batch does not start where the previous ended"
             );
             assert!(b.count > 0, "empty batch");
-            next += b.count * stride;
+            next += b.count as u64 * stride;
             total += b.count as usize;
         }
         assert_eq!(
@@ -710,7 +710,7 @@ mod batching {
 
         let b = store.batches();
         assert_eq!(b.len(), 3);
-        let stride = std::mem::size_of::<Primitive>() as u32;
+        let stride = std::mem::size_of::<Primitive>() as u64;
         assert_eq!((b[0].id, b[0].byte_offset, b[0].count), (ui_id(), 0, 2));
         assert_eq!(
             (b[1].id, b[1].byte_offset, b[1].count),

@@ -12,7 +12,8 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) pos: vec4<f32>,
-    @location(0) uv_screen: vec2<f32>, // screen pixel coords
+    @location(0) uv_local: vec2<f32>, // screen pixel coords
+    @location(1) @interpolate(flat) rect_size: vec2<f32>,
 };
 
 struct Globals {
@@ -350,25 +351,26 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
     var out: VertexOutput;
     out.pos = vec4<f32>(ndc, 0.0, 1.0);
-    out.uv_screen = world_pos; // pass pixel coords to FS
+    out.uv_local = local_pos; // pass pixel coords to FS
+    out.rect_size = in.size;
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Rebuild ray from pixel coords
-    let ws = max(globals.window_size, vec2<f32>(1.0, 1.0));
-    var fragCoord = in.uv_screen;
+    let rs = max(in.rect_size, vec2<f32>(1.0, 1.0));
+    var fragCoord = in.uv_local;
     // Convert to bottom-left origin for camera math
-    fragCoord.y = ws.y - fragCoord.y;
+    fragCoord.y = rs.y - fragCoord.y;
 
-    let aspect = vec2<f32>(ws.x / ws.y, 1.0);
+    let aspect = vec2<f32>(rs.x / rs.y, 1.0);
 
     let cam = setup_camera();
     let eye = cam.eye;
     let look_at = cam.look_at;
 
-    let point_ndc = fragCoord / ws;
+    let point_ndc = fragCoord / rs;
     let point_cam = vec3<f32>((2.0 * point_ndc - vec2<f32>(1.0, 1.0)) * aspect * FOV, -1.0);
 
     let ray = primary_ray(point_cam, eye, look_at);

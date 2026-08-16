@@ -1,10 +1,11 @@
 use wgpu::Surface;
 
+use super::attachment::Attachments;
 use crate::{
     gpu::{Globals, Gpu},
     primitive::{InstanceStore, Primitive},
     render::{
-        pipeline::{DrawCtx, PipelineId, PipelineRegistry},
+        pipeline::{DepthUse, DrawCtx, FrameCtx, PipelineId, PipelineRegistry},
         texture::TextureRegistry,
     },
 };
@@ -63,7 +64,8 @@ impl Renderer {
         &mut self,
         gpu: &Gpu,
         surface: &Surface<'a>,
-        pipeline_registry: &mut PipelineRegistry,
+        attachments: &mut Attachments,
+        registry: &mut PipelineRegistry,
         globals: &Globals,
         store: &InstanceStore,
     ) -> Presented {
@@ -88,7 +90,17 @@ impl Renderer {
         };
 
         crate::scope!("encode+submit");
-        let view = &output
+
+        let Some(config) = registry.pass_config() else {
+            // Nothing registered — nothing can draw.
+            gpu.queue.present(output);
+            return Presented::Ok;
+        };
+
+        let target_size = [output.texture.width(), output.texture.height()];
+        attachments.ensure(&gpu.device, target_size, config, registry.generation());
+
+        let surface_view = &output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -99,23 +111,97 @@ impl Renderer {
             });
 
         self.ensure_instance_capacity(&gpu.device, store.bytes().len() as u64);
-
         gpu.queue
             .write_buffer(&self.instance_buffer, 0, store.bytes());
 
+        // ---- frame hooks -------------------------------------------------
+        // Before the shared pass, with the encoder and the queue. Offscreen
+        // passes, compute dispatches, and per-frame uploads happen here.
+        let active = PipelineRegistry::active_ids(store.batches());
         {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
+            crate::scope!("pipeline::frame");
+            for &id in &active {
+                let Some(pipeline) = registry.get_mut(id) else {
+                    continue;
+                };
+                let mut ctx = FrameCtx {
+                    gpu,
+                    encoder: &mut encoder,
+                    globals,
+                    store,
+                    textures: &mut self.textures,
+                    pass: config,
+                    target_size,
+                    id,
+                };
+                pipeline.frame(&mut ctx);
+            }
+        }
+
+        // Depth slices: count the batches that asked to be isolated, then hand
+        // them descending ranges so later-painted widgets sit nearer the
+        // camera and cannot be rejected by an earlier widget's depth.
+        let isolated: Vec<usize> = store
+            .batches()
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| {
+                registry
+                    .requirements_of(b.id)
+                    .is_some_and(|r| r.isolate_depth && r.depth != DepthUse::None)
+            })
+            .map(|(i, _)| i)
+            .collect();
+        let slice = if isolated.is_empty() {
+            1.0
+        } else {
+            1.0 / isolated.len() as f32
+        };
+
+        {
+            let color_attachment = match attachments.msaa_view() {
+                // Multisampled: draw into the MSAA texture, resolve to the
+                // surface.
+                Some(msaa) => wgpu::RenderPassColorAttachment {
+                    view: msaa,
+                    depth_slice: None,
+                    resolve_target: Some(surface_view),
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Discard,
+                    },
+                },
+                None => wgpu::RenderPassColorAttachment {
+                    view: surface_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                         store: wgpu::StoreOp::Store,
                     },
-                })],
-                depth_stencil_attachment: None,
+                },
+            };
+
+            let depth_attachment =
+                attachments
+                    .depth_view()
+                    .map(|view| wgpu::RenderPassDepthStencilAttachment {
+                        view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: if config.depth_read_only {
+                                wgpu::StoreOp::Discard
+                            } else {
+                                wgpu::StoreOp::Store
+                            },
+                        }),
+                        stencil_ops: None,
+                    });
+
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(color_attachment)],
+                depth_stencil_attachment: depth_attachment,
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
@@ -125,6 +211,10 @@ impl Renderer {
                 globals,
                 textures: self.textures.bind_group(),
                 instances: &self.instance_buffer,
+                store,
+                depth: attachments.depth_bind(),
+                pass: config,
+                target_size,
             };
 
             let sf = globals.scale;
@@ -132,7 +222,10 @@ impl Renderer {
             let lh = globals.window_size[1].ceil() as i32;
             let default_clip = [0, 0, lw, lh];
             let mut bound: Option<PipelineId> = None;
-            for batch in store.batches() {
+            let mut depth_range: Option<(f32, f32)> = None;
+            let mut isolated_seen = 0usize;
+
+            for (i, batch) in store.batches().iter().enumerate() {
                 let [x, y, w, h] = batch.clip.unwrap_or(default_clip);
                 let left = x.clamp(0, lw);
                 let top = y.clamp(0, lh);
@@ -147,21 +240,42 @@ impl Renderer {
                 if pw == 0 || ph == 0 {
                     continue;
                 }
-                let Some(pipeline) = pipeline_registry.get_mut(batch.id) else {
-                    #[cfg(feature = "tracing")]
-                    tracing::warn!("batch emitted for an unregistered pipeline: {:?}", batch.id);
-                    debug_assert!(false, "batch emitted for an unregistered pipeline");
-                    continue;
+
+                // Depth range for this batch. Reverse order: the first
+                // isolated batch gets the far slice.
+                let want_range = if config.has_depth() {
+                    if isolated.contains(&i) {
+                        let k = isolated.len() - 1 - isolated_seen;
+                        isolated_seen += 1;
+                        Some((k as f32 * slice, (k as f32 + 1.0) * slice))
+                    } else {
+                        Some((0.0, 1.0))
+                    }
+                } else {
+                    None
                 };
+
+                if let Some(range) = want_range
+                    && depth_range != Some(range)
+                {
+                    pass.set_viewport(
+                        0.0,
+                        0.0,
+                        target_size[0] as f32,
+                        target_size[1] as f32,
+                        range.0,
+                        range.1,
+                    );
+                    depth_range = Some(range);
+                }
 
                 // Geometry and bind groups only change when the pipeline does;
                 // consecutive batches differing only by scissor skip this.
-                if bound != Some(batch.id) {
-                    pipeline.bind(&ctx, &mut pass);
+                let rebind = bound != Some(batch.id);
+                pass.set_scissor_rect(px, py, pw, ph);
+                if registry.draw_batch(batch.id, &ctx, &mut pass, batch, rebind) {
                     bound = Some(batch.id);
                 }
-                pass.set_scissor_rect(px, py, pw, ph);
-                pipeline.draw(&ctx, &mut pass, batch.byte_offset as u64, batch.count);
             }
         }
 

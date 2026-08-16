@@ -4,7 +4,7 @@ use crate::{
     layout::LayoutEngine,
     model::{Position, Rect, Size},
     render::{
-        pipeline::{Pipeline, PipelineRegistry},
+        pipeline::{Pipeline, PipelineRegistry, RegistryEnv},
         texture::TextureRegistry,
     },
     text::TextBackend,
@@ -59,12 +59,12 @@ impl<'a> PrepareCtx<'a> {
     }
     /// The pipeline for `P`, building it if this is its first use.
     pub fn pipeline<P: Pipeline>(&mut self) -> &mut P {
-        self.pipelines.get_or_insert::<P>(
-            self.gpu,
-            &self.surface_format,
-            self.texture.layout(),
-            self.immediate_size,
-        )
+        self.pipelines.get_or_insert::<P>(RegistryEnv {
+            gpu: self.gpu,
+            color_format: self.surface_format,
+            texture_bgl: self.texture.layout(),
+            immediate_size: self.immediate_size,
+        })
     }
 
     /// Register `P` without needing a handle to it.

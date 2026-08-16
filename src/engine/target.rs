@@ -1,7 +1,13 @@
 use std::{sync::Arc, time::Instant};
 
 use super::{Engine, builder::TargetConfig};
-use crate::{context::Context, gpu::Globals, model::Size, widget::Element};
+use crate::{
+    context::Context,
+    gpu::Globals,
+    model::Size,
+    render::{attachment::Attachments, pipeline::RegistryEnv},
+    widget::Element,
+};
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub struct TargetId(pub(super) u32);
@@ -21,6 +27,7 @@ impl TargetIdAlloc {
 pub struct Target<'a> {
     pub surface: wgpu::Surface<'a>,
     pub config: wgpu::SurfaceConfiguration,
+    pub(super) attachments: Attachments,
     /// Logical size of the surface (in logical pixels)
     pub size: Size<u32>,
     /// Device-pixel ratio. Physical size = logical size x scale_factor
@@ -143,6 +150,7 @@ impl<'a> Engine<'a> {
         let target = Target {
             surface,
             config,
+            attachments: Attachments::new(),
             size: logical_size,
             scale_factor: sf,
             globals: Globals {
@@ -163,23 +171,17 @@ impl<'a> Engine<'a> {
             root: None,
         };
 
+        let env = RegistryEnv {
+            gpu: &self.gpu,
+            color_format: target.config.format,
+            texture_bgl: self.renderer.textures.layout(),
+            immediate_size: self.immediate_size,
+        };
         if !self.pipeline_registry.has_default_pipelines() {
-            self.pipeline_registry.register_default_pipelines(
-                &self.gpu,
-                &target.config.format,
-                self.renderer.textures.layout(),
-                self.immediate_size,
-            );
+            self.pipeline_registry.register_default_pipelines(env);
         }
-        let fmt = target.config.format;
         for reg in std::mem::take(&mut self.pending_pipelines) {
-            self.pipeline_registry.register(
-                reg,
-                &self.gpu,
-                &fmt,
-                self.renderer.textures.layout(),
-                self.immediate_size,
-            );
+            self.pipeline_registry.register(reg, env);
         }
 
         let tid = self.target_alloc.alloc();

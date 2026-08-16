@@ -10,7 +10,7 @@ use crate::{
     primitive::InstanceStore,
     render::{
         AllocatorKind,
-        pipeline::{Pipeline, PipelineId, PipelineRegistration, PipelineRegistry},
+        pipeline::{Pipeline, PipelineId, PipelineRegistration, PipelineRegistry, RegistryEnv},
         renderer::Renderer,
         texture::{Atlas, TextureHandle},
     },
@@ -217,12 +217,12 @@ impl<'a> Engine<'a> {
             return;
         };
 
-        self.pipeline_registry.reload(
-            &self.gpu,
-            &fmt,
-            self.renderer.textures.layout(),
-            self.immediate_size,
-        );
+        self.pipeline_registry.reload_all(RegistryEnv {
+            gpu: &self.gpu,
+            color_format: fmt,
+            texture_bgl: self.renderer.textures.layout(),
+            immediate_size: self.immediate_size,
+        });
     }
 
     pub fn toggle_debug(&mut self) {
@@ -267,10 +267,12 @@ impl<'a> Engine<'a> {
 
         self.pipeline_registry.register(
             reg,
-            &self.gpu,
-            &fmt,
-            self.renderer.textures.layout(),
-            self.immediate_size,
+            RegistryEnv {
+                gpu: &self.gpu,
+                color_format: fmt,
+                texture_bgl: self.renderer.textures.layout(),
+                immediate_size: self.immediate_size,
+            },
         );
     }
 
