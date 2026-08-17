@@ -104,6 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         layer: Layer::Overlay,
         size: Size::new(w, h),
         anchors: Anchor::TOP | Anchor::LEFT,
+        margin: Vec4::splat(0),
         exclusive_zone: -1,
         keyboard_interactivity: KeyboardInteractivity::None,
         namespace: Some("ui-stress".to_string()),

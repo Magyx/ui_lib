@@ -3,7 +3,7 @@ use smithay_client_toolkit::shell::{
     xdg::window::WindowDecorations,
 };
 
-use crate::model::Size;
+use crate::model::{Size, Vec4};
 
 #[derive(Clone, Debug)]
 pub enum OutputSet {
@@ -37,6 +37,7 @@ pub struct LayerOptions {
     pub layer: Layer,
     pub size: Size<u32>,
     pub anchors: Anchor,
+    pub margin: Vec4<i32>,
     /// Negative means "auto" (no reservation). Positive reserves screen space (e.g. status bar).
     pub exclusive_zone: i32,
     pub keyboard_interactivity: KeyboardInteractivity,
@@ -50,7 +51,8 @@ impl Default for LayerOptions {
         Self {
             layer: Layer::Top,
             size: Size::new(640, 360),
-            anchors: Anchor::TOP | Anchor::LEFT | Anchor::RIGHT,
+            anchors: Anchor::all(),
+            margin: Vec4::splat(0),
             exclusive_zone: -1,
             keyboard_interactivity: KeyboardInteractivity::None,
             namespace: Some("ui".to_string()),

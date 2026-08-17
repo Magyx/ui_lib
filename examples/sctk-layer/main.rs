@@ -35,6 +35,7 @@ fn main() -> ui::Result<()> {
         layer: Layer::Background,
         size: Size::new(0, 0),
         anchors: Anchor::TOP | Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
+        margin: Vec4::splat(50),
         exclusive_zone: -1,
         keyboard_interactivity: KeyboardInteractivity::OnDemand,
         namespace: Some("ui-example".to_string()),

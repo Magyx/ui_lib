@@ -137,6 +137,7 @@ impl SctkState {
             out,
         );
         layer_surface.set_anchor(opts.anchors);
+        layer_surface.set_margin(opts.margin.y, opts.margin.z, opts.margin.w, opts.margin.x);
         layer_surface.set_size(opts.size.width, opts.size.height);
         layer_surface.set_keyboard_interactivity(opts.keyboard_interactivity);
         if opts.exclusive_zone != 0 {
