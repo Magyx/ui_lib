@@ -331,6 +331,14 @@ impl<'a> Engine<'a> {
                 }
                 target.ctx.request_redraw();
             }
+            Event::CursorLeft => {
+                target.ctx.mouse_pos = crate::context::POINTER_ELSEWHERE;
+                target.globals.mouse_pos = [
+                    crate::context::POINTER_ELSEWHERE.x,
+                    crate::context::POINTER_ELSEWHERE.y,
+                ];
+                target.ctx.request_redraw();
+            }
             Event::CursorMoved { position } => {
                 let sf = target.scale_factor as f32;
                 let lp = Position::new(position.x / sf, position.y / sf);
@@ -355,6 +363,10 @@ impl<'a> Engine<'a> {
             Event::ModifiersChanged(m) => {
                 target.ctx.modifiers = m;
             }
+            Event::Focused(f) => {
+                target.ctx.surface_focused = f;
+                target.ctx.request_redraw();
+            }
             _ => (),
         }
 
@@ -365,6 +377,8 @@ impl<'a> Engine<'a> {
             let ev_view = match &event {
                 Event::RedrawRequested => Some(Ui::RedrawRequested),
                 Event::Resized { .. } => Some(Ui::Resized { size: logical_size }),
+                Event::CursorEntered => Some(Ui::CursorEntered),
+                Event::CursorLeft => Some(Ui::CursorLeft),
                 Event::CursorMoved { .. } => Some(Ui::CursorMoved {
                     position: logical_mouse,
                 }),
@@ -388,6 +402,7 @@ impl<'a> Engine<'a> {
                 Event::Key(k) => Some(Ui::Key(k)),
                 Event::Text(t) => Some(Ui::Text(t)),
                 Event::ModifiersChanged(m) => Some(Ui::ModifiersChanged(m)),
+                Event::Focused(f) => Some(Ui::Focused(*f)),
                 _ => None,
             };
 

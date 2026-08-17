@@ -125,13 +125,15 @@ where
         }
         Options::Lock(lock_options) => {
             let mut st = state::SctkState::new(
+                registry,
                 compositor,
-                None,
-                None,
                 outputs,
                 seats,
-                registry,
+                None,
+                None,
                 session_lock,
+                None,
+                None,
                 sctk_handler,
                 tx_sctk,
             );
@@ -287,7 +289,7 @@ where
             }
 
             // TODO: SctkEvent::Closed should carry the sid
-            if exit_on_close && matches!(ev, SctkEvent::Closed) {
+            if exit_on_close && matches!(ev, SctkEvent::Closed { .. }) {
                 loop_ctl.exit();
             }
         }

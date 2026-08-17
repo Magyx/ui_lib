@@ -22,6 +22,13 @@ pub enum SctkEvent {
         surface: SurfaceId,
         factor: i32,
     },
+    PointerEntered {
+        surface: SurfaceId,
+        pos: Position<f32>,
+    },
+    PointerLeft {
+        surface: SurfaceId,
+    },
     PointerMoved {
         surface: SurfaceId,
         pos: Position<f32>,
@@ -36,7 +43,6 @@ pub enum SctkEvent {
         h: f64,
         v: f64,
     },
-
     Key {
         surface: SurfaceId,
         raw_code: u32,
@@ -45,9 +51,14 @@ pub enum SctkEvent {
         pressed: bool,
         repeat: bool,
     },
-
     Modifiers(SurfaceId, smithay_client_toolkit::seat::keyboard::Modifiers),
-    Closed,
+    Focus {
+        surface: SurfaceId,
+        focused: bool,
+    },
+    Closed {
+        surface: SurfaceId,
+    },
 }
 
 impl SctkEvent {
@@ -55,11 +66,15 @@ impl SctkEvent {
         match self {
             SctkEvent::Resized { surface, .. }
             | SctkEvent::ScaleChanged { surface, .. }
+            | SctkEvent::PointerEntered { surface, .. }
+            | SctkEvent::PointerLeft { surface, .. }
             | SctkEvent::PointerMoved { surface, .. }
             | SctkEvent::PointerButton { surface, .. }
             | SctkEvent::PointerAxis { surface, .. }
             | SctkEvent::Key { surface, .. }
-            | SctkEvent::Modifiers(surface, ..) => Some(*surface),
+            | SctkEvent::Modifiers(surface, ..)
+            | SctkEvent::Focus { surface, .. }
+            | SctkEvent::Closed { surface } => Some(*surface),
             _ => None,
         }
     }
@@ -73,6 +88,8 @@ impl<M> ToEvent<M, SctkEvent> for SctkEvent {
             SctkEvent::ScaleChanged { factor, .. } => Event::ScaleFactorChanged {
                 factor: *factor as f64,
             },
+            SctkEvent::PointerEntered { .. } => Event::CursorEntered,
+            SctkEvent::PointerLeft { .. } => Event::CursorLeft,
             SctkEvent::PointerMoved { pos, .. } => Event::CursorMoved { position: *pos },
             SctkEvent::PointerButton {
                 button, pressed, ..
@@ -101,7 +118,6 @@ impl<M> ToEvent<M, SctkEvent> for SctkEvent {
                 dy: *v as f32,
                 units: ScrollUnits::Pixels,
             }),
-
             SctkEvent::Key {
                 raw_code,
                 keysym,
@@ -126,7 +142,6 @@ impl<M> ToEvent<M, SctkEvent> for SctkEvent {
                     location: KeyLocation::Standard,
                 })
             }
-
             SctkEvent::Modifiers(_, m) => Event::ModifiersChanged(Modifiers {
                 shift: m.shift,
                 control: m.ctrl,
@@ -135,8 +150,8 @@ impl<M> ToEvent<M, SctkEvent> for SctkEvent {
                 caps_lock: Some(m.caps_lock),
                 num_lock: Some(m.num_lock),
             }),
-
-            SctkEvent::Closed => Event::Platform(SctkEvent::Closed),
+            SctkEvent::Focus { focused, .. } => Event::Focused(*focused),
+            SctkEvent::Closed { .. } => Event::CloseRequested,
         }
     }
 }

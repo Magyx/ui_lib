@@ -74,6 +74,7 @@ pub struct SctkState {
     pub surfaces: HashMap<SurfaceId, SurfaceRec>,
     by_surface_id: HashMap<u32, SurfaceId>,
     kbd_focus: Option<SurfaceId>,
+    pointer_focus: Option<SurfaceId>,
     active_lock: Option<SessionLock>,
 
     // event queue for the generic runner
@@ -84,13 +85,15 @@ pub struct SctkState {
 impl SctkState {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        registry: RegistryState,
         compositor: CompositorState,
-        layer_shell: Option<LayerShell>,
-        xdg_shell: Option<XdgShell>,
         outputs: OutputState,
         seats: SeatState,
-        registry: RegistryState,
+        layer_shell: Option<LayerShell>,
+        xdg_shell: Option<XdgShell>,
         session_lock: SessionLockState,
+        surfaces: Option<HashMap<SurfaceId, SurfaceRec>>,
+        by_surface_id: Option<HashMap<u32, SurfaceId>>,
         handler: Box<dyn SctkErased>,
         event_tx: loop_channel::Sender<SctkEvent>,
     ) -> Self {
@@ -103,9 +106,10 @@ impl SctkState {
             _xdg_shell: xdg_shell,
             session_lock,
 
-            surfaces: HashMap::new(),
-            by_surface_id: HashMap::new(),
+            surfaces: surfaces.unwrap_or_default(),
+            by_surface_id: by_surface_id.unwrap_or_default(),
             kbd_focus: None,
+            pointer_focus: None,
             active_lock: None,
 
             handler,
@@ -183,23 +187,19 @@ impl SctkState {
             );
         }
 
-        Ok(Self {
+        Ok(Self::new(
             registry,
-            _compositor: compositor,
+            compositor,
             outputs,
             seats,
-            _layer_shell: Some(layer_shell),
-            _xdg_shell: None,
+            Some(layer_shell),
+            None,
             session_lock,
-
-            surfaces,
-            by_surface_id,
-            kbd_focus: None,
-            active_lock: None,
-
+            Some(surfaces),
+            Some(by_surface_id),
             handler,
             event_tx,
-        })
+        ))
     }
 
     pub fn spawn_layer_surfaces(
@@ -326,23 +326,19 @@ impl SctkState {
             },
         );
 
-        Ok(Self {
+        Ok(Self::new(
             registry,
-            _compositor: compositor,
+            compositor,
             outputs,
             seats,
-            _layer_shell: None,
-            _xdg_shell: Some(xdg_shell),
+            None,
+            Some(xdg_shell),
             session_lock,
-
-            surfaces,
-            by_surface_id,
-            kbd_focus: None,
-            active_lock: None,
-
+            Some(surfaces),
+            Some(by_surface_id),
             handler,
             event_tx,
-        })
+        ))
     }
 
     pub fn spawn_window(&mut self, qh: &QueueHandle<Self>, mut opts: XdgOptions) -> SurfaceId {
@@ -394,6 +390,9 @@ impl SctkState {
             self.surfaces.remove(&sid);
             if self.kbd_focus == Some(sid) {
                 self.kbd_focus = None;
+            }
+            if self.pointer_focus == Some(sid) {
+                self.pointer_focus = None;
             }
         }
     }
@@ -639,6 +638,10 @@ impl CompositorHandler for SctkState {
 
 impl LayerShellHandler for SctkState {
     fn closed(&mut self, conn: &Connection, qh: &QueueHandle<Self>, layer: &LayerSurface) {
+        let lid = layer.wl_surface().id().protocol_id();
+        if let Some(&sid) = self.by_surface_id.get(&lid) {
+            self.emit_event(SctkEvent::Closed { surface: sid });
+        }
         self.handler.closed(conn, qh, layer);
     }
 
@@ -679,6 +682,10 @@ impl LayerShellHandler for SctkState {
 
 impl WindowHandler for SctkState {
     fn request_close(&mut self, conn: &Connection, qh: &QueueHandle<Self>, window: &Window) {
+        let wid = window.wl_surface().id().protocol_id();
+        if let Some(&sid) = self.by_surface_id.get(&wid) {
+            self.emit_event(SctkEvent::Closed { surface: sid });
+        }
         self.handler.request_close(conn, qh, window);
     }
 
@@ -843,20 +850,27 @@ impl PointerHandler for SctkState {
                 None => continue,
             };
 
+            let sf = self
+                .surfaces
+                .get(&sid)
+                .map(|r| r.scale_factor.max(1) as f32)
+                .unwrap_or(1.0);
+            let (px, py) = ev.position;
+            let pos = Position::new(px as f32 * sf, py as f32 * sf);
+
             match ev.kind {
-                PointerEventKind::Enter { .. } => {}
-                PointerEventKind::Leave { .. } => {}
+                PointerEventKind::Enter { .. } => {
+                    self.pointer_focus = Some(sid);
+                    self.emit_event(SctkEvent::PointerEntered { surface: sid, pos });
+                }
+                PointerEventKind::Leave { .. } => {
+                    if self.pointer_focus == Some(sid) {
+                        self.pointer_focus = None;
+                    }
+                    self.emit_event(SctkEvent::PointerLeft { surface: sid });
+                }
                 PointerEventKind::Motion { .. } => {
-                    let (x, y) = ev.position;
-                    let sf = self
-                        .surfaces
-                        .get(&sid)
-                        .map(|r| r.scale_factor.max(1) as f32)
-                        .unwrap_or(1.0);
-                    self.emit_event(SctkEvent::PointerMoved {
-                        surface: sid,
-                        pos: Position::new(x as f32 * sf, y as f32 * sf),
-                    });
+                    self.emit_event(SctkEvent::PointerMoved { surface: sid, pos });
                 }
                 PointerEventKind::Press { button, .. } => {
                     self.emit_event(SctkEvent::PointerButton {
@@ -899,7 +913,12 @@ impl KeyboardHandler for SctkState {
         _rawkeys: &[u32],
         _keysyms: &[Keysym],
     ) {
-        self.kbd_focus = Some(SurfaceId(surface.id().protocol_id()));
+        let sid = SurfaceId(surface.id().protocol_id());
+        self.kbd_focus = Some(sid);
+        self.emit_event(SctkEvent::Focus {
+            surface: sid,
+            focused: true,
+        });
     }
 
     fn leave(
@@ -907,10 +926,17 @@ impl KeyboardHandler for SctkState {
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
         _keyboard: &WlKeyboard,
-        _surface: &WlSurface,
+        surface: &WlSurface,
         _serial: u32,
     ) {
-        self.kbd_focus = None;
+        let sid = SurfaceId(surface.id().protocol_id());
+        if self.kbd_focus == Some(sid) {
+            self.kbd_focus = None;
+            self.emit_event(SctkEvent::Focus {
+                surface: sid,
+                focused: false,
+            });
+        }
     }
 
     fn press_key(

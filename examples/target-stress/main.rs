@@ -80,13 +80,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let handler = erased::erase::<DefaultHandler, Msg, _>(|_m: Msg| {});
 
     let mut state = SctkState::new(
+        registry,
         compositor,
-        Some(layer_shell),
-        None,
         outputs,
         seats,
-        registry,
+        Some(layer_shell),
+        None,
         session_lock,
+        None,
+        None,
         handler,
         tx,
     );

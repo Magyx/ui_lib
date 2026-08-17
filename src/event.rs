@@ -127,6 +127,8 @@ pub enum Event<M, E: ToEvent<M, E>> {
     ScaleFactorChanged {
         factor: f64,
     },
+    CursorEntered,
+    CursorLeft,
     CursorMoved {
         position: Position<f32>,
     },
@@ -139,6 +141,8 @@ pub enum Event<M, E: ToEvent<M, E>> {
     Key(KeyEvent),               // key press/release (with metadata)
     Text(TextInput),             // committed text (IME/composition)
     ModifiersChanged(Modifiers), // track a snapshot in your ctx
+    Focused(bool),
+    CloseRequested,
 
     Platform(E),
     Message(M),
@@ -150,6 +154,8 @@ pub enum UiEventRef<'a> {
     Resized {
         size: Size<u32>,
     },
+    CursorEntered,
+    CursorLeft,
     CursorMoved {
         position: Position<f32>,
     },
@@ -161,6 +167,8 @@ pub enum UiEventRef<'a> {
     Key(&'a KeyEvent),
     Text(&'a TextInput),
     ModifiersChanged(&'a Modifiers),
+    Focused(bool),
+    CloseRequested,
 }
 
 #[cfg(test)]

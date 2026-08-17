@@ -116,6 +116,8 @@ impl<M> ToEvent<M, ::winit::event::WindowEvent> for ::winit::event::WindowEvent 
             WE::ScaleFactorChanged { scale_factor, .. } => Event::ScaleFactorChanged {
                 factor: *scale_factor,
             },
+            WE::CursorEntered { .. } => Event::CursorEntered,
+            WE::CursorLeft { .. } => Event::CursorLeft,
             WE::CursorMoved { position, .. } => Event::CursorMoved {
                 position: Position::new(position.x as f32, position.y as f32),
             },
@@ -173,6 +175,8 @@ impl<M> ToEvent<M, ::winit::event::WindowEvent> for ::winit::event::WindowEvent 
                 caps_lock: None,
                 num_lock: None,
             }),
+            WE::Focused(f) => Event::Focused(*f),
+            WE::CloseRequested => Event::CloseRequested,
             _ => Event::Platform(self.clone()),
         }
     }

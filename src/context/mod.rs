@@ -25,12 +25,15 @@ pub use event::*;
 
 pub type Id = u64;
 
+pub const POINTER_ELSEWHERE: Position<f32> = Position::splat(f32::NEG_INFINITY);
+
 pub struct Context {
     pub mouse_pos: Position<f32>,
     pub mouse_buttons_down: u32,
     pub mouse_buttons_pressed: u32,
     pub mouse_buttons_released: u32,
     pub modifiers: Modifiers,
+    pub surface_focused: bool,
     pub focus: Focus,
     pub view_state: ViewState,
 
@@ -50,6 +53,7 @@ impl Context {
             mouse_buttons_pressed: 0,
             mouse_buttons_released: 0,
             modifiers: Modifiers::default(),
+            surface_focused: true,
             focus: Focus::new(),
             view_state: ViewState::default(),
 
