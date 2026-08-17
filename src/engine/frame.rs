@@ -377,6 +377,9 @@ impl<'a> Engine<'a> {
             let ev_view = match &event {
                 Event::RedrawRequested => Some(Ui::RedrawRequested),
                 Event::Resized { .. } => Some(Ui::Resized { size: logical_size }),
+                Event::ScaleFactorChanged { factor } => {
+                    Some(Ui::ScaleFactorChanged { factor: *factor })
+                }
                 Event::CursorEntered => Some(Ui::CursorEntered),
                 Event::CursorLeft => Some(Ui::CursorLeft),
                 Event::CursorMoved { .. } => Some(Ui::CursorMoved {

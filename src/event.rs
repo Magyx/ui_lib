@@ -154,6 +154,9 @@ pub enum UiEventRef<'a> {
     Resized {
         size: Size<u32>,
     },
+    ScaleFactorChanged {
+        factor: f64,
+    },
     CursorEntered,
     CursorLeft,
     CursorMoved {
