@@ -12,8 +12,9 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) pos: vec4<f32>,
-    @location(0) uv_local: vec2<f32>, // screen pixel coords
+    @location(0) uv_local: vec2<f32>, // rect pixel coords
     @location(1) @interpolate(flat) rect_size: vec2<f32>,
+    @location(2) @interpolate(flat) rect_origin: vec2<f32>,
 };
 
 struct Globals {
@@ -281,16 +282,23 @@ fn march_clouds_shadow(local_origin: vec3<f32>, local_up: vec3<f32>, rot_cloud: 
 }
 
 /* -------------------- render -------------------- */
-const FOV: f32 = 0.5773502691896257; // tan(radians(30.0))
+const FIT_MARGIN: f32 = 1.12;
 const MAX_RAY_DIST: f32 = MAX_HEIGHT * 4.0;
 
-fn render(eye: Ray) -> vec3<f32> {
+fn fit_fov() -> f32 {
+    let r = (PLANET.radius + MAX_HEIGHT) * FIT_MARGIN;
+    let cam = setup_camera();
+    let d = length(cam.eye - PLANET.origin);
+    return r / sqrt((max(d * d - r * r, 1e-4)));
+}
+
+fn render(eye: Ray, drag: vec2<f32>) -> vec3<f32> {
     let rot_y = rotate_y(27.0);
     var rot = rotate_x(-12.0 * globals.time) * rot_y;
     var rot_cloud = rotate_x(8.0 * globals.time) * rot_y;
 
     if globals.mouse_buttons != 0u {
-        rot = rotate_y(-globals.mouse_pos.x) * rotate_x(globals.mouse_pos.y);
+        rot = rotate_y(-drag.x * 180.0) * rotate_x(drag.y * 90.0);
         rot_cloud = rot;
     }
 
@@ -351,8 +359,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
     var out: VertexOutput;
     out.pos = vec4<f32>(ndc, 0.0, 1.0);
-    out.uv_local = local_pos; // pass pixel coords to FS
+    out.uv_local = local_pos; // pixel relative to top-left
     out.rect_size = in.size;
+    out.rect_origin = in.position;
     return out;
 }
 
@@ -364,18 +373,25 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Convert to bottom-left origin for camera math
     fragCoord.y = rs.y - fragCoord.y;
 
-    let aspect = vec2<f32>(rs.x / rs.y, 1.0);
+    let ar = rs.x / rs.y;
+    let aspect = select(vec2<f32>(1.0, 1.0 / ar), vec2<f32>(ar, 1.0), ar >= 1.0);
 
     let cam = setup_camera();
     let eye = cam.eye;
     let look_at = cam.look_at;
 
     let point_ndc = fragCoord / rs;
-    let point_cam = vec3<f32>((2.0 * point_ndc - vec2<f32>(1.0, 1.0)) * aspect * FOV, -1.0);
+    let point_cam = vec3<f32>((2.0 * point_ndc - vec2<f32>(1.0, 1.0)) * aspect * fit_fov(), -1.0);
 
     let ray = primary_ray(point_cam, eye, look_at);
 
-    var color = render(ray);
+    let local = ((globals.mouse_pos - in.rect_origin) / rs) * 2.0 - vec2<f32>(1.0, 1.0);
+    let drag = clamp(
+        vec2<f32>(local.x, -local.y),
+        vec2<f32>(-1.0, -1.0),
+        vec2<f32>(1.0, 1.0),
+    );
+    var color = render(ray, drag);
 
     // tonemap + gamma (keep non-negative to avoid pow NaNs)
     color = max(color, vec3<f32>(0.0, 0.0, 0.0));
