@@ -1,4 +1,4 @@
-use smithay_client_toolkit::seat::keyboard::Keysym;
+use smithay_client_toolkit::{reexports::client::protocol::wl_pointer, seat::keyboard::Keysym};
 use smol_str::ToSmolStr;
 
 use super::SurfaceId;
@@ -42,6 +42,9 @@ pub enum SctkEvent {
         surface: SurfaceId,
         h: f64,
         v: f64,
+        h120: i32,
+        v120: i32,
+        source: Option<wl_pointer::AxisSource>,
     },
     Key {
         surface: SurfaceId,
@@ -113,11 +116,38 @@ impl<M> ToEvent<M, SctkEvent> for SctkEvent {
                     state: ks,
                 }
             }
-            SctkEvent::PointerAxis { h, v, .. } => Event::MouseWheel(ScrollDelta {
-                dx: *h as f32,
-                dy: *v as f32,
-                units: ScrollUnits::Pixels,
-            }),
+            SctkEvent::PointerAxis {
+                h,
+                v,
+                h120,
+                v120,
+                source,
+                ..
+            } => {
+                let wheel = matches!(
+                    source,
+                    Some(wl_pointer::AxisSource::Wheel) | Some(wl_pointer::AxisSource::WheelTilt)
+                );
+                if wheel {
+                    const STEP: f32 = 10.0;
+                    let (dx, dy) = if *h120 != 0 || *v120 != 0 {
+                        (*h120 as f32 / 120.0, *v120 as f32 / 120.0)
+                    } else {
+                        (*h as f32 / STEP, *v as f32 / STEP)
+                    };
+                    Event::MouseWheel(ScrollDelta {
+                        dx,
+                        dy,
+                        units: ScrollUnits::Lines,
+                    })
+                } else {
+                    Event::MouseWheel(ScrollDelta {
+                        dx: *h as f32,
+                        dy: *v as f32,
+                        units: ScrollUnits::Pixels,
+                    })
+                }
+            }
             SctkEvent::Key {
                 raw_code,
                 keysym,
@@ -133,13 +163,14 @@ impl<M> ToEvent<M, SctkEvent> for SctkEvent {
                 };
                 let logical_key = map_keysym_to_logical(*keysym, utf8.as_deref());
                 let physical_key = PhysicalKey::Code(*raw_code);
+                let location = map_keysym_to_location(*keysym);
 
                 Event::Key(KeyEvent {
                     state,
                     repeat: *repeat,
                     logical_key,
                     physical_key,
-                    location: KeyLocation::Standard,
+                    location,
                 })
             }
             SctkEvent::Modifiers(_, m) => Event::ModifiersChanged(Modifiers {
@@ -153,6 +184,18 @@ impl<M> ToEvent<M, SctkEvent> for SctkEvent {
             SctkEvent::Focus { focused, .. } => Event::Focused(*focused),
             SctkEvent::Closed { .. } => Event::CloseRequested,
         }
+    }
+}
+
+pub fn map_keysym_to_location(k: Keysym) -> KeyLocation {
+    use smithay_client_toolkit::seat::keyboard::Keysym as KS;
+    match k {
+        KS::Shift_L | KS::Control_L | KS::Alt_L | KS::Super_L | KS::Meta_L => KeyLocation::Left,
+        KS::Shift_R | KS::Control_R | KS::Alt_R | KS::Super_R | KS::Meta_R => KeyLocation::Right,
+        other if (KS::KP_Space.raw()..=KS::KP_Equal.raw()).contains(&other.raw()) => {
+            KeyLocation::Numpad
+        }
+        _ => KeyLocation::Standard,
     }
 }
 

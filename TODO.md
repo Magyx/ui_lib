@@ -71,7 +71,7 @@ Priorities:
 - [ ] `consts.rs` TODO list — `// TODO: should add configurability` at `graphics.rs:2863`, `// TODO: maybe return a result` at `graphics.rs:3022, 3129, 3241`.
 - [ ] `// TODO: winit can only have 1 target` at `winit.rs:12498`.
 - [ ] `// TODO: propagate new_output and output_destroyed` at `sctk/state.rs:8775`.
-- [ ] `Scrollable` doesn't scroll equally between different runtimes.
+- [x] `Scrollable` doesn't scroll equally between different runtimes.
 
 ---
 

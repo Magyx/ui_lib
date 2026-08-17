@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use calloop::LoopHandle;
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
     delegate_compositor, delegate_keyboard, delegate_layer, delegate_output, delegate_pointer,
@@ -80,6 +81,7 @@ pub struct SctkState {
     // event queue for the generic runner
     handler: Box<dyn SctkErased>,
     event_tx: loop_channel::Sender<SctkEvent>,
+    loop_handle: Option<LoopHandle<'static, Self>>,
 }
 
 impl SctkState {
@@ -114,6 +116,7 @@ impl SctkState {
 
             handler,
             event_tx,
+            loop_handle: None,
         }
     }
 
@@ -379,6 +382,10 @@ impl SctkState {
 
     fn emit_event(&self, ev: SctkEvent) {
         let _ = self.event_tx.send(ev);
+    }
+
+    pub fn set_loop_handle(&mut self, handle: LoopHandle<'static, SctkState>) {
+        self.loop_handle = Some(handle);
     }
 
     pub fn surface_id_by_protocol_id(&self, id: u32) -> Option<&SurfaceId> {
@@ -819,9 +826,31 @@ impl SeatHandler for SctkState {
             Capability::Pointer => {
                 _ = self.seats.get_pointer(qh, &seat);
             }
-            Capability::Keyboard => {
-                _ = self.seats.get_keyboard(qh, &seat, None);
-            }
+            Capability::Keyboard => match self.loop_handle.clone() {
+                Some(lh) => {
+                    _ = self.seats.get_keyboard_with_repeat(
+                        qh,
+                        &seat,
+                        None,
+                        lh,
+                        Box::new(|state, _db, event| {
+                            if let Some(sid) = state.kbd_focus {
+                                state.emit_event(SctkEvent::Key {
+                                    surface: sid,
+                                    raw_code: event.raw_code,
+                                    keysym: event.keysym,
+                                    utf8: event.utf8,
+                                    pressed: true,
+                                    repeat: true,
+                                })
+                            }
+                        }),
+                    );
+                }
+                None => {
+                    _ = self.seats.get_keyboard(qh, &seat, None);
+                }
+            },
             _ => { /* Not supported atm */ }
         }
     }
@@ -889,12 +918,16 @@ impl PointerHandler for SctkState {
                 PointerEventKind::Axis {
                     horizontal,
                     vertical,
+                    source,
                     ..
                 } => {
                     self.emit_event(SctkEvent::PointerAxis {
                         surface: sid,
                         h: horizontal.absolute,
                         v: vertical.absolute,
+                        h120: horizontal.value120,
+                        v120: vertical.value120,
+                        source,
                     });
                 }
             }

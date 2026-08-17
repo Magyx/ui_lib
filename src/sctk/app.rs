@@ -90,6 +90,8 @@ where
         _ => None,
     };
 
+    let mut event_loop: EventLoop<state::SctkState> =
+        EventLoop::try_new().map_err(SctkError::event_loop)?;
     let mut st = match opts {
         Options::Layer(layer_options) => {
             let layer_shell = LayerShell::bind(&globals, &qh).map_err(SctkError::bind_global)?;
@@ -184,8 +186,7 @@ where
     let loop_ctl = SctkLoop::default();
 
     // 5) Main loop
-    let mut event_loop: EventLoop<state::SctkState> =
-        EventLoop::try_new().map_err(SctkError::event_loop)?;
+    st.set_loop_handle(event_loop.handle());
 
     WaylandSource::new(conn.clone(), event_queue)
         .insert(event_loop.handle())
