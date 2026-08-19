@@ -58,6 +58,7 @@ impl MeshItem {
     }
 }
 
+// TODO: light sources
 #[derive(Widget)]
 pub struct MeshCanvas {
     size: Size<Length>,

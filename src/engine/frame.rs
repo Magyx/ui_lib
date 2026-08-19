@@ -406,7 +406,8 @@ impl<'a> Engine<'a> {
                 Event::Text(t) => Some(Ui::Text(t)),
                 Event::ModifiersChanged(m) => Some(Ui::ModifiersChanged(m)),
                 Event::Focused(f) => Some(Ui::Focused(*f)),
-                _ => None,
+                Event::CloseRequested => None, // TODO: we could use this to clean up resources
+                Event::Platform(_) | Event::Message(_) => None,
             };
 
             if ev_view.is_some() {
