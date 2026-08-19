@@ -23,8 +23,8 @@ use smithay_client_toolkit::{
     registry::{ProvidesRegistryState, RegistryHandler, RegistryState},
     seat::{
         Capability, SeatHandler, SeatState,
-        keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers},
-        pointer::{PointerEvent, PointerEventKind, PointerHandler},
+        keyboard::{KeyEvent, KeyboardData, KeyboardHandler, Keysym, Modifiers, RawModifiers},
+        pointer::{PointerData, PointerEvent, PointerEventKind, PointerHandler},
     },
     session_lock::{SessionLock, SessionLockHandler, SessionLockState, SessionLockSurface},
     shell::{
@@ -61,6 +61,21 @@ pub struct SurfaceRec {
     pub output: Option<WlOutput>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum LastDevice {
+    Pointer,
+    Keyboard,
+}
+
+#[derive(Default)]
+struct SeatRec {
+    pointer: Option<WlPointer>,
+    keyboard: Option<WlKeyboard>,
+    kbd_serial: Option<u32>,
+    kbd_focus: Option<SurfaceId>,
+    pointer_focus: Option<SurfaceId>,
+}
+
 pub struct SctkState {
     // sctk state objects
     registry: RegistryState,
@@ -74,9 +89,11 @@ pub struct SctkState {
     // surface & role
     pub surfaces: HashMap<SurfaceId, SurfaceRec>,
     by_surface_id: HashMap<u32, SurfaceId>,
-    kbd_focus: Option<SurfaceId>,
-    pointer_focus: Option<SurfaceId>,
     active_lock: Option<SessionLock>,
+
+    // input
+    seat_recs: HashMap<WlSeat, SeatRec>,
+    last_active: Option<(WlSeat, LastDevice)>,
 
     // event queue for the generic runner
     handler: Box<dyn SctkErased>,
@@ -110,8 +127,8 @@ impl SctkState {
 
             surfaces: surfaces.unwrap_or_default(),
             by_surface_id: by_surface_id.unwrap_or_default(),
-            kbd_focus: None,
-            pointer_focus: None,
+            seat_recs: HashMap::default(),
+            last_active: None,
             active_lock: None,
 
             handler,
@@ -388,6 +405,38 @@ impl SctkState {
         self.loop_handle = Some(handle);
     }
 
+    fn seat_rec_mut(&mut self, seat: &WlSeat) -> &mut SeatRec {
+        self.seat_recs.entry(seat.clone()).or_default()
+    }
+    fn seat_of_pointer(pointer: &WlPointer) -> Option<WlSeat> {
+        pointer.data::<PointerData>().map(|d| d.seat().clone())
+    }
+    fn seat_of_keyboard(keyboard: &WlKeyboard) -> Option<WlSeat> {
+        keyboard
+            .data::<KeyboardData<Self>>()
+            .map(|d| d.seat().clone())
+    }
+
+    pub fn grab_source(&self) -> Option<(&WlSeat, u32)> {
+        let (seat, device) = self.last_active.as_ref()?;
+        let rec = self.seat_recs.get(seat)?;
+        let serial = match device {
+            LastDevice::Pointer => {
+                let data = rec.pointer.as_ref()?.data::<PointerData>()?;
+                data.latest_button_serial()
+                    .or_else(|| data.latest_enter_serial())?
+            }
+            LastDevice::Keyboard => rec.kbd_serial?,
+        };
+        Some((seat, serial))
+    }
+    pub fn cursor_source(&self) -> Option<(&WlPointer, u32)> {
+        let (seat, _) = self.last_active.as_ref()?;
+        let pointer = self.seat_recs.get(seat)?.pointer.as_ref()?;
+        let serial = pointer.data::<PointerData>()?.latest_enter_serial()?;
+        Some((pointer, serial))
+    }
+
     pub fn surface_id_by_protocol_id(&self, id: u32) -> Option<&SurfaceId> {
         self.by_surface_id.get(&id)
     }
@@ -395,11 +444,13 @@ impl SctkState {
     pub fn remove_surface_by_surface_id(&mut self, sid: SurfaceId) {
         if let Some(sid) = self.by_surface_id.remove(&sid.0) {
             self.surfaces.remove(&sid);
-            if self.kbd_focus == Some(sid) {
-                self.kbd_focus = None;
-            }
-            if self.pointer_focus == Some(sid) {
-                self.pointer_focus = None;
+            for rec in self.seat_recs.values_mut() {
+                if rec.kbd_focus == Some(sid) {
+                    rec.kbd_focus = None;
+                }
+                if rec.pointer_focus == Some(sid) {
+                    rec.pointer_focus = None;
+                }
             }
         }
     }
@@ -761,8 +812,10 @@ impl SessionLockHandler for SctkState {
         {
             self.surfaces.remove(&sid);
             self.by_surface_id.remove(&key);
-            if self.kbd_focus == Some(sid) {
-                self.kbd_focus = None;
+            for rec in self.seat_recs.values_mut() {
+                if rec.kbd_focus == Some(sid) {
+                    rec.kbd_focus = None;
+                }
             }
         }
 
@@ -813,7 +866,12 @@ impl SeatHandler for SctkState {
 
     fn new_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {}
 
-    fn remove_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _seat: WlSeat) {}
+    fn remove_seat(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, seat: WlSeat) {
+        self.seat_recs.remove(&seat);
+        if self.last_active.as_ref().is_some_and(|(s, _)| *s == seat) {
+            self.last_active = None;
+        }
+    }
 
     fn new_capability(
         &mut self,
@@ -828,13 +886,16 @@ impl SeatHandler for SctkState {
             }
             Capability::Keyboard => match self.loop_handle.clone() {
                 Some(lh) => {
-                    _ = self.seats.get_keyboard_with_repeat(
+                    let kbd = self.seats.get_keyboard_with_repeat(
                         qh,
                         &seat,
                         None,
                         lh,
-                        Box::new(|state, _db, event| {
-                            if let Some(sid) = state.kbd_focus {
+                        Box::new(|state, kdb, event| {
+                            let sid = SctkState::seat_of_keyboard(kdb)
+                                .and_then(|s| state.seat_recs.get(&s))
+                                .and_then(|r| r.kbd_focus);
+                            if let Some(sid) = sid {
                                 state.emit_event(SctkEvent::Key {
                                     surface: sid,
                                     raw_code: event.raw_code,
@@ -846,9 +907,14 @@ impl SeatHandler for SctkState {
                             }
                         }),
                     );
+                    if let Ok(kbd) = kbd {
+                        self.seat_rec_mut(&seat).keyboard = Some(kbd);
+                    }
                 }
                 None => {
-                    _ = self.seats.get_keyboard(qh, &seat, None);
+                    if let Ok(kbd) = self.seats.get_keyboard(qh, &seat, None) {
+                        self.seat_rec_mut(&seat).keyboard = Some(kbd);
+                    }
                 }
             },
             _ => { /* Not supported atm */ }
@@ -870,9 +936,11 @@ impl PointerHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _pointer: &WlPointer,
+        pointer: &WlPointer,
         events: &[PointerEvent],
     ) {
+        let seat = Self::seat_of_pointer(pointer);
+
         for ev in events {
             let sid = match self.by_surface_id.get(&ev.surface.id().protocol_id()) {
                 Some(&sid) => sid,
@@ -889,12 +957,18 @@ impl PointerHandler for SctkState {
 
             match ev.kind {
                 PointerEventKind::Enter { .. } => {
-                    self.pointer_focus = Some(sid);
+                    if let Some(seat) = &seat {
+                        self.seat_rec_mut(seat).pointer_focus = Some(sid);
+                        self.last_active = Some((seat.clone(), LastDevice::Pointer));
+                    }
                     self.emit_event(SctkEvent::PointerEntered { surface: sid, pos });
                 }
                 PointerEventKind::Leave { .. } => {
-                    if self.pointer_focus == Some(sid) {
-                        self.pointer_focus = None;
+                    if let Some(seat) = &seat {
+                        let rec = self.seat_rec_mut(seat);
+                        if rec.pointer_focus == Some(sid) {
+                            rec.pointer_focus = None;
+                        }
                     }
                     self.emit_event(SctkEvent::PointerLeft { surface: sid });
                 }
@@ -902,6 +976,9 @@ impl PointerHandler for SctkState {
                     self.emit_event(SctkEvent::PointerMoved { surface: sid, pos });
                 }
                 PointerEventKind::Press { button, .. } => {
+                    if let Some(seat) = &seat {
+                        self.last_active = Some((seat.clone(), LastDevice::Pointer));
+                    }
                     self.emit_event(SctkEvent::PointerButton {
                         surface: sid,
                         button,
@@ -909,6 +986,9 @@ impl PointerHandler for SctkState {
                     });
                 }
                 PointerEventKind::Release { button, .. } => {
+                    if let Some(seat) = &seat {
+                        self.last_active = Some((seat.clone(), LastDevice::Pointer));
+                    }
                     self.emit_event(SctkEvent::PointerButton {
                         surface: sid,
                         button,
@@ -940,14 +1020,19 @@ impl KeyboardHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _keyboard: &WlKeyboard,
+        keyboard: &WlKeyboard,
         surface: &WlSurface,
-        _serial: u32,
+        serial: u32,
         _rawkeys: &[u32],
         _keysyms: &[Keysym],
     ) {
         let sid = SurfaceId(surface.id().protocol_id());
-        self.kbd_focus = Some(sid);
+        if let Some(seat) = Self::seat_of_keyboard(keyboard) {
+            let rec = self.seat_rec_mut(&seat);
+            rec.kbd_focus = Some(sid);
+            rec.kbd_serial = Some(serial);
+            self.last_active = Some((seat, LastDevice::Keyboard));
+        }
         self.emit_event(SctkEvent::Focus {
             surface: sid,
             focused: true,
@@ -958,13 +1043,17 @@ impl KeyboardHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _keyboard: &WlKeyboard,
+        keyboard: &WlKeyboard,
         surface: &WlSurface,
         _serial: u32,
     ) {
         let sid = SurfaceId(surface.id().protocol_id());
-        if self.kbd_focus == Some(sid) {
-            self.kbd_focus = None;
+        let Some(seat) = Self::seat_of_keyboard(keyboard) else {
+            return;
+        };
+        let rec = self.seat_rec_mut(&seat);
+        if rec.kbd_focus == Some(sid) {
+            rec.kbd_focus = None;
             self.emit_event(SctkEvent::Focus {
                 surface: sid,
                 focused: false,
@@ -976,11 +1065,21 @@ impl KeyboardHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _keyboard: &WlKeyboard,
-        _serial: u32,
+        keyboard: &WlKeyboard,
+        serial: u32,
         event: KeyEvent,
     ) {
-        if let Some(sid) = self.kbd_focus {
+        let seat = Self::seat_of_keyboard(keyboard);
+        if let Some(seat) = &seat {
+            let rec = self.seat_rec_mut(seat);
+            rec.kbd_serial = Some(serial);
+            self.last_active = Some((seat.clone(), LastDevice::Keyboard));
+        }
+        let focus = seat
+            .as_ref()
+            .and_then(|s| self.seat_recs.get(s))
+            .and_then(|r| r.kbd_focus);
+        if let Some(sid) = focus {
             self.emit_event(SctkEvent::Key {
                 surface: sid,
                 raw_code: event.raw_code,
@@ -996,11 +1095,16 @@ impl KeyboardHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _keyboard: &WlKeyboard,
+        keyboard: &WlKeyboard,
         _serial: u32,
         event: KeyEvent,
     ) {
-        if let Some(sid) = self.kbd_focus {
+        let seat = Self::seat_of_keyboard(keyboard);
+        let focus = seat
+            .as_ref()
+            .and_then(|s| self.seat_recs.get(s))
+            .and_then(|r| r.kbd_focus);
+        if let Some(sid) = focus {
             self.emit_event(SctkEvent::Key {
                 surface: sid,
                 raw_code: event.raw_code,
@@ -1016,11 +1120,16 @@ impl KeyboardHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _keyboard: &WlKeyboard,
+        keyboard: &WlKeyboard,
         _serial: u32,
         event: KeyEvent,
     ) {
-        if let Some(sid) = self.kbd_focus {
+        let seat = Self::seat_of_keyboard(keyboard);
+        let focus = seat
+            .as_ref()
+            .and_then(|s| self.seat_recs.get(s))
+            .and_then(|r| r.kbd_focus);
+        if let Some(sid) = focus {
             self.emit_event(SctkEvent::Key {
                 surface: sid,
                 raw_code: event.raw_code,
@@ -1036,13 +1145,16 @@ impl KeyboardHandler for SctkState {
         &mut self,
         _conn: &Connection,
         _qh: &QueueHandle<Self>,
-        _keyboard: &WlKeyboard,
+        keyboard: &WlKeyboard,
         _serial: u32,
         modifiers: Modifiers,
         _raw_modifiers: RawModifiers,
         _layout: u32,
     ) {
-        if let Some(sid) = self.kbd_focus {
+        let focus = Self::seat_of_keyboard(keyboard)
+            .and_then(|s| self.seat_recs.get(&s))
+            .and_then(|r| r.kbd_focus);
+        if let Some(sid) = focus {
             self.emit_event(SctkEvent::Modifiers(sid, modifiers));
         }
     }
