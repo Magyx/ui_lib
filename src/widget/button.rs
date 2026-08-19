@@ -19,6 +19,7 @@ pub struct Button<M> {
 
     style: Style,
     border: bool,
+    can_focus: bool,
 
     on_press: Option<M>,
 }
@@ -34,6 +35,7 @@ impl<M: Clone> Button<M> {
                 ..Default::default()
             },
             border: false,
+            can_focus: true,
             on_press: None,
         }
     }
@@ -49,6 +51,7 @@ impl<M: Clone> Button<M> {
             content: Some(content.into()),
             style: Style::default(),
             border: false,
+            can_focus: true,
             on_press: None,
         }
     }
@@ -75,6 +78,10 @@ impl<M: Clone> Button<M> {
     }
     pub fn max(mut self, size: Size<i32>) -> Self {
         self.max = size;
+        self
+    }
+    pub fn can_focus(mut self, enabled: bool) -> Self {
+        self.can_focus = enabled;
         self
     }
     pub fn on_press(mut self, msg: M) -> Self {
@@ -109,7 +116,7 @@ impl<M: Clone + 'static> Widget for Button<M> {
     }
 
     fn focusable(&self) -> bool {
-        true
+        self.can_focus
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
