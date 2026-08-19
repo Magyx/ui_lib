@@ -38,31 +38,18 @@ pub struct ScrollViewState {
 fn focused_reveal(ctx: &EventCtx, self_idx: usize) -> Option<(i32, i32)> {
     let focused = ctx.ui.focus.focused()?;
     let nodes = &ctx.layout.nodes;
-    // `nodes` is reused across frames without truncation (only `node_count` is
-    // reset), so bound the search to the live prefix.
     let live = ctx.layout.node_count;
     let fidx = nodes[..live].iter().position(|n| n.id == focused)?;
-
-    // Walk from the focused node up to `self_idx`, summing the scroll offset of
-    // every intermediate scrollable (strictly between the two).
-    let mut idx = fidx;
-    let mut inner_scroll = 0;
-    loop {
-        let parent = nodes[idx].parent?;
-        if parent == self_idx {
-            break;
-        }
-        if let Some(sv) = ctx.ui.view_state.get::<ScrollViewState>(&nodes[parent].id) {
-            inner_scroll += sv.y;
-        }
-        idx = parent;
-    }
-
-    let top = nodes[fidx].pos.y - nodes[self_idx].pos.y - inner_scroll;
+    let st = ctx
+        .ui
+        .view_state
+        .get::<ScrollViewState>(&nodes[self_idx].id)?;
+    let top = nodes[fidx].pos.y - nodes[self_idx].pos.y + st.y;
     let height = nodes[fidx].current_size.height;
     Some((top, height))
 }
 
+// FIX: current children_offset is always one frame late but handle queues a relayeout
 #[derive(Widget)]
 pub struct Scrollable {
     size: Size<Length>,
@@ -182,12 +169,14 @@ impl Scrollable {
     }
 }
 impl Widget for Scrollable {
-    fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
+    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node {
+        let st = self.ensure_state(ctx.view_state, ctx.id());
         Node {
             size: self.size,
             min: self.min,
             max: self.max,
             clip_children: true,
+            children_offset: Position::new(0, -st.y),
             ..Default::default()
         }
     }
@@ -197,14 +186,6 @@ impl Widget for Scrollable {
     }
     fn child_mut(&mut self, _i: usize) -> &mut dyn Widget {
         self.child.as_mut()
-    }
-    fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
-        let st = self.ensure_state(view_state, id);
-        // Heights are stashed during paint/handle (same frame values that
-        // `write_back` used to bake in), so no `self.h` is needed here.
-        let max = (st.content_h - st.viewport_h).max(0);
-        st.y = st.y.clamp(0, max);
-        (0, -st.y)
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {

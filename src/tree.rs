@@ -143,29 +143,26 @@ fn post_width_query<'a>(
 pub fn prepare_tree(w: &mut dyn crate::widget::Widget, ctx: &mut PrepareCtx, cursor: &mut usize) {
     crate::scope!("layout::prepare_tree");
     let env = ctx.theme.root_env();
-    __prepare_tree(w, ctx, cursor, 0, 0, env);
+    __prepare_tree(w, ctx, cursor, env);
 }
 
 fn __prepare_tree(
     w: &mut dyn crate::widget::Widget,
     ctx: &mut PrepareCtx,
     cursor: &mut usize,
-    acc_tx: i32,
-    acc_ty: i32,
     env: Env,
 ) {
     let id = *cursor;
-    ctx.__set_data(id, acc_tx, acc_ty, env);
+    ctx.__set_data(id, env);
 
     w.prepare(ctx);
     *cursor += 1;
 
     let child_env = w.child_env(env, ctx.theme);
-    let (dx, dy) = w.children_offset(ctx.view_state, ctx.id());
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
-        __prepare_tree(child, ctx, cursor, acc_tx + dx, acc_ty + dy, child_env);
+        __prepare_tree(child, ctx, cursor, child_env);
     }
 }
 
@@ -193,7 +190,7 @@ pub fn handle_tree(
         ctx.ui.request_redraw();
     }
 
-    __handle_tree(w, ctx, cursor, 0, 0, ROOT_SEED, None);
+    __handle_tree(w, ctx, cursor, ROOT_SEED, None);
 
     ctx.ui.focus.end_walk();
 }
@@ -202,8 +199,6 @@ fn __handle_tree(
     w: &mut dyn crate::widget::Widget,
     ctx: &mut crate::context::EventCtx,
     cursor: &mut usize,
-    acc_tx: i32,
-    acc_ty: i32,
     scope: ScopeId,
     parent_clip: Option<[i32; 4]>,
 ) {
@@ -213,8 +208,8 @@ fn __handle_tree(
     let mut clip = parent_clip;
     if n.clip_children {
         let mut r = [
-            n.pos.x + acc_tx,
-            n.pos.y + acc_ty,
+            n.pos.x,
+            n.pos.y,
             n.current_size.width,
             n.current_size.height,
         ];
@@ -227,7 +222,7 @@ fn __handle_tree(
         }
         clip = Some(r);
     }
-    ctx.__set_data(id, acc_tx, acc_ty, scope, clip);
+    ctx.__set_data(id, scope, clip);
 
     let node_id = ctx.id();
 
@@ -244,22 +239,13 @@ fn __handle_tree(
     w.handle(ctx);
     *cursor += 1;
 
-    let (dx, dy) = w.children_offset(&mut ctx.ui.view_state, node_id);
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
-        __handle_tree(
-            child,
-            ctx,
-            cursor,
-            acc_tx + dx,
-            acc_ty + dy,
-            child_scope,
-            clip,
-        );
+        __handle_tree(child, ctx, cursor, child_scope, clip);
     }
 
-    ctx.__set_data(id, acc_tx, acc_ty, scope, clip);
+    ctx.__set_data(id, scope, clip);
     w.handle_after(ctx);
 }
 
@@ -273,7 +259,7 @@ pub fn paint_tree(
 ) {
     crate::scope!("layout::paint_tree");
     let env = ctx.theme.root_env();
-    __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, 0, 0, env);
+    __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, env);
 }
 #[allow(clippy::too_many_arguments)]
 fn __paint_tree(
@@ -283,20 +269,18 @@ fn __paint_tree(
     cursor: &mut usize,
     out: &mut InstanceStore,
     parent_clip: Option<[i32; 4]>,
-    acc_tx: i32,
-    acc_ty: i32,
     depth: usize,
     env: Env,
 ) {
     let id = *cursor;
-    ctx.__set_data(id, acc_tx, acc_ty, env);
+    ctx.__set_data(id, env);
     let n = eng.nodes[id];
 
     let mut clip = parent_clip;
     if n.clip_children {
         let mut r = [
-            n.pos.x + acc_tx,
-            n.pos.y + acc_ty,
+            n.pos.x,
+            n.pos.y,
             n.current_size.width,
             n.current_size.height,
         ];
@@ -326,25 +310,13 @@ fn __paint_tree(
     if w.focus_trap() {
         child_env.focus_scope = node_id;
     }
-    let (dx, dy) = w.children_offset(ctx.view_state, node_id);
     let child_count = w.child_count();
     for i in 0..child_count {
         let child = w.child_mut(i);
-        __paint_tree(
-            child,
-            ctx,
-            eng,
-            cursor,
-            out,
-            clip,
-            acc_tx + dx,
-            acc_ty + dy,
-            depth + 1,
-            child_env,
-        );
+        __paint_tree(child, ctx, eng, cursor, out, clip, depth + 1, child_env);
     }
 
-    ctx.__set_data(id, acc_tx, acc_ty, env);
+    ctx.__set_data(id, env);
     w.paint_overlay(ctx, out);
 
     if eng.debug {

@@ -38,9 +38,6 @@ impl<W: Widget> Widget for Keyed<W> {
         self.inner.min_height_for_width(ctx, width)
     }
 
-    fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
-        self.inner.children_offset(view_state, id)
-    }
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         self.inner.prepare(ctx)
     }

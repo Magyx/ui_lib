@@ -73,6 +73,7 @@ pub struct Node {
     pub padding: Padding,
     pub spacing: i32,
     pub clip_children: bool,
+    pub children_offset: Position<i32>,
     pub is_absolute: bool,
     pub offset_pos: Position<i32>,
     pub main_align: Align,
@@ -87,6 +88,7 @@ impl Default for Node {
             layout_dir: Default::default(),
             padding: Default::default(),
             spacing: Default::default(),
+            children_offset: Default::default(),
             clip_children: Default::default(),
             is_absolute: Default::default(),
             offset_pos: Default::default(),
@@ -127,7 +129,6 @@ pub struct LayoutEngine {
 
     pub(crate) debug: bool,
 }
-
 impl Default for LayoutEngine {
     fn default() -> Self {
         Self::new()
@@ -474,8 +475,9 @@ impl LayoutEngine {
             let cross_align = self.nodes[id].cross_align;
 
             // Content-box origin (inside padding).
-            let base_x = x + pad.left;
-            let base_y = y + pad.top;
+            let offset = self.nodes[id].children_offset;
+            let base_x = x + pad.left + offset.x;
+            let base_y = y + pad.top + offset.y;
             let inner_w = (self.nodes[id].current_size.width - pad.left - pad.right).max(0);
             let inner_h = (self.nodes[id].current_size.height - pad.top - pad.bottom).max(0);
             let (inner_main, inner_cross) = match layout_dir {

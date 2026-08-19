@@ -4,7 +4,7 @@ use crate::{
     focus::{Dir, ScopeId},
     gpu::Globals,
     layout::LayoutEngine,
-    model::{Position, Rect},
+    model::Rect,
     text::TextBackend,
     tree::ROOT_SEED,
 };
@@ -17,7 +17,6 @@ pub struct EventCtx<'a> {
     #[doc(hidden)]
     pub layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
-    pub(crate) offset: Position<i32>,
     pub(crate) focus_scope: ScopeId,
     pub(crate) clip: Option<Rect>,
 
@@ -40,7 +39,6 @@ impl<'a> EventCtx<'a> {
             event,
             layout,
             current_node: 0usize,
-            offset: Position::splat(0),
             focus_scope: ROOT_SEED,
             clip: None,
 
@@ -50,13 +48,10 @@ impl<'a> EventCtx<'a> {
     pub(crate) fn __set_data(
         &mut self,
         current_node: usize,
-        acc_tx: i32,
-        acc_ty: i32,
         focus_scope: ScopeId,
         clip: Option<[i32; 4]>,
     ) {
         self.current_node = current_node;
-        self.offset = Position::new(acc_tx, acc_ty);
         self.focus_scope = focus_scope;
         self.clip = clip.map(|[x, y, w, h]| Rect::new(x, y, w, h));
     }
@@ -66,8 +61,8 @@ impl<'a> EventCtx<'a> {
     pub fn rect(&self) -> Rect {
         let n = &self.layout.nodes[self.current_node];
         Rect::new(
-            n.pos.x + self.offset.x,
-            n.pos.y + self.offset.y,
+            n.pos.x,
+            n.pos.y,
             n.current_size.width,
             n.current_size.height,
         )

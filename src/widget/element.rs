@@ -1,5 +1,5 @@
 use crate::{
-    context::{Env, EventCtx, Id, LayoutCtx, PaintCtx, PrepareCtx, ViewState},
+    context::{Env, EventCtx, LayoutCtx, PaintCtx, PrepareCtx},
     layout::Node,
     primitive::InstanceStore,
     theme::Theme,
@@ -8,12 +8,17 @@ use crate::{
 pub trait IntoElement {}
 
 pub trait Widget: IntoElement {
-    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node;
     fn key(&self) -> Option<u64> {
+        None
+    }
+    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node;
+    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a>, width: i32) -> Option<i32> {
+        let _ = (ctx, width);
         None
     }
     fn child_count(&self) -> usize;
     fn child_mut(&mut self, idx: usize) -> &mut dyn Widget;
+
     fn child_env(&self, env: Env, theme: &Theme) -> Env {
         let _ = theme;
         env
@@ -29,15 +34,6 @@ pub trait Widget: IntoElement {
         ctx.focus_ring(out, ctx.rect().xywh());
     }
 
-    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a>, width: i32) -> Option<i32> {
-        let _ = (ctx, width);
-        None
-    }
-
-    fn children_offset(&self, view_state: &mut ViewState, id: Id) -> (i32, i32) {
-        let _ = (view_state, id);
-        (0, 0)
-    }
     fn prepare(&mut self, ctx: &mut PrepareCtx) {
         let _ = ctx;
     }

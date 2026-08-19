@@ -2,7 +2,7 @@ use super::{Env, Id, ViewState};
 use crate::{
     gpu::{Globals, Gpu},
     layout::LayoutEngine,
-    model::{Position, Rect, Size},
+    model::{Rect, Size},
     render::{
         pipeline::{Pipeline, PipelineRegistry, RegistryEnv},
         texture::TextureRegistry,
@@ -21,7 +21,6 @@ pub struct PrepareCtx<'a> {
     pub(crate) immediate_size: u32,
     pub(crate) layout: &'a LayoutEngine,
     pub(crate) current_node: usize,
-    pub(crate) offset: Position<i32>,
     pub view_state: &'a mut ViewState,
     pub theme: &'a Theme,
     pub env: Env,
@@ -51,7 +50,6 @@ impl<'a> PrepareCtx<'a> {
             immediate_size,
             layout,
             current_node: 0,
-            offset: Position::splat(0),
             view_state,
             theme,
             env: theme.root_env(),
@@ -72,9 +70,8 @@ impl<'a> PrepareCtx<'a> {
         let _ = self.pipeline::<P>();
     }
 
-    pub(crate) fn __set_data(&mut self, current_node: usize, acc_tx: i32, acc_ty: i32, env: Env) {
+    pub(crate) fn __set_data(&mut self, current_node: usize, env: Env) {
         self.current_node = current_node;
-        self.offset = Position::new(acc_tx, acc_ty);
         self.env = env;
     }
     pub fn current_node_id(&self) -> usize {
@@ -83,8 +80,8 @@ impl<'a> PrepareCtx<'a> {
     pub fn rect(&self) -> Rect {
         let n = &self.layout.nodes[self.current_node];
         Rect::new(
-            n.pos.x + self.offset.x,
-            n.pos.y + self.offset.y,
+            n.pos.x,
+            n.pos.y,
             n.current_size.width,
             n.current_size.height,
         )
