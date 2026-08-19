@@ -1,5 +1,8 @@
 // TODO: text height can exede its parents fixed size, increasing the parents size
-use std::cmp::{max, min};
+use std::{
+    cmp::{max, min},
+    ops::{Deref, DerefMut},
+};
 
 use crate::{
     context::Id,
@@ -62,59 +65,6 @@ pub struct Padding {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct __Node {
-    pub size: Size<Length>,
-    pub min: Size<i32>,
-    pub max: Size<i32>,
-    pub layout_dir: Axis,
-    pub padding: Padding,
-    pub spacing: i32,
-    pub clip_children: bool,
-    pub is_absolute: bool,
-    pub offset_pos: Position<i32>,
-    pub main_align: Align,
-    pub cross_align: Align,
-
-    pub(crate) id: Id,
-
-    pub(crate) pos: Position<i32>,
-    pub(crate) current_size: Size<i32>,
-    pub(crate) content_size: Size<i32>,
-
-    pub(crate) parent: Option<usize>,
-    pub(crate) first_child: Option<usize>,
-    pub(crate) next_sibling: Option<usize>,
-}
-
-impl Default for __Node {
-    fn default() -> Self {
-        Self {
-            size: Default::default(),
-            min: Default::default(),
-            max: Size::splat(i32::MAX),
-            layout_dir: Default::default(),
-            padding: Default::default(),
-            spacing: Default::default(),
-            clip_children: Default::default(),
-            is_absolute: Default::default(),
-            offset_pos: Default::default(),
-            main_align: Align::Start,
-            cross_align: Align::Start,
-
-            id: 0,
-
-            pos: Default::default(),
-            current_size: Default::default(),
-            content_size: Default::default(),
-
-            parent: Default::default(),
-            first_child: Default::default(),
-            next_sibling: Default::default(),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
 pub struct Node {
     pub size: Size<Length>,
     pub min: Size<i32>,
@@ -128,7 +78,6 @@ pub struct Node {
     pub main_align: Align,
     pub cross_align: Align,
 }
-
 impl Default for Node {
     fn default() -> Self {
         Self {
@@ -144,6 +93,31 @@ impl Default for Node {
             main_align: Align::Start,
             cross_align: Align::Start,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct __Node {
+    pub desc: Node,
+
+    pub(crate) id: Id,
+    pub(crate) pos: Position<i32>,
+    pub(crate) current_size: Size<i32>,
+    pub(crate) natural_size: Size<i32>,
+
+    pub(crate) parent: Option<usize>,
+    pub(crate) first_child: Option<usize>,
+    pub(crate) next_sibling: Option<usize>,
+}
+impl Deref for __Node {
+    type Target = Node;
+    fn deref(&self) -> &Self::Target {
+        &self.desc
+    }
+}
+impl DerefMut for __Node {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.desc
     }
 }
 
@@ -213,7 +187,7 @@ macro_rules! impl_layout_pass {
 
             let total_min = max(min_val, self.nodes[id].min.$dim);
             let natural_val = max(total_min, base_val);
-            self.nodes[id].content_size.$dim = natural_val;
+            self.nodes[id].natural_size.$dim = natural_val;
             if self.nodes[id].clip_children {
                 self.nodes[id].current_size.$dim = natural_val.min(self.nodes[id].max.$dim);
             } else {
@@ -393,17 +367,11 @@ impl LayoutEngine {
             debug: false,
         }
     }
-    pub(crate) fn create_node(
-        &mut self,
-        size: Size<Length>,
-        layout_dir: Axis,
-        is_absolute: bool,
-    ) -> usize {
+    pub(crate) fn create_node(&mut self, desc: Node, seed: Id) -> usize {
         let i = self.node_count;
         let node = __Node {
-            size,
-            layout_dir,
-            is_absolute,
+            desc,
+            id: seed,
             ..Default::default()
         };
         if i < self.nodes.len() {
@@ -602,7 +570,7 @@ mod tests {
 
         // Force growth past the initial allocation
         for _ in 0..initial_cap + 1 {
-            engine.create_node(Size::default(), Axis::default(), false);
+            engine.create_node(Node::default(), 0);
         }
 
         assert!(

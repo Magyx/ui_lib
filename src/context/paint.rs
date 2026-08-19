@@ -73,7 +73,7 @@ impl<'a> PaintCtx<'a> {
     }
     pub fn child_content_height(&self) -> i32 {
         if let Some(cid) = self.first_child_node() {
-            self.layout.nodes[cid].content_size.height.max(0)
+            self.layout.nodes[cid].natural_size.height.max(0)
         } else {
             0
         }

@@ -96,19 +96,7 @@ fn build_tree<'a>(
     ctx.__set_id(seed);
     ctx.__set_env(env);
     let desc = w.layout(ctx);
-    let i = layout_engine.create_node(desc.size, desc.layout_dir, desc.is_absolute);
-    {
-        let n = &mut layout_engine.nodes[i];
-        n.id = seed;
-        n.min = desc.min;
-        n.max = desc.max;
-        n.padding = desc.padding;
-        n.spacing = desc.spacing;
-        n.offset_pos = desc.offset_pos;
-        n.clip_children = desc.clip_children;
-        n.main_align = desc.main_align;
-        n.cross_align = desc.cross_align;
-    }
+    let i = layout_engine.create_node(desc, seed);
 
     let mut child_env = w.child_env(env, ctx.theme);
     if w.focus_trap() {
