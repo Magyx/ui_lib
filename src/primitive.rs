@@ -1,7 +1,7 @@
 use std::mem;
 
 use crate::{
-    model::{Color, Position, Size},
+    model::{Color, Position, Rect, Size},
     render::{
         pack::{pack_shape_params, pack_unorm4x8, shape_flags},
         pipeline::{Pipeline, PipelineId, ui::UiPipeline},
@@ -283,14 +283,14 @@ pub struct Batch {
     pub id: PipelineId,
     pub byte_offset: u64,
     pub count: u32,
-    pub clip: Option<[i32; 4]>,
+    pub clip: Option<Rect>,
 }
 
 /// Instances emitted during one paint pass, in draw order.
 pub struct InstanceStore {
     data: Vec<u32>,
     batches: Vec<Batch>,
-    clip: Option<[i32; 4]>,
+    clip: Option<Rect>,
     count: usize,
 }
 impl Default for InstanceStore {
@@ -336,7 +336,7 @@ impl InstanceStore {
         self.clip = None;
         self.count = 0;
     }
-    pub(crate) fn set_clip(&mut self, clip: Option<[i32; 4]>) -> Option<[i32; 4]> {
+    pub(crate) fn set_clip(&mut self, clip: Option<Rect>) -> Option<Rect> {
         mem::replace(&mut self.clip, clip)
     }
 
@@ -727,20 +727,20 @@ mod batching {
     fn clip_change_splits_the_batch() {
         let mut store = InstanceStore::new();
         store.push(ui_quad());
-        store.set_clip(Some([10, 20, 30, 40]));
+        store.set_clip(Some(Rect::new(10, 20, 30, 40)));
         store.push(ui_quad());
 
         let b = store.batches();
         assert_eq!(b.len(), 2, "same pipeline but a different clip must split");
         assert_eq!(b[0].clip, None);
-        assert_eq!(b[1].clip, Some([10, 20, 30, 40]));
+        assert_eq!(b[1].clip, Some(Rect::new(10, 20, 30, 40)));
         assert_covers_all(&store);
     }
 
     #[test]
     fn setting_the_same_clip_does_not_split() {
         let mut store = InstanceStore::new();
-        let clip = Some([1, 2, 3, 4]);
+        let clip = Some(Rect::new(1, 2, 3, 4));
         store.set_clip(clip);
         store.push(ui_quad());
         store.set_clip(clip);
@@ -760,8 +760,8 @@ mod batching {
     #[test]
     fn returning_to_an_earlier_clip_starts_a_new_batch() {
         let mut store = InstanceStore::new();
-        let outer = Some([0, 0, 100, 100]);
-        let inner = Some([10, 10, 20, 20]);
+        let outer = Some(Rect::new(0, 0, 100, 100));
+        let inner = Some(Rect::new(10, 10, 20, 20));
 
         store.set_clip(outer);
         store.push(ui_quad());
@@ -783,9 +783,12 @@ mod batching {
     #[test]
     fn set_clip_returns_the_previous_clip() {
         let mut store = InstanceStore::new();
-        assert_eq!(store.set_clip(Some([1, 1, 1, 1])), None);
-        assert_eq!(store.set_clip(Some([2, 2, 2, 2])), Some([1, 1, 1, 1]));
-        assert_eq!(store.set_clip(None), Some([2, 2, 2, 2]));
+        assert_eq!(store.set_clip(Some(Rect::new(1, 1, 1, 1))), None);
+        assert_eq!(
+            store.set_clip(Some(Rect::new(2, 2, 2, 2))),
+            Some(Rect::new(1, 1, 1, 1))
+        );
+        assert_eq!(store.set_clip(None), Some(Rect::new(2, 2, 2, 2)));
     }
 
     /// Culling degenerate clips is the renderer's job. The store records the
@@ -793,17 +796,17 @@ mod batching {
     #[test]
     fn zero_area_clip_still_records_a_batch() {
         let mut store = InstanceStore::new();
-        store.set_clip(Some([5, 5, 0, 40]));
+        store.set_clip(Some(Rect::new(5, 5, 0, 40)));
         store.push(ui_quad());
 
         assert_eq!(store.batches().len(), 1);
-        assert_eq!(store.batches()[0].clip, Some([5, 5, 0, 40]));
+        assert_eq!(store.batches()[0].clip, Some(Rect::new(5, 5, 0, 40)));
     }
 
     #[test]
     fn clear_resets_data_batches_and_clip() {
         let mut store = InstanceStore::new();
-        store.set_clip(Some([1, 2, 3, 4]));
+        store.set_clip(Some(Rect::new(1, 2, 3, 4)));
         store.push(ui_quad());
         store.clear();
 

@@ -3,7 +3,7 @@ use crate::{
     event::{KeyState, LogicalKey, UiEventRef},
     focus::{Dir, ScopeId},
     layout::{LayoutEngine, NodeIdx},
-    model::{Color, Position, Size},
+    model::{Color, Position, Rect, Size},
     primitive::{Instance, InstanceStore},
     widget::Widget,
 };
@@ -202,27 +202,24 @@ fn __handle_tree(
     ctx: &mut crate::context::EventCtx,
     cursor: &mut usize,
     scope: ScopeId,
-    parent_clip: Option<[i32; 4]>,
+    parent_clip: Option<Rect>,
 ) {
     let id = NodeIdx::new(*cursor);
 
     let n = ctx.layout.nodes[id];
     let mut clip = parent_clip;
     if n.clip_children {
-        let mut r = [
-            n.pos.x,
-            n.pos.y,
-            n.current_size.width,
-            n.current_size.height,
-        ];
-        if let Some([px, py, pw, ph]) = clip {
-            let x0 = px.max(r[0]);
-            let y0 = py.max(r[1]);
-            let x1 = (px + pw).min(r[0] + r[2]);
-            let y1 = (py + ph).min(r[1] + r[3]);
-            r = [x0, y0, (x1 - x0).max(0), (y1 - y0).max(0)];
-        }
-        clip = Some(r);
+        let node_rect = Rect {
+            x: n.pos.x,
+            y: n.pos.y,
+            w: n.current_size.width,
+            h: n.current_size.height,
+        };
+
+        clip = Some(match parent_clip {
+            Some(parent) => parent.intersect(&node_rect),
+            None => node_rect,
+        });
     }
     ctx.__set_data(id, scope, clip);
 
@@ -257,7 +254,7 @@ pub fn paint_tree(
     eng: &crate::layout::LayoutEngine,
     cursor: &mut usize,
     out: &mut InstanceStore,
-    parent_clip: Option<[i32; 4]>,
+    parent_clip: Option<Rect>,
 ) {
     crate::scope!("layout::paint_tree");
     let env = ctx.theme.root_env();
@@ -270,7 +267,7 @@ fn __paint_tree(
     eng: &crate::layout::LayoutEngine,
     cursor: &mut usize,
     out: &mut InstanceStore,
-    parent_clip: Option<[i32; 4]>,
+    parent_clip: Option<Rect>,
     depth: usize,
     env: Env,
 ) {
@@ -280,23 +277,17 @@ fn __paint_tree(
 
     let mut clip = parent_clip;
     if n.clip_children {
-        let mut r = [
-            n.pos.x,
-            n.pos.y,
-            n.current_size.width,
-            n.current_size.height,
-        ];
-        if let Some([px, py, pw, ph]) = clip {
-            // intersect
-            let x0 = px.max(r[0]);
-            let y0 = py.max(r[1]);
-            let x1 = (px + pw).min(r[0] + r[2]);
-            let y1 = (py + ph).min(r[1] + r[3]);
-            let w = (x1 - x0).max(0);
-            let h = (y1 - y0).max(0);
-            r = [x0, y0, w, h];
-        }
-        clip = Some(r);
+        let node_rect = Rect {
+            x: n.pos.x,
+            y: n.pos.y,
+            w: n.current_size.width,
+            h: n.current_size.height,
+        };
+
+        clip = Some(match parent_clip {
+            Some(parent) => parent.intersect(&node_rect),
+            None => node_rect,
+        });
     }
 
     let prev_clip = out.set_clip(clip);

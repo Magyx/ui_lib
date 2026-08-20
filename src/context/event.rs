@@ -49,11 +49,11 @@ impl<'a> EventCtx<'a> {
         &mut self,
         current_node: NodeIdx,
         focus_scope: ScopeId,
-        clip: Option<[i32; 4]>,
+        clip: Option<Rect>,
     ) {
         self.current_node = current_node;
         self.focus_scope = focus_scope;
-        self.clip = clip.map(|[x, y, w, h]| Rect::new(x, y, w, h));
+        self.clip = clip;
     }
     pub fn current_node_id(&self) -> NodeIdx {
         self.current_node

@@ -3,6 +3,7 @@ use wgpu::Surface;
 use super::attachment::Attachments;
 use crate::{
     gpu::{Globals, Gpu},
+    model::Rect,
     primitive::{InstanceStore, Primitive},
     render::{
         pipeline::{DepthUse, DrawCtx, FrameCtx, PipelineId, PipelineRegistry},
@@ -220,13 +221,13 @@ impl Renderer {
             let sf = globals.scale;
             let lw = globals.window_size[0].ceil() as i32;
             let lh = globals.window_size[1].ceil() as i32;
-            let default_clip = [0, 0, lw, lh];
+            let default_clip = Rect::new(0, 0, lw, lh);
             let mut bound: Option<PipelineId> = None;
             let mut depth_range: Option<(f32, f32)> = None;
             let mut isolated_seen = 0usize;
 
             for (i, batch) in store.batches().iter().enumerate() {
-                let [x, y, w, h] = batch.clip.unwrap_or(default_clip);
+                let Rect { x, y, w, h } = batch.clip.unwrap_or(default_clip);
                 let left = x.clamp(0, lw);
                 let top = y.clamp(0, lh);
                 let right = (x + w).clamp(0, lw);

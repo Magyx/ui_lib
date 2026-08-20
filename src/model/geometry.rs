@@ -252,6 +252,21 @@ impl Rect {
     }
 
     #[inline]
+    pub fn intersect(&self, other: &Self) -> Self {
+        let x0 = self.x.max(other.x);
+        let y0 = self.y.max(other.y);
+        let x1 = (self.x + self.w).min(other.x + other.w);
+        let y1 = (self.y + self.h).min(other.y + other.h);
+
+        Self {
+            x: x0,
+            y: y0,
+            w: (x1 - x0).max(0),
+            h: (y1 - y0).max(0),
+        }
+    }
+
+    #[inline]
     pub fn xywh(&self) -> (i32, i32, i32, i32) {
         (self.x, self.y, self.w, self.h)
     }

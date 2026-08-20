@@ -138,12 +138,12 @@ mod harness {
                 &self.theme,
                 &self.ctx.focus,
             );
-            let screen_clip = Some([
+            let screen_clip = Some(Rect::new(
                 0,
                 0,
                 self.globals.window_size[0] as i32,
                 self.globals.window_size[1] as i32,
-            ]);
+            ));
             paint_tree(
                 root,
                 &mut pctx,
@@ -178,7 +178,6 @@ mod harness {
         }
     }
 
-    pub type Rect = (i32, i32, i32, i32);
     pub type RectSlot = Rc<Cell<Option<Rect>>>;
 
     /// Wraps any Widget and captures its final (x, y, w, h) in a shared cell.
@@ -216,7 +215,7 @@ mod harness {
         }
         fn paint(&mut self, ctx: &mut ui::context::PaintCtx, out: &mut InstanceStore) {
             let r = ctx.rect();
-            self.slot.set(Some(r.xywh()));
+            self.slot.set(Some(r));
             self.inner.paint(ctx, out);
         }
         fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
@@ -237,9 +236,10 @@ mod harness {
     }
 
     /// Convenience: unwrap the rect captured by a slot.
-    pub fn read(slot: &RectSlot) -> Rect {
+    pub fn read(slot: &RectSlot) -> (i32, i32, i32, i32) {
         slot.get()
             .expect("layout+paint did not capture a rect for this Probe")
+            .xywh()
     }
 
     /// Minimal clip container for exercising `clip_children` layout behavior.

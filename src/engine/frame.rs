@@ -2,7 +2,7 @@ use super::{Engine, TargetId};
 use crate::{
     context::{EventCtx, LayoutCtx, PaintCtx, PrepareCtx, SweepCtx},
     event::{Event, KeyState, ScrollDelta, ToEvent},
-    model::{Position, Size},
+    model::{Position, Rect, Size},
     primitive::Instance,
     render::renderer::Presented,
     task::{Task, UploadCtx},
@@ -226,12 +226,12 @@ impl<'a> Engine<'a> {
             );
 
             let mut cursor = root_id;
-            let screen_clip = Some([
+            let screen_clip = Some(Rect::new(
                 0,
                 0,
                 target.globals.window_size[0] as i32,
                 target.globals.window_size[1] as i32,
-            ]);
+            ));
             self.instance_buf.clear();
             self.instance_buf.push(Instance::ui(
                 Position::default(),

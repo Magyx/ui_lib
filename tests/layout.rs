@@ -998,7 +998,7 @@ mod layout {
         }
         fn paint(&mut self, ctx: &mut ui::context::PaintCtx, _out: &mut InstanceStore) {
             let r = ctx.rect();
-            self.slot.set(Some(r.xywh()));
+            self.slot.set(Some(r));
         }
         fn handle(&mut self, _ctx: &mut ui::context::EventCtx) {}
     }
@@ -1086,7 +1086,7 @@ mod layout {
             }
             fn paint(&mut self, ctx: &mut ui::context::PaintCtx, _out: &mut InstanceStore) {
                 let r = ctx.rect();
-                self.slot.set(Some(r.xywh()));
+                self.slot.set(Some(r));
             }
             fn handle(&mut self, _ctx: &mut ui::context::EventCtx) {}
         }
@@ -1099,9 +1099,9 @@ mod layout {
         h.layout(&mut row, 1000, 1000);
         let r = slot.get().unwrap();
         assert!(
-            r.3 >= 50,
+            r.h >= 50,
             "post_width_query must not reduce below existing min.height; got {}",
-            r.3
+            r.h
         );
     }
 
@@ -1136,7 +1136,7 @@ mod layout {
             }
             fn paint(&mut self, ctx: &mut ui::context::PaintCtx, _out: &mut InstanceStore) {
                 let r = ctx.rect();
-                self.slot.set(Some(r.xywh()));
+                self.slot.set(Some(r));
             }
             fn handle(&mut self, _ctx: &mut ui::context::EventCtx) {}
         }
@@ -1149,9 +1149,9 @@ mod layout {
         h.layout(&mut row, 1000, 1000);
         let r = slot.get().unwrap();
         assert!(
-            r.3 <= 30,
+            r.h <= 30,
             "post_width_query must respect max.height; got {}",
-            r.3
+            r.h
         );
     }
 

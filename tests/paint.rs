@@ -125,7 +125,7 @@ mod paint {
         let scissor = instances.batches()[0].clip;
         assert_eq!(
             scissor,
-            Some([0, 0, 200, 100]),
+            Some(Rect::new(0, 0, 200, 100)),
             "screen clip should be applied to all instances"
         );
     }
@@ -203,7 +203,7 @@ mod paint {
         h.layout(&mut root, 200, 100);
         let instances = h.paint(&mut root);
 
-        let screen = Some([0, 0, 200, 100]);
+        let screen = Some(Rect::new(0, 0, 200, 100));
         let narrowed = instances
             .batches()
             .iter()
@@ -215,14 +215,14 @@ mod paint {
             .unwrap();
 
         assert!(
-            clip[3] <= 50,
+            clip.h <= 50,
             "child clip height {} should be bounded by the 50px viewport",
-            clip[3]
+            clip.h
         );
         assert!(
-            clip[2] <= 100,
+            clip.w <= 100,
             "child clip width {} should be bounded by the 100px viewport",
-            clip[2]
+            clip.w
         );
     }
 
@@ -248,18 +248,18 @@ mod paint {
             .batches()
             .iter()
             .filter_map(|b| b.clip)
-            .min_by_key(|c| c[2] as i64 * c[3] as i64)
+            .min_by_key(|c| c.w as i64 * c.h as i64)
             .expect("expected at least one clipped batch");
 
         assert!(
-            tightest[3] <= 30,
+            tightest.h <= 30,
             "nested clip height {} must be bounded by the inner 30px viewport",
-            tightest[3]
+            tightest.h
         );
         assert!(
-            tightest[2] <= 90,
+            tightest.w <= 90,
             "nested clip width {} must be bounded by the inner 90px viewport",
-            tightest[2]
+            tightest.w
         );
     }
 
@@ -280,7 +280,7 @@ mod paint {
         h.layout(&mut root, 200, 100);
         let instances = h.paint(&mut root);
 
-        let screen = Some([0, 0, 200, 100]);
+        let screen = Some(Rect::new(0, 0, 200, 100));
         assert_eq!(
             instances.batches().last().unwrap().clip,
             screen,
