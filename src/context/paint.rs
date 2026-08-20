@@ -2,7 +2,7 @@ use super::{Env, Id, ViewState};
 use crate::{
     focus::Focus,
     gpu::Globals,
-    layout::LayoutEngine,
+    layout::{LayoutEngine, NodeIdx},
     model::{Color, Position, Rect, Size},
     primitive::{Instance, InstanceStore},
     text::TextBackend,
@@ -13,7 +13,7 @@ pub struct PaintCtx<'a> {
     pub globals: &'a Globals,
     pub text: &'a dyn TextBackend,
     pub(crate) layout: &'a LayoutEngine,
-    pub(crate) current_node: usize,
+    pub(crate) current_node: NodeIdx,
     pub view_state: &'a mut ViewState,
     pub theme: &'a Theme,
     pub env: Env,
@@ -33,21 +33,21 @@ impl<'a> PaintCtx<'a> {
             globals,
             text,
             layout,
-            current_node: 0,
+            current_node: NodeIdx::new(0),
             view_state,
             theme,
             env: theme.root_env(),
             focus,
         }
     }
-    pub(crate) fn __set_data(&mut self, current_node: usize, env: Env) {
+    pub(crate) fn __set_data(&mut self, current_node: NodeIdx, env: Env) {
         self.current_node = current_node;
         self.env = env;
     }
     pub(crate) fn __set_env(&mut self, env: Env) {
         self.env = env;
     }
-    pub fn current_node_id(&self) -> usize {
+    pub fn current_node_id(&self) -> NodeIdx {
         self.current_node
     }
     pub fn rect(&self) -> Rect {
@@ -65,7 +65,7 @@ impl<'a> PaintCtx<'a> {
     pub fn state_or<T: 'static>(&mut self, default: impl FnOnce() -> T) -> &mut T {
         self.view_state.ensure(self.id(), default)
     }
-    pub fn first_child_node(&self) -> Option<usize> {
+    pub fn first_child_node(&self) -> Option<NodeIdx> {
         self.layout.nodes[self.current_node].first_child
     }
     pub fn child_content_height(&self) -> i32 {

@@ -1,7 +1,9 @@
 // TODO: text height can exede its parents fixed size, increasing the parents size
 use std::{
     cmp::{max, min},
-    ops::{Deref, DerefMut},
+    num::NonZeroU32,
+    ops::{Deref, DerefMut, Index, IndexMut},
+    range::Range,
 };
 
 use crate::{
@@ -98,6 +100,21 @@ impl Default for Node {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct NodeIdx(NonZeroU32);
+impl NodeIdx {
+    #[inline]
+    pub fn new(index: usize) -> Self {
+        let val = NonZeroU32::new((index + 1) as u32).expect("Node index overflow");
+        NodeIdx(val)
+    }
+
+    #[inline]
+    pub fn as_usize(self) -> usize {
+        (self.0.get() - 1) as usize
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct __Node {
     pub desc: Node,
@@ -107,9 +124,10 @@ pub struct __Node {
     pub(crate) current_size: Size<i32>,
     pub(crate) natural_size: Size<i32>,
 
-    pub(crate) parent: Option<usize>,
-    pub(crate) first_child: Option<usize>,
-    pub(crate) next_sibling: Option<usize>,
+    pub(crate) parent: Option<NodeIdx>,
+    pub(crate) first_child: Option<NodeIdx>,
+    pub(crate) last_child: Option<NodeIdx>,
+    pub(crate) next_sibling: Option<NodeIdx>,
 }
 impl Deref for __Node {
     type Target = Node;
@@ -123,15 +141,123 @@ impl DerefMut for __Node {
     }
 }
 
-pub struct LayoutEngine {
+// TODO: Might want to look into making this a soa of topology, style and computed values
+pub struct Tree {
     pub(crate) nodes: Vec<__Node>,
     pub(crate) node_count: usize,
+}
+impl Default for Tree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl Tree {
+    pub fn new() -> Self {
+        Self::with_capacity(1024)
+    }
+
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            nodes: Vec::with_capacity(capacity),
+            node_count: 0,
+        }
+    }
+
+    pub(crate) fn create_node(&mut self, desc: Node, seed: Id) -> NodeIdx {
+        let i = self.node_count;
+        let node_idx = NodeIdx::new(i);
+        let node = __Node {
+            desc,
+            id: seed,
+            ..Default::default()
+        };
+
+        if i < self.nodes.len() {
+            self.nodes[i] = node;
+        } else {
+            self.nodes.push(node);
+        }
+        self.node_count += 1;
+        node_idx
+    }
+
+    pub(crate) fn add_child(&mut self, parent: NodeIdx, child: NodeIdx) {
+        self[child].parent = Some(parent);
+
+        if let Some(last) = self[parent].last_child {
+            self[last].next_sibling = Some(child);
+        } else {
+            self[parent].first_child = Some(child);
+        }
+
+        self[parent].last_child = Some(child);
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.node_count = 0;
+    }
+
+    pub fn find_by_id(&self, target_id: Id) -> Option<NodeIdx> {
+        self.nodes[..self.node_count]
+            .iter()
+            .position(|n| n.id == target_id)
+            .map(NodeIdx::new)
+    }
+}
+impl Index<NodeIdx> for Tree {
+    type Output = __Node;
+
+    #[inline]
+    fn index(&self, index: NodeIdx) -> &Self::Output {
+        &self.nodes[index.as_usize()]
+    }
+}
+impl IndexMut<NodeIdx> for Tree {
+    #[inline]
+    fn index_mut(&mut self, index: NodeIdx) -> &mut Self::Output {
+        &mut self.nodes[index.as_usize()]
+    }
+}
+impl Index<Range<NodeIdx>> for Tree {
+    type Output = [__Node];
+
+    fn index(&self, index: Range<NodeIdx>) -> &Self::Output {
+        &self.nodes[index.start.as_usize()..index.end.as_usize()]
+    }
+}
+
+pub struct LayoutEngine {
+    pub nodes: Tree,
 
     pub(crate) debug: bool,
 }
 impl Default for LayoutEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+impl LayoutEngine {
+    pub fn new() -> Self {
+        LayoutEngine {
+            nodes: Tree::default(),
+            debug: false,
+        }
+    }
+
+    pub(crate) fn create_node(&mut self, desc: Node, seed: Id) -> NodeIdx {
+        self.nodes.create_node(desc, seed)
+    }
+
+    pub(crate) fn add_child(&mut self, parent: NodeIdx, child: NodeIdx) {
+        self.nodes.add_child(parent, child);
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.nodes.reset();
+    }
+
+    pub fn toggle_debug(&mut self) {
+        self.debug = !self.debug;
     }
 }
 
@@ -147,7 +273,7 @@ macro_rules! impl_layout_pass {
         stretch_check: $stretch_check:ident
     ) => {
         // Phase 1 / 3: measure minimal size
-        pub(crate) fn $measure_fn(&mut self, id: usize) {
+        pub(crate) fn $measure_fn(&mut self, id: NodeIdx) {
             let base_val = match self.nodes[id].size.$dim {
                 Length::Fixed(v) => {
                     self.nodes[id].min.$dim = max(self.nodes[id].min.$dim, v);
@@ -198,7 +324,7 @@ macro_rules! impl_layout_pass {
         }
 
         // Phase 2 / 4: assign sizes within available space
-        pub(crate) fn $assign_fn(&mut self, id: usize, parent_size: i32) {
+        pub(crate) fn $assign_fn(&mut self, id: NodeIdx, parent_size: i32) {
             let target_v = match self.nodes[id].size.$dim {
                 Length::Grow | Length::Weighted(_) => parent_size,
                 Length::Fixed(v) => v,
@@ -360,52 +486,9 @@ macro_rules! impl_layout_pass {
 }
 
 impl LayoutEngine {
-    pub fn new() -> Self {
-        LayoutEngine {
-            nodes: Vec::with_capacity(1024),
-            node_count: 0,
-
-            debug: false,
-        }
-    }
-    pub(crate) fn create_node(&mut self, desc: Node, seed: Id) -> usize {
-        let i = self.node_count;
-        let node = __Node {
-            desc,
-            id: seed,
-            ..Default::default()
-        };
-        if i < self.nodes.len() {
-            self.nodes[i] = node;
-        } else {
-            self.nodes.push(node);
-        }
-        self.node_count += 1;
-        i
-    }
-    pub(crate) fn add_child(&mut self, parent: usize, child: usize) {
-        self.nodes[child].parent = Some(parent);
-        if self.nodes[parent].first_child.is_none() {
-            self.nodes[parent].first_child = Some(child);
-        } else {
-            let mut cur = self.nodes[parent].first_child.unwrap();
-            while let Some(next) = self.nodes[cur].next_sibling {
-                cur = next;
-            }
-            self.nodes[cur].next_sibling = Some(child);
-        }
-    }
-    pub(crate) fn reset(&mut self) {
-        self.node_count = 0;
-    }
-
-    pub fn toggle_debug(&mut self) {
-        self.debug = !self.debug;
-    }
-
     /// True when this node is a flow child of a horizontal parent whose
     /// `cross_align` is `Stretch` — i.e. its *height* should fill the parent.
-    fn stretched_by_horizontal_parent(&self, id: usize) -> bool {
+    fn stretched_by_horizontal_parent(&self, id: NodeIdx) -> bool {
         if self.nodes[id].is_absolute {
             return false;
         }
@@ -420,7 +503,7 @@ impl LayoutEngine {
 
     /// True when this node is a flow child of a vertical parent whose
     /// `cross_align` is `Stretch` — i.e. its *width* should fill the parent.
-    fn stretched_by_vertical_parent(&self, id: usize) -> bool {
+    fn stretched_by_vertical_parent(&self, id: NodeIdx) -> bool {
         if self.nodes[id].is_absolute {
             return false;
         }
@@ -456,7 +539,7 @@ impl LayoutEngine {
     );
 
     // Phase 5: place all nodes (compute positions)
-    pub(crate) fn place(&mut self, id: usize, x: i32, y: i32) -> (i32, i32) {
+    pub(crate) fn place(&mut self, id: NodeIdx, x: i32, y: i32) -> (i32, i32) {
         fn cross_offset(align: Align, inner_cross: i32, child_cross: i32) -> i32 {
             match align {
                 Align::Center => ((inner_cross - child_cross) / 2).max(0),
@@ -567,30 +650,30 @@ mod tests {
 
     #[test]
     fn node_vec_grows_beyond_initial_capacity() {
-        let mut engine = LayoutEngine::new();
-        let initial_cap = engine.nodes.capacity();
+        let mut tree = Tree::default();
+        let initial_cap = tree.nodes.capacity();
 
         // Force growth past the initial allocation
         for _ in 0..initial_cap + 1 {
-            engine.create_node(Node::default(), 0);
+            tree.create_node(Node::default(), 0);
         }
 
         assert!(
-            engine.nodes.capacity() > initial_cap,
+            tree.nodes.capacity() > initial_cap,
             "vec should have reallocated"
         );
         assert_eq!(
-            engine.node_count,
+            tree.node_count,
             initial_cap + 1,
             "all nodes should be accounted for"
         );
 
         // Verify reset preserves capacity
-        let grown_cap = engine.nodes.capacity();
-        engine.reset();
-        assert_eq!(engine.node_count, 0);
+        let grown_cap = tree.nodes.capacity();
+        tree.reset();
+        assert_eq!(tree.node_count, 0);
         assert_eq!(
-            engine.nodes.capacity(),
+            tree.nodes.capacity(),
             grown_cap,
             "reset should not shrink capacity"
         );

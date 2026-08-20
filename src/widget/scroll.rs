@@ -1,5 +1,6 @@
 use crate::{
     event::{MouseButton, ScrollUnits, UiEventRef},
+    layout::NodeIdx,
     primitive::Instance,
     widget::prelude::*,
 };
@@ -35,11 +36,10 @@ pub struct ScrollViewState {
     last_focus: Option<Id>,
 }
 
-fn focused_reveal(ctx: &EventCtx, self_idx: usize) -> Option<(i32, i32)> {
+fn focused_reveal(ctx: &EventCtx, self_idx: NodeIdx) -> Option<(i32, i32)> {
     let focused = ctx.ui.focus.focused()?;
     let nodes = &ctx.layout.nodes;
-    let live = ctx.layout.node_count;
-    let fidx = nodes[..live].iter().position(|n| n.id == focused)?;
+    let fidx = nodes.find_by_id(focused)?;
     let st = ctx
         .ui
         .view_state

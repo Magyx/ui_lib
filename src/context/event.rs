@@ -3,7 +3,7 @@ use crate::{
     event::{KeyState, MouseButton, UiEventRef},
     focus::{Dir, ScopeId},
     gpu::Globals,
-    layout::LayoutEngine,
+    layout::{LayoutEngine, NodeIdx},
     model::Rect,
     text::TextBackend,
     tree::ROOT_SEED,
@@ -16,7 +16,7 @@ pub struct EventCtx<'a> {
     pub event: Option<UiEventRef<'a>>,
     #[doc(hidden)]
     pub layout: &'a LayoutEngine,
-    pub(crate) current_node: usize,
+    pub(crate) current_node: NodeIdx,
     pub(crate) focus_scope: ScopeId,
     pub(crate) clip: Option<Rect>,
 
@@ -38,7 +38,7 @@ impl<'a> EventCtx<'a> {
             ui,
             event,
             layout,
-            current_node: 0usize,
+            current_node: NodeIdx::new(0),
             focus_scope: ROOT_SEED,
             clip: None,
 
@@ -47,7 +47,7 @@ impl<'a> EventCtx<'a> {
     }
     pub(crate) fn __set_data(
         &mut self,
-        current_node: usize,
+        current_node: NodeIdx,
         focus_scope: ScopeId,
         clip: Option<[i32; 4]>,
     ) {
@@ -55,7 +55,7 @@ impl<'a> EventCtx<'a> {
         self.focus_scope = focus_scope;
         self.clip = clip.map(|[x, y, w, h]| Rect::new(x, y, w, h));
     }
-    pub fn current_node_id(&self) -> usize {
+    pub fn current_node_id(&self) -> NodeIdx {
         self.current_node
     }
     pub fn rect(&self) -> Rect {
@@ -73,7 +73,7 @@ impl<'a> EventCtx<'a> {
     pub fn state_or<T: 'static>(&mut self, default: impl FnOnce() -> T) -> &mut T {
         self.ui.view_state.ensure(self.id(), default)
     }
-    pub fn first_child_node(&self) -> Option<usize> {
+    pub fn first_child_node(&self) -> Option<NodeIdx> {
         self.layout.nodes[self.current_node].first_child
     }
 

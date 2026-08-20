@@ -2,7 +2,7 @@ use crate::{
     context::{Env, Id, LayoutCtx, PaintCtx, PrepareCtx},
     event::{KeyState, LogicalKey, UiEventRef},
     focus::{Dir, ScopeId},
-    layout::LayoutEngine,
+    layout::{LayoutEngine, NodeIdx},
     model::{Color, Position, Size},
     primitive::{Instance, InstanceStore},
     widget::Widget,
@@ -83,7 +83,7 @@ pub fn run_layout<'a>(
         layout_engine.place(root_id, 0, 0);
     }
 
-    root_id
+    root_id.as_usize()
 }
 
 fn build_tree<'a>(
@@ -92,7 +92,7 @@ fn build_tree<'a>(
     w: &mut dyn Widget,
     seed: u64,
     env: Env,
-) -> usize {
+) -> NodeIdx {
     ctx.__set_id(seed);
     ctx.__set_env(env);
     let desc = w.layout(ctx);
@@ -122,14 +122,16 @@ fn post_width_query<'a>(
     ctx: &mut LayoutCtx<'a>,
     cursor: &mut usize,
 ) {
-    let i = *cursor;
+    let id = NodeIdx::new(*cursor);
 
-    let first = eng.nodes[i].first_child;
+    let first = eng.nodes[id].first_child;
     if first.is_none() {
-        ctx.__set_id(eng.nodes[i].id);
-        if let Some(h) = w.min_height_for_width(ctx, eng.nodes[i].current_size.width) {
-            let clamped = h.max(eng.nodes[i].min.height).min(eng.nodes[i].max.height);
-            eng.nodes[i].min.height = clamped;
+        ctx.__set_id(eng.nodes[id].id);
+        if let Some(h) = w.min_height_for_width(ctx, eng.nodes[id].current_size.width) {
+            let clamped = h
+                .max(eng.nodes[id].min.height)
+                .min(eng.nodes[id].max.height);
+            eng.nodes[id].min.height = clamped;
         }
     }
 
@@ -152,7 +154,7 @@ fn __prepare_tree(
     cursor: &mut usize,
     env: Env,
 ) {
-    let id = *cursor;
+    let id = NodeIdx::new(*cursor);
     ctx.__set_data(id, env);
 
     w.prepare(ctx);
@@ -202,7 +204,7 @@ fn __handle_tree(
     scope: ScopeId,
     parent_clip: Option<[i32; 4]>,
 ) {
-    let id = *cursor;
+    let id = NodeIdx::new(*cursor);
 
     let n = ctx.layout.nodes[id];
     let mut clip = parent_clip;
@@ -272,7 +274,7 @@ fn __paint_tree(
     depth: usize,
     env: Env,
 ) {
-    let id = *cursor;
+    let id = NodeIdx::new(*cursor);
     ctx.__set_data(id, env);
     let n = eng.nodes[id];
 

@@ -260,7 +260,7 @@ impl<'a> Engine<'a> {
         }
 
         crate::plot!("ui.instances", self.instance_buf.len() as f64);
-        crate::plot!("ui.nodes", self.layout_engine.node_count as f64);
+        crate::plot!("ui.nodes", self.layout_engine.nodes.node_count as f64);
 
         target.globals.frame = target.globals.frame.wrapping_add(1);
 

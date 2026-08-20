@@ -1,7 +1,7 @@
 use super::{Env, Id, ViewState};
 use crate::{
     gpu::{Globals, Gpu},
-    layout::LayoutEngine,
+    layout::{LayoutEngine, NodeIdx},
     model::{Rect, Size},
     render::{
         pipeline::{Pipeline, PipelineRegistry, RegistryEnv},
@@ -20,7 +20,7 @@ pub struct PrepareCtx<'a> {
     pub(crate) surface_format: wgpu::TextureFormat,
     pub(crate) immediate_size: u32,
     pub(crate) layout: &'a LayoutEngine,
-    pub(crate) current_node: usize,
+    pub(crate) current_node: NodeIdx,
     pub view_state: &'a mut ViewState,
     pub theme: &'a Theme,
     pub env: Env,
@@ -49,7 +49,7 @@ impl<'a> PrepareCtx<'a> {
             surface_format,
             immediate_size,
             layout,
-            current_node: 0,
+            current_node: NodeIdx::new(0),
             view_state,
             theme,
             env: theme.root_env(),
@@ -70,11 +70,11 @@ impl<'a> PrepareCtx<'a> {
         let _ = self.pipeline::<P>();
     }
 
-    pub(crate) fn __set_data(&mut self, current_node: usize, env: Env) {
+    pub(crate) fn __set_data(&mut self, current_node: NodeIdx, env: Env) {
         self.current_node = current_node;
         self.env = env;
     }
-    pub fn current_node_id(&self) -> usize {
+    pub fn current_node_id(&self) -> NodeIdx {
         self.current_node
     }
     pub fn rect(&self) -> Rect {
@@ -89,7 +89,7 @@ impl<'a> PrepareCtx<'a> {
     pub fn id(&self) -> Id {
         self.layout.nodes[self.current_node].id
     }
-    pub fn first_child_node(&self) -> Option<usize> {
+    pub fn first_child_node(&self) -> Option<NodeIdx> {
         self.layout.nodes[self.current_node].first_child
     }
     pub fn child_content_height(&self) -> i32 {
