@@ -2,7 +2,7 @@ use crate::{
     context::{Env, Id, LayoutCtx, PaintCtx, PrepareCtx},
     event::{KeyState, LogicalKey, UiEventRef},
     focus::{Dir, ScopeId},
-    layout::{LayoutEngine, NodeIdx},
+    layout::{__Node, LayoutEngine, NodeIdx},
     model::{Color, Position, Rect, Size},
     primitive::{Instance, InstanceStore},
     widget::Widget,
@@ -168,6 +168,23 @@ fn __prepare_tree(
     }
 }
 
+#[inline]
+fn calculate_clip(n: &__Node, parent_clip: Option<Rect>) -> Option<Rect> {
+    if !n.clip_children {
+        return parent_clip;
+    }
+    let node_rect = Rect {
+        x: n.pos.x,
+        y: n.pos.y,
+        w: n.current_size.width,
+        h: n.current_size.height,
+    };
+    Some(match parent_clip {
+        Some(parent) => parent.intersect(&node_rect),
+        None => node_rect,
+    })
+}
+
 pub fn handle_tree(
     w: &mut dyn crate::widget::Widget,
     ctx: &mut crate::context::EventCtx,
@@ -207,20 +224,7 @@ fn __handle_tree(
     let id = NodeIdx::new(*cursor);
 
     let n = ctx.layout.nodes[id];
-    let mut clip = parent_clip;
-    if n.clip_children {
-        let node_rect = Rect {
-            x: n.pos.x,
-            y: n.pos.y,
-            w: n.current_size.width,
-            h: n.current_size.height,
-        };
-
-        clip = Some(match parent_clip {
-            Some(parent) => parent.intersect(&node_rect),
-            None => node_rect,
-        });
-    }
+    let clip = calculate_clip(&n, parent_clip);
     ctx.__set_data(id, scope, clip);
 
     let node_id = ctx.id();
@@ -275,21 +279,7 @@ fn __paint_tree(
     ctx.__set_data(id, env);
     let n = eng.nodes[id];
 
-    let mut clip = parent_clip;
-    if n.clip_children {
-        let node_rect = Rect {
-            x: n.pos.x,
-            y: n.pos.y,
-            w: n.current_size.width,
-            h: n.current_size.height,
-        };
-
-        clip = Some(match parent_clip {
-            Some(parent) => parent.intersect(&node_rect),
-            None => node_rect,
-        });
-    }
-
+    let clip = calculate_clip(&n, parent_clip);
     let prev_clip = out.set_clip(clip);
     w.paint(ctx, out);
     if w.focusable() && ctx.is_focused() {
@@ -314,16 +304,12 @@ fn __paint_tree(
 
     if eng.debug {
         let r = ctx.rect();
-        let x = r.x as f32;
-        let y = r.y as f32;
-        let w = r.w as f32;
-        let h = r.h as f32;
         let col = color_for_depth(depth);
         let thickness = 1;
 
         out.push(Instance::ui_rounded(
-            Position::new(x, y),
-            Size::new(w, h),
+            Position::new(r.x as f32, r.y as f32),
+            Size::new(r.w as f32, r.h as f32),
             Color::TRANSPARENT,
             1.0,
             thickness,
