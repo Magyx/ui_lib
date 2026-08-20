@@ -173,31 +173,40 @@ impl Focus {
     }
 
     fn move_focus(&mut self, dir: Dir) {
-        // Filter the ring to the active scope: this single filter *is* the
-        // keyboard half of trapping — you cannot Tab out of a modal because
-        // only its entries are candidates.
-        let items: Vec<Id> = self
-            .ring
-            .iter()
-            .filter(|f| f.scope == self.active_scope)
-            .map(|f| f.id)
-            .collect();
-        let len = items.len();
-        if len == 0 {
-            return;
-        }
-        let cur = self
-            .focused
-            .and_then(|id| items.iter().position(|&x| x == id));
-        let next = match (cur, dir) {
-            // Focused item is in the active scope: step with wraparound.
-            (Some(i), Dir::Next) => (i + 1) % len,
-            (Some(i), Dir::Prev) => (i + len - 1) % len,
-            // Not in the active scope (e.g. a modal just opened): enter it.
-            (None, Dir::Next) => 0,
-            (None, Dir::Prev) => len - 1,
+        let mut scoped = self.ring.iter().filter(|f| f.scope == self.active_scope);
+
+        self.focused = match dir {
+            Dir::Next => {
+                if let Some(cur_id) = self.focused {
+                    scoped
+                        .by_ref()
+                        .skip_while(|f| f.id != cur_id)
+                        .nth(1)
+                        .or_else(|| self.ring.iter().find(|f| f.scope == self.active_scope))
+                        .map(|f| f.id)
+                } else {
+                    scoped.next().map(|f| f.id)
+                }
+            }
+            Dir::Prev => {
+                if let Some(cur_id) = self.focused {
+                    scoped
+                        .by_ref()
+                        .rev()
+                        .skip_while(|f| f.id != cur_id)
+                        .nth(1)
+                        .or_else(|| {
+                            self.ring
+                                .iter()
+                                .rev()
+                                .find(|f| f.scope == self.active_scope)
+                        })
+                        .map(|f| f.id)
+                } else {
+                    scoped.next_back().map(|f| f.id)
+                }
+            }
         };
-        self.focused = Some(items[next]);
     }
 
     /// Drop focus/press whose widget was not touched this frame (it was removed

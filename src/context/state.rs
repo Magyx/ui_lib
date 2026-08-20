@@ -40,23 +40,8 @@ impl ViewState {
         self.inner.is_empty()
     }
 
-    pub fn ensure<T: 'static>(&mut self, id: Id, default: impl FnOnce() -> T) -> &mut T {
+    pub(crate) fn touch(&mut self, id: Id) {
         self.touched.insert(id);
-        self.ensure_inner(id, default, None)
-    }
-
-    pub fn ensure_swept<T: OnSweep + 'static>(
-        &mut self,
-        id: Id,
-        default: impl FnOnce() -> T,
-    ) -> &mut T {
-        self.touched.insert(id);
-
-        fn dispatch<T: OnSweep + 'static>(v: &mut dyn Any, cx: &mut SweepCtx) {
-            v.downcast_mut::<T>().unwrap().on_sweep(cx);
-        }
-
-        self.ensure_inner(id, default, Some(dispatch::<T>))
     }
 
     fn ensure_inner<T: 'static>(
@@ -88,26 +73,36 @@ impl ViewState {
 
         entry.value.downcast_mut::<T>().unwrap()
     }
+    pub fn ensure<T: 'static>(&mut self, id: Id, default: impl FnOnce() -> T) -> &mut T {
+        self.touch(id);
+        self.ensure_inner(id, default, None)
+    }
+    pub fn ensure_swept<T: OnSweep + 'static>(
+        &mut self,
+        id: Id,
+        default: impl FnOnce() -> T,
+    ) -> &mut T {
+        self.touch(id);
+
+        fn dispatch<T: OnSweep + 'static>(v: &mut dyn Any, cx: &mut SweepCtx) {
+            v.downcast_mut::<T>().unwrap().on_sweep(cx);
+        }
+
+        self.ensure_inner(id, default, Some(dispatch::<T>))
+    }
 
     pub(crate) fn was_touched(&self, id: &Id) -> bool {
         self.touched.contains(id)
     }
 
     fn drain_stale(&mut self) -> Vec<(Id, Entry)> {
-        let stale: Vec<Id> = self
+        let stale: Vec<(Id, Entry)> = self
             .inner
-            .keys()
-            .copied()
-            .filter(|id| !self.touched.contains(id))
+            .extract_if(|id, _| !self.touched.contains(id))
             .collect();
-        let mut out = Vec::with_capacity(stale.len());
-        for id in stale {
-            if let Some(e) = self.inner.remove(&id) {
-                out.push((id, e));
-            }
-        }
+
         self.touched.clear();
-        out
+        stale
     }
 
     pub(crate) fn sweep(&mut self, cx: &mut SweepCtx) {

@@ -2,7 +2,6 @@ use crate::{
     context::Env,
     model::Color,
     text::{FontStyle, Weight},
-    tree::ROOT_SEED,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -195,7 +194,6 @@ impl Theme {
             elevation: 0,
             foreground: self.on_surface,
             text: self.typography.body,
-            focus_scope: ROOT_SEED,
         }
     }
 

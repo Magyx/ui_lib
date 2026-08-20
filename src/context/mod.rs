@@ -2,7 +2,7 @@ use std::any::Any;
 
 use crate::{
     event::{Modifiers, MouseButton},
-    focus::{Focus, ScopeId},
+    focus::Focus,
     model::{Color, Position},
     task::TaskStore,
     theme::TextStyle,
@@ -98,8 +98,6 @@ pub struct Env {
     pub foreground: Color,
     /// Inherited default text style.
     pub text: TextStyle,
-    /// Focus scope the subtree belongs to.
-    pub focus_scope: ScopeId,
 }
 
 /// A drain-able queue of type-erased app messages.

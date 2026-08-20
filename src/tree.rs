@@ -98,12 +98,8 @@ fn build_tree<'a>(
     let desc = w.layout(ctx);
     let i = layout_engine.create_node(desc, seed);
 
-    let mut child_env = w.child_env(env, ctx.theme);
-    if w.focus_trap() {
-        child_env.focus_scope = seed;
-    }
-    let count = w.child_count();
-    for y in 0..count {
+    let child_env = w.child_env(env, ctx.theme);
+    for y in 0..w.child_count() {
         let child = w.child_mut(y);
         let child_seed = match child.key() {
             Some(k) => mix64(seed, k as usize),
@@ -136,8 +132,7 @@ fn post_width_query<'a>(
     }
 
     *cursor += 1;
-    let count = w.child_count();
-    for i in 0..count {
+    for i in 0..w.child_count() {
         post_width_query(w.child_mut(i), eng, ctx, cursor);
     }
 }
@@ -161,8 +156,7 @@ fn __prepare_tree(
     *cursor += 1;
 
     let child_env = w.child_env(env, ctx.theme);
-    let child_count = w.child_count();
-    for i in 0..child_count {
+    for i in 0..w.child_count() {
         let child = w.child_mut(i);
         __prepare_tree(child, ctx, cursor, child_env);
     }
@@ -228,9 +222,9 @@ fn __handle_tree(
     ctx.__set_data(id, scope, clip);
 
     let node_id = ctx.id();
-
     if w.focusable() {
         ctx.ui.focus.register(node_id, scope);
+        ctx.ui.view_state.touch(node_id);
     }
     let child_scope = if w.focus_trap() {
         ctx.ui.focus.note_trap(node_id);
@@ -288,13 +282,8 @@ fn __paint_tree(
 
     *cursor += 1;
 
-    let node_id = eng.nodes[id].id;
-    let mut child_env = w.child_env(env, ctx.theme);
-    if w.focus_trap() {
-        child_env.focus_scope = node_id;
-    }
-    let child_count = w.child_count();
-    for i in 0..child_count {
+    let child_env = w.child_env(env, ctx.theme);
+    for i in 0..w.child_count() {
         let child = w.child_mut(i);
         __paint_tree(child, ctx, eng, cursor, out, clip, depth + 1, child_env);
     }
