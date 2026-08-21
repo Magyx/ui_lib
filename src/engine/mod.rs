@@ -26,7 +26,7 @@ pub mod frame;
 mod target;
 
 pub struct Engine<'a> {
-    instance_buf: InstanceStore,
+    instances: InstanceStore,
     layout_engine: LayoutEngine,
     theme: Theme,
 
@@ -165,7 +165,7 @@ impl<'a> Engine<'a> {
 
         Ok(Self {
             layout_engine: LayoutEngine::new(),
-            instance_buf: InstanceStore::new(),
+            instances: InstanceStore::new(),
             theme,
 
             gpu: Arc::new(gpu),

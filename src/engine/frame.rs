@@ -232,8 +232,8 @@ impl<'a> Engine<'a> {
                 target.globals.window_size[0] as i32,
                 target.globals.window_size[1] as i32,
             ));
-            self.instance_buf.clear();
-            self.instance_buf.push(Instance::ui(
+            self.instances.clear();
+            self.instances.push(Instance::ui(
                 Position::default(),
                 Size::from(target.globals.window_size),
                 self.theme.surface,
@@ -244,7 +244,7 @@ impl<'a> Engine<'a> {
                 &mut paint_ctx,
                 &self.layout_engine,
                 &mut cursor,
-                &mut self.instance_buf,
+                &mut self.instances,
                 screen_clip,
             );
         }
@@ -259,7 +259,7 @@ impl<'a> Engine<'a> {
             target.ctx.view_state.sweep(&mut sweep_ctx);
         }
 
-        crate::plot!("ui.instances", self.instance_buf.len() as f64);
+        crate::plot!("ui.instances", self.instances.len() as f64);
         crate::plot!("ui.nodes", self.layout_engine.nodes.node_count as f64);
 
         target.globals.frame = target.globals.frame.wrapping_add(1);
@@ -270,7 +270,7 @@ impl<'a> Engine<'a> {
             &mut target.attachments,
             &mut self.pipeline_registry,
             &target.globals,
-            &self.instance_buf,
+            &self.instances,
         ) {
             Presented::Ok => Ok(RenderOutcome::Rendered),
             Presented::Suboptimal => {
