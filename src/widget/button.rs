@@ -96,8 +96,8 @@ impl<M: Clone + 'static> Widget for Button<M> {
             min: self.min,
             max: self.max,
             layout_dir: Axis::Horizontal,
-            cross_align: Align::Center,
-            main_align: Align::Center,
+            cross: Align::CENTER,
+            main: Main::At(Align::CENTER),
             ..Default::default()
         }
     }

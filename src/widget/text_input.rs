@@ -187,7 +187,7 @@ pub struct TextInput<M, Mode: TextMode = SingleLine> {
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
-    padding: Vec4<i32>,
+    padding: Inset,
     border: i32,
 
     value: Cow<'static, str>,
@@ -209,7 +209,7 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
             size,
             min: Size::splat(28),
             max: Size::splat(i32::MAX),
-            padding: Vec4::new(8, 6, 8, 6),
+            padding: Inset::new(8, 6, 8, 6),
             border: 0,
             value: value.into(),
             placeholder: None,
@@ -253,8 +253,8 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
         self.placeholder = Some(text.into());
         self
     }
-    pub fn padding(mut self, p: Vec4<i32>) -> Self {
-        self.padding = p;
+    pub fn padding(mut self, p: impl Into<Inset>) -> Self {
+        self.padding = p.into();
         self
     }
     pub fn font_size(mut self, size: f32) -> Self {
@@ -288,10 +288,15 @@ impl<M, Mode: TextMode + 'static> TextInput<M, Mode> {
 
     #[inline]
     fn text_origin(&self, r: Rect) -> (i32, i32) {
-        (
-            r.x + self.padding.x + self.border,
-            r.y + self.padding.y + self.border,
-        )
+        let o = r.inset(self.inner_inset()).origin();
+        (o.x, o.y)
+    }
+
+    /// Padding plus the uniform border — the inset from the widget's
+    /// border box to where text actually starts.
+    #[inline]
+    fn inner_inset(&self) -> Inset {
+        self.padding + Inset::all(self.border)
     }
 
     fn ensure_state<'b>(
@@ -485,19 +490,13 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
         };
         self.child.set_content(text, color);
 
-        let b = ctx.theme.border_width;
-        self.border = b;
+        self.border = ctx.theme.border_width;
         Node {
             size: self.size,
             min: self.min,
             max: self.max,
             clip_children: true,
-            padding: Padding {
-                left: self.padding.x + b,
-                top: self.padding.y + b,
-                right: self.padding.z + b,
-                bottom: self.padding.w + b,
-            },
+            padding: self.inner_inset(),
             ..Default::default()
         }
     }

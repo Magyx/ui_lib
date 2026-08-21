@@ -8,97 +8,11 @@ use std::{
 
 use crate::{
     context::Id,
-    model::{Position, Size},
+    model::{Position, Rect, Size},
 };
 
-#[derive(Clone, Copy, Debug, Default)]
-pub enum Length {
-    #[default]
-    Fit,
-    Fixed(i32),
-    Grow,
-    Weighted(f32),
-}
-impl Length {
-    pub(crate) fn weight(self) -> Option<f32> {
-        match self {
-            Length::Grow => Some(1.0),
-            Length::Weighted(w) => Some(w),
-            _ => None,
-        }
-    }
-}
-impl<T> From<T> for Length
-where
-    T: Into<i32>,
-{
-    fn from(value: T) -> Self {
-        Length::Fixed(value.into())
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Align {
-    #[default]
-    Start,
-    Center,
-    End,
-    SpaceBetween,
-    SpaceAround,
-    SpaceEvenly,
-    /// Cross-axis only: fill the container's cross size. Resolved in the
-    /// assign pass (not `place`) so the stretched child's subtree reflows.
-    Stretch,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub enum Axis {
-    #[default]
-    Horizontal,
-    Vertical,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Padding {
-    pub left: i32,
-    pub top: i32,
-    pub right: i32,
-    pub bottom: i32,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Node {
-    pub size: Size<Length>,
-    pub min: Size<i32>,
-    pub max: Size<i32>,
-    pub layout_dir: Axis,
-    pub padding: Padding,
-    pub spacing: i32,
-    pub clip_children: bool,
-    pub children_offset: Position<i32>,
-    pub is_absolute: bool,
-    pub offset_pos: Position<i32>,
-    pub main_align: Align,
-    pub cross_align: Align,
-}
-impl Default for Node {
-    fn default() -> Self {
-        Self {
-            size: Default::default(),
-            min: Default::default(),
-            max: Size::splat(i32::MAX),
-            layout_dir: Default::default(),
-            padding: Default::default(),
-            spacing: Default::default(),
-            children_offset: Default::default(),
-            clip_children: Default::default(),
-            is_absolute: Default::default(),
-            offset_pos: Default::default(),
-            main_align: Align::Start,
-            cross_align: Align::Start,
-        }
-    }
-}
+mod models;
+pub use models::{Align, Align2, Axis, Length, Main, Node};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeIdx(NonZeroU32);
@@ -229,6 +143,7 @@ impl Index<Range<NodeIdx>> for Tree {
 pub struct LayoutEngine {
     pub nodes: Tree,
 
+    pub(crate) fill_scratch: Vec<NodeIdx>,
     pub(crate) debug: bool,
 }
 impl Default for LayoutEngine {
@@ -240,6 +155,7 @@ impl LayoutEngine {
     pub fn new() -> Self {
         LayoutEngine {
             nodes: Tree::default(),
+            fill_scratch: Vec::new(),
             debug: false,
         }
     }
@@ -265,12 +181,12 @@ macro_rules! impl_layout_pass {
     (
         measure_fn: $measure_fn:ident,
         assign_fn: $assign_fn:ident,
+        fill_fn: $fill_fn:ident,
         dim: $dim:ident,
         pad_start: $pad_start:ident,
         pad_end: $pad_end:ident,
         main_axis: $main_axis:pat,
-        cross_axis: $cross_axis:pat,
-        stretch_check: $stretch_check:ident
+        cross_axis: $cross_axis:pat
     ) => {
         // Phase 1 / 3: measure minimal size
         pub(crate) fn $measure_fn(&mut self, id: NodeIdx) {
@@ -323,12 +239,102 @@ macro_rules! impl_layout_pass {
             }
         }
 
+        /// Size the `Fill` children in `first`'s sibling chain from `pool`,
+        /// in proportion to their weights.
+        ///
+        /// A child whose share would violate its own min or max is frozen at
+        /// that bound and taken out of the pool; the remaining children then
+        /// re-split what is left. Each pass freezes at least one child, so
+        /// this settles in at most one pass per flexible child.
+        ///
+        /// Note a `Fill` child's min is its *content* min (set in the measure
+        /// pass), unless it clips — so text still refuses to shrink past the
+        /// point where it would be cut off, and the exact weight ratio gives
+        /// way to that.
+        pub(crate) fn $fill_fn(&mut self, first: NodeIdx, pool: i32) {
+            let mut open = std::mem::take(&mut self.fill_scratch);
+            open.clear();
+
+            let mut idx = Some(first);
+            while let Some(child) = idx {
+                let n = &self.nodes[child];
+                if !n.is_absolute && n.size.$dim.weight().is_some() {
+                    open.push(child);
+                }
+                idx = n.next_sibling;
+            }
+
+            let mut pool = pool;
+            while !open.is_empty() {
+                let mut total_w = 0f32;
+                for &c in open.iter() {
+                    total_w += self.nodes[c].size.$dim.weight().unwrap_or(0.0);
+                }
+                if total_w <= 0.0 {
+                    break;
+                }
+
+                // Freeze every child whose fair share breaks a bound, then
+                // re-split the reduced pool among whoever is left.
+                let mut froze = false;
+                let mut i = 0;
+                while i < open.len() {
+                    let c = open[i];
+                    let w = self.nodes[c].size.$dim.weight().unwrap_or(0.0);
+                    let share = (pool as f32 * (w / total_w)).floor() as i32;
+                    let lo = self.nodes[c].min.$dim;
+                    let hi = self.nodes[c].max.$dim;
+                    if share < lo || share > hi {
+                        let bound = share.clamp(lo, hi);
+                        self.nodes[c].current_size.$dim = bound;
+                        pool -= bound;
+                        open.remove(i);
+                        froze = true;
+                    } else {
+                        i += 1;
+                    }
+                }
+                if froze {
+                    continue;
+                }
+
+                // Nobody is clamped: hand out the shares and spread the
+                // rounding remainder one pixel at a time.
+                let mut assigned = 0;
+                for &c in open.iter() {
+                    let w = self.nodes[c].size.$dim.weight().unwrap_or(0.0);
+                    let share = (pool as f32 * (w / total_w)).floor() as i32;
+                    self.nodes[c].current_size.$dim = share;
+                    assigned += share;
+                }
+                let mut rem = pool - assigned;
+                for &c in open.iter() {
+                    if rem <= 0 {
+                        break;
+                    }
+                    if self.nodes[c].current_size.$dim < self.nodes[c].max.$dim {
+                        self.nodes[c].current_size.$dim += 1;
+                        rem -= 1;
+                    }
+                }
+                break;
+            }
+
+            open.clear();
+            self.fill_scratch = open;
+        }
+
         // Phase 2 / 4: assign sizes within available space
         pub(crate) fn $assign_fn(&mut self, id: NodeIdx, parent_size: i32) {
             let target_v = match self.nodes[id].size.$dim {
-                Length::Grow | Length::Weighted(_) => parent_size,
+                Length::Fill(_) => parent_size,
                 Length::Fixed(v) => v,
-                Length::Fit if self.$stretch_check(id) => parent_size,
+                Length::Fit
+                    if self.parent_fills_cross(id)
+                        && matches!(self.parent_axis(id), Some($cross_axis)) =>
+                {
+                    parent_size
+                }
                 Length::Fit => self.nodes[id].current_size.$dim,
             };
             let target_v = target_v
@@ -352,21 +358,43 @@ macro_rules! impl_layout_pass {
                 return;
             }
 
-            // Main axis: one walk for count + base sum.
+            // Main axis: one walk for count + base sum. `Fill` children are
+            // deliberately excluded from the base — their size comes from the
+            // pool below, in proportion to weight, rather than from growing
+            // their content outward. That is what makes `Fill(2)` twice
+            // `Fill(1)` regardless of what either one contains.
             let spacing = self.nodes[id].spacing;
-            let (mut count, mut total_base) = (0, 0);
+            let (mut count, mut total_base, mut fills) = (0, 0, 0);
             let mut idx = Some(first);
             while let Some(child) = idx {
                 if !self.nodes[child].is_absolute {
                     count += 1;
-                    total_base += self.nodes[child].current_size.$dim;
+                    if self.nodes[child].size.$dim.weight().is_some() {
+                        fills += 1;
+                    } else {
+                        total_base += self.nodes[child].current_size.$dim;
+                    }
                 }
                 idx = self.nodes[child].next_sibling;
             }
 
             let gaps = if count > 0 { (count - 1) * spacing } else { 0 };
             let inner_v = (target_v - pad.$pad_start - pad.$pad_end - gaps).max(0);
-            let mut remaining = inner_v - total_base;
+
+            if fills > 0 {
+                self.$fill_fn(first, (inner_v - total_base).max(0));
+            }
+
+            // Re-sum now that the `Fill` children have been sized; anything
+            // still over budget is taken back by the shrink loop below.
+            let (mut total_used, mut idx) = (0, Some(first));
+            while let Some(child) = idx {
+                if !self.nodes[child].is_absolute {
+                    total_used += self.nodes[child].current_size.$dim;
+                }
+                idx = self.nodes[child].next_sibling;
+            }
+            let remaining = inner_v - total_used;
 
             if remaining < 0 {
                 // shrink flexible children toward min
@@ -409,63 +437,6 @@ macro_rules! impl_layout_pass {
                         break;
                     }
                 }
-            } else if remaining > 0 {
-                // grow Grow children toward their max.
-                while remaining > 0 {
-                    let mut total_w = 0f32;
-                    let mut idx = Some(first);
-                    while let Some(child) = idx {
-                        let n = &self.nodes[child];
-                        if let Some(w) = n.size.$dim.weight()
-                            && n.current_size.$dim < n.max.$dim
-                        {
-                            total_w += w;
-                        }
-                        idx = n.next_sibling;
-                    }
-                    if total_w <= 0.0 {
-                        break;
-                    }
-                    let budget = remaining;
-                    let mut used = 0;
-                    let mut idx = Some(first);
-                    while let Some(child) = idx {
-                        let next = self.nodes[child].next_sibling;
-                        let n = &mut self.nodes[child];
-                        if remaining > 0
-                            && let Some(w) = n.size.$dim.weight()
-                        {
-                            let addable = n.max.$dim - n.current_size.$dim;
-                            if addable > 0 {
-                                let share = (budget as f32 * (w / total_w)).floor() as i32;
-                                let amt = min(addable, share);
-                                if amt > 0 {
-                                    n.current_size.$dim += amt;
-                                    used += amt;
-                                    remaining -= amt;
-                                }
-                            }
-                        }
-                        idx = next;
-                    }
-                    if used == 0 {
-                        let mut idx = Some(first);
-                        while let Some(child) = idx {
-                            let next = self.nodes[child].next_sibling;
-                            let n = &mut self.nodes[child];
-                            if n.size.$dim.weight().is_some() && n.current_size.$dim < n.max.$dim {
-                                n.current_size.$dim += 1;
-                                remaining -= 1; // You added this to height, but not width in your original snippet!
-                                used = 1; // Keeping it here makes both passes safer and mathematically correct.
-                                break;
-                            }
-                            idx = next;
-                        }
-                        if used == 0 {
-                            break;
-                        }
-                    }
-                }
             }
 
             // Recurse: flow children into their resolved size, absolute children
@@ -485,84 +456,71 @@ macro_rules! impl_layout_pass {
     };
 }
 
+#[inline]
+fn cross_offset(align: Align, inner_cross: i32, child_cross: i32) -> i32 {
+    (((inner_cross - child_cross) as f32 * align.get()).floor()).max(0.0) as i32
+}
+
 impl LayoutEngine {
-    /// True when this node is a flow child of a horizontal parent whose
-    /// `cross_align` is `Stretch` — i.e. its *height* should fill the parent.
-    fn stretched_by_horizontal_parent(&self, id: NodeIdx) -> bool {
+    /// True when this node is a flow child of a parent with `fill_cross` set.
+    /// The caller pairs this with an axis check, since filling only applies
+    /// across the parent's layout direction.
+    fn parent_fills_cross(&self, id: NodeIdx) -> bool {
         if self.nodes[id].is_absolute {
             return false;
         }
         match self.nodes[id].parent {
-            Some(p) => {
-                matches!(self.nodes[p].layout_dir, Axis::Horizontal)
-                    && self.nodes[p].cross_align == Align::Stretch
-            }
+            Some(p) => self.nodes[p].fill_cross,
             None => false,
         }
     }
 
-    /// True when this node is a flow child of a vertical parent whose
-    /// `cross_align` is `Stretch` — i.e. its *width* should fill the parent.
-    fn stretched_by_vertical_parent(&self, id: NodeIdx) -> bool {
-        if self.nodes[id].is_absolute {
-            return false;
-        }
-        match self.nodes[id].parent {
-            Some(p) => {
-                matches!(self.nodes[p].layout_dir, Axis::Vertical)
-                    && self.nodes[p].cross_align == Align::Stretch
-            }
-            None => false,
-        }
+    #[inline]
+    fn parent_axis(&self, id: NodeIdx) -> Option<Axis> {
+        self.nodes[id].parent.map(|p| self.nodes[p].layout_dir)
     }
 
     impl_layout_pass!(
         measure_fn: measure_width,
         assign_fn: assign_width,
+        fill_fn: resolve_fill_width,
         dim: width,
         pad_start: left,
         pad_end: right,
         main_axis: Axis::Horizontal,
-        cross_axis: Axis::Vertical,
-        stretch_check: stretched_by_vertical_parent
+        cross_axis: Axis::Vertical
     );
 
     impl_layout_pass!(
         measure_fn: measure_height,
         assign_fn: assign_height,
+        fill_fn: resolve_fill_height,
         dim: height,
         pad_start: top,
         pad_end: bottom,
         main_axis: Axis::Vertical,
-        cross_axis: Axis::Horizontal,
-        stretch_check: stretched_by_horizontal_parent
+        cross_axis: Axis::Horizontal
     );
 
     // Phase 5: place all nodes (compute positions)
     pub(crate) fn place(&mut self, id: NodeIdx, x: i32, y: i32) -> (i32, i32) {
-        fn cross_offset(align: Align, inner_cross: i32, child_cross: i32) -> i32 {
-            match align {
-                Align::Center => ((inner_cross - child_cross) / 2).max(0),
-                Align::End => (inner_cross - child_cross).max(0),
-                _ => 0,
-            }
-        }
-
         // Set this nodes position
         self.nodes[id].pos = Position::new(x, y);
         if let Some(child_idx) = self.nodes[id].first_child {
             let layout_dir = self.nodes[id].layout_dir;
             let pad = self.nodes[id].padding;
             let spacing = self.nodes[id].spacing;
-            let main_align = self.nodes[id].main_align;
-            let cross_align = self.nodes[id].cross_align;
+            let main = self.nodes[id].main;
+            let cross = self.nodes[id].cross;
 
-            // Content-box origin (inside padding).
+            // Content box: the node's rect inside its padding, then shifted by
+            // `children_offset` (scroll, and later any subtree translation).
             let offset = self.nodes[id].children_offset;
-            let base_x = x + pad.left + offset.x;
-            let base_y = y + pad.top + offset.y;
-            let inner_w = (self.nodes[id].current_size.width - pad.left - pad.right).max(0);
-            let inner_h = (self.nodes[id].current_size.height - pad.top - pad.bottom).max(0);
+            let content = Rect::from_parts(Position::new(x, y), self.nodes[id].current_size)
+                .inset(pad)
+                .translate(offset);
+            let (base_x, base_y) = (content.x, content.y);
+            let (inner_w, inner_h) = (content.w, content.h);
             let (inner_main, inner_cross) = match layout_dir {
                 Axis::Horizontal => (inner_w, inner_h),
                 Axis::Vertical => (inner_h, inner_w),
@@ -585,19 +543,16 @@ impl LayoutEngine {
 
             let base_spacing = if n > 1 { (n - 1) * spacing } else { 0 };
             let free = (inner_main - content_main - base_spacing).max(0);
-            let (lead, gap) = match main_align {
-                // `Stretch` is cross-axis only; on the main axis it means Start.
-                Align::Start | Align::Stretch => (0, spacing),
-                Align::Center => (free / 2, spacing),
-                Align::End => (free, spacing),
-                Align::SpaceBetween => {
+            let (lead, gap) = match main {
+                Main::At(a) => ((free as f32 * a.get()).floor() as i32, spacing),
+                Main::Between => {
                     if n > 1 {
                         (0, spacing + free / (n - 1))
                     } else {
                         (0, spacing)
                     }
                 }
-                Align::SpaceAround => {
+                Main::Around => {
                     if n > 0 {
                         let unit = free / n;
                         (unit / 2, spacing + unit)
@@ -605,7 +560,7 @@ impl LayoutEngine {
                         (0, spacing)
                     }
                 }
-                Align::SpaceEvenly => {
+                Main::Evenly => {
                     let unit = free / (n + 1);
                     (unit, spacing + unit)
                 }
@@ -622,15 +577,16 @@ impl LayoutEngine {
                 } else {
                     let child_w = self.nodes[child].current_size.width;
                     let child_h = self.nodes[child].current_size.height;
+                    let align = self.nodes[child].cross_self.unwrap_or(cross);
                     match layout_dir {
                         Axis::Horizontal => {
-                            let cross = cross_offset(cross_align, inner_cross, child_h);
-                            self.place(child, base_x + cursor_main, base_y + cross);
+                            let off = cross_offset(align, inner_cross, child_h);
+                            self.place(child, base_x + cursor_main, base_y + off);
                             cursor_main += child_w + gap;
                         }
                         Axis::Vertical => {
-                            let cross = cross_offset(cross_align, inner_cross, child_w);
-                            self.place(child, base_x + cross, base_y + cursor_main);
+                            let off = cross_offset(align, inner_cross, child_w);
+                            self.place(child, base_x + off, base_y + cursor_main);
                             cursor_main += child_h + gap;
                         }
                     }
@@ -645,8 +601,173 @@ impl LayoutEngine {
 }
 
 #[cfg(test)]
+mod fill_tests {
+    use super::*;
+
+    /// A flexible child with `content` px of irreducible content.
+    fn fill(w: f32, content: i32) -> Node {
+        Node {
+            size: Size::new(Length::Fill(w), Length::Fit),
+            min: Size::new(content, 0),
+            ..Default::default()
+        }
+    }
+
+    fn fixed(v: i32) -> Node {
+        Node {
+            size: Size::new(Length::Fixed(v), Length::Fit),
+            ..Default::default()
+        }
+    }
+
+    /// Lay out a horizontal row of `width` px and return the children's
+    /// resolved widths.
+    fn widths(width: i32, kids: Vec<Node>) -> Vec<i32> {
+        let mut e = LayoutEngine::new();
+        let root = e.create_node(
+            Node {
+                size: Size::new(Length::Fixed(width), Length::Fit),
+                layout_dir: Axis::Horizontal,
+                ..Default::default()
+            },
+            0,
+        );
+        let ids: Vec<NodeIdx> = kids
+            .into_iter()
+            .enumerate()
+            .map(|(i, k)| {
+                let c = e.create_node(k, i as u64 + 1);
+                e.add_child(root, c);
+                c
+            })
+            .collect();
+        e.measure_width(root);
+        e.assign_width(root, width);
+        ids.into_iter()
+            .map(|c| e.nodes[c].current_size.width)
+            .collect()
+    }
+
+    #[test]
+    fn weight_sets_the_ratio_when_empty() {
+        assert_eq!(
+            widths(300, vec![fill(2.0, 0), fill(1.0, 0)]),
+            vec![200, 100]
+        );
+        assert_eq!(
+            widths(400, vec![fill(3.0, 0), fill(1.0, 0)]),
+            vec![300, 100]
+        );
+    }
+
+    /// The regression this change exists for: content used to be reserved
+    /// before the split, so a `Fill(2)` holding 60px came out 220:80.
+    #[test]
+    fn content_does_not_skew_the_ratio() {
+        assert_eq!(
+            widths(300, vec![fill(2.0, 60), fill(1.0, 0)]),
+            vec![200, 100]
+        );
+    }
+
+    /// Two equal weights used to diverge whenever one held content.
+    #[test]
+    fn equal_weights_stay_equal() {
+        assert_eq!(
+            widths(300, vec![fill(1.0, 100), fill(1.0, 0)]),
+            vec![150, 150]
+        );
+    }
+
+    #[test]
+    fn fixed_siblings_are_reserved_first() {
+        assert_eq!(
+            widths(300, vec![fixed(100), fill(1.0, 0), fill(1.0, 0)]),
+            vec![100, 100, 100]
+        );
+    }
+
+    /// A child that cannot fit its share freezes at its minimum, and the
+    /// others re-split what is left rather than overflowing the row.
+    #[test]
+    fn content_min_wins_over_the_ratio() {
+        assert_eq!(
+            widths(300, vec![fill(1.0, 200), fill(1.0, 0)]),
+            vec![200, 100]
+        );
+    }
+
+    #[test]
+    fn max_freezes_and_redistributes() {
+        let capped = Node {
+            size: Size::new(Length::Fill(1.0), Length::Fit),
+            max: Size::new(50, i32::MAX),
+            ..Default::default()
+        };
+        assert_eq!(widths(300, vec![capped, fill(1.0, 0)]), vec![50, 250]);
+    }
+
+    /// Flooring loses up to one pixel per child; the remainder is handed out
+    /// so the row is filled exactly.
+    #[test]
+    fn rounding_remainder_is_distributed() {
+        let out = widths(100, vec![fill(1.0, 0), fill(1.0, 0), fill(1.0, 0)]);
+        assert_eq!(out.iter().sum::<i32>(), 100);
+        assert_eq!(out, vec![34, 33, 33]);
+    }
+
+    /// Whatever the weights, the children must never exceed the container.
+    #[test]
+    fn never_overflows_the_container() {
+        for width in 1..200 {
+            for w in 1..6 {
+                let out = widths(width, vec![fill(w as f32, 0), fill(1.0, 0)]);
+                assert!(
+                    out.iter().sum::<i32>() <= width,
+                    "width={width} w={w} -> {out:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn no_fill_children_leaves_slack_for_alignment() {
+        assert_eq!(widths(300, vec![fixed(40), fixed(60)]), vec![40, 60]);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `cross_offset` must reproduce the arms the old `Align` enum had, for
+    /// every input including the overflow cases the `.max(0)` clamps.
+    #[test]
+    fn cross_offset_matches_legacy_arms() {
+        for inner in 0..48 {
+            for child in 0..48 {
+                assert_eq!(cross_offset(Align::START, inner, child), 0);
+                assert_eq!(
+                    cross_offset(Align::CENTER, inner, child),
+                    ((inner - child) / 2).max(0),
+                    "center inner={inner} child={child}"
+                );
+                assert_eq!(
+                    cross_offset(Align::END, inner, child),
+                    (inner - child).max(0),
+                    "end inner={inner} child={child}"
+                );
+            }
+        }
+    }
+
+    /// An oversized child pins to the leading edge rather than centring, so
+    /// the start of its content stays reachable.
+    #[test]
+    fn cross_offset_clamps_overflow() {
+        assert_eq!(cross_offset(Align::CENTER, 50, 200), 0);
+        assert_eq!(cross_offset(Align::END, 50, 200), 0);
+    }
 
     #[test]
     fn node_vec_grows_beyond_initial_capacity() {

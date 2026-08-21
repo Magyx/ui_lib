@@ -69,7 +69,7 @@ pub struct Scrollable {
 impl Scrollable {
     pub fn new<E: Into<Element>>(child: E) -> Self {
         Self {
-            size: Size::new(Length::Grow, Length::Grow),
+            size: Size::new(Length::Fill(1.0), Length::Fill(1.0)),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
             child: child.into(),

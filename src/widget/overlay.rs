@@ -51,7 +51,7 @@ pub struct Overlay {
     children: Vec<Absolute>,
     size: Size<Length>,
     color: Color,
-    padding: Vec4<i32>,
+    padding: Inset,
     min: Size<i32>,
     max: Size<i32>,
     modal: bool,
@@ -77,7 +77,7 @@ impl Overlay {
             children: wrapped,
             size: Size::splat(Length::Fit),
             color: Color::TRANSPARENT,
-            padding: Vec4::splat(0),
+            padding: Inset::ZERO,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
             modal: false,
@@ -98,8 +98,8 @@ impl Overlay {
         }
         self
     }
-    pub fn padding(mut self, amount: Vec4<i32>) -> Self {
-        self.padding = amount;
+    pub fn padding(mut self, amount: impl Into<Inset>) -> Self {
+        self.padding = amount.into();
         self
     }
     pub fn min(mut self, size: Size<i32>) -> Self {
@@ -129,12 +129,7 @@ impl Widget for Overlay {
             min: self.min,
             max: self.max,
             layout_dir: Axis::Horizontal,
-            padding: Padding {
-                left: self.padding.x,
-                top: self.padding.y,
-                right: self.padding.z,
-                bottom: self.padding.w,
-            },
+            padding: self.padding,
             ..Default::default()
         }
     }

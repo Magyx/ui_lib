@@ -4,13 +4,15 @@ use crate::widget::prelude::*;
 pub struct Column {
     children: Vec<Element>,
     spacing: i32,
-    padding: Vec4<i32>,
+    padding: Inset,
     size: Size<Length>,
     color: Color,
     min: Size<i32>,
     max: Size<i32>,
-    main_align: Align,
-    cross_align: Align,
+    main: Main,
+    cross: Align,
+    cross_self: Option<Align>,
+    fill_cross: bool,
 }
 impl Column {
     pub fn empty() -> Self {
@@ -24,23 +26,38 @@ impl Column {
         Self {
             children: children.into_iter().map(Into::into).collect(),
             spacing: 0,
-            padding: Vec4::splat(0),
+            padding: Inset::ZERO,
             size: Size::splat(Length::Fit),
             color: Color::TRANSPARENT,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
-            main_align: Align::Start,
-            cross_align: Align::Start,
+            main: Main::default(),
+            cross: Align::START,
+            cross_self: None,
+            fill_cross: false,
         }
     }
     /// Alignment of children along the layout axis (vertical for a `Column`).
-    pub fn main(mut self, align: Align) -> Self {
-        self.main_align = align;
+    pub fn main(mut self, main: impl Into<Main>) -> Self {
+        self.main = main.into();
         self
     }
     /// Alignment of children across the layout axis (horizontal for a `Column`).
     pub fn cross(mut self, align: Align) -> Self {
-        self.cross_align = align;
+        self.cross = align;
+        self
+    }
+
+    /// Override the alignment this container is given by *its* parent.
+    pub fn cross_self(mut self, align: Align) -> Self {
+        self.cross_self = Some(align);
+        self
+    }
+
+    /// Make `Fit` children fill the cross axis. Replaces the old
+    /// `cross(Align::Stretch)`.
+    pub fn fill_cross(mut self, fill: bool) -> Self {
+        self.fill_cross = fill;
         self
     }
     pub fn spacing(mut self, amount: i32) -> Self {
@@ -55,8 +72,8 @@ impl Column {
         self.color = color;
         self
     }
-    pub fn padding(mut self, amount: Vec4<i32>) -> Self {
-        self.padding = amount;
+    pub fn padding(mut self, amount: impl Into<Inset>) -> Self {
+        self.padding = amount.into();
         self
     }
     pub fn min(mut self, size: Size<i32>) -> Self {
@@ -82,15 +99,12 @@ impl Widget for Column {
             min: self.min,
             max: self.max,
             layout_dir: Axis::Vertical,
-            padding: Padding {
-                left: self.padding.x,
-                top: self.padding.y,
-                right: self.padding.z,
-                bottom: self.padding.w,
-            },
+            padding: self.padding,
             spacing: self.spacing,
-            main_align: self.main_align,
-            cross_align: self.cross_align,
+            main: self.main,
+            cross: self.cross,
+            cross_self: self.cross_self,
+            fill_cross: self.fill_cross,
             ..Default::default()
         }
     }
@@ -118,8 +132,8 @@ impl Center {
         E: Into<Element>,
     {
         Column::new(std::iter::once(child))
-            .size(Size::splat(Length::Grow))
-            .main(Align::Center)
-            .cross(Align::Center)
+            .size(Size::splat(Length::Fill(1.0)))
+            .main(Align::CENTER)
+            .cross(Align::CENTER)
     }
 }

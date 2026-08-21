@@ -62,11 +62,8 @@ impl<M: Clone + 'static> Widget for Radio<M> {
             size: Size::new(Length::Fit, Length::Fixed(SIZE)),
             min: Size::splat(SIZE),
             layout_dir: Axis::Horizontal,
-            cross_align: Align::Center,
-            padding: Padding {
-                left,
-                ..Default::default()
-            },
+            cross: Align::CENTER,
+            padding: Inset::new(left, 0, 0, 0),
             ..Default::default()
         }
     }

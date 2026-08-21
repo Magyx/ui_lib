@@ -1,6 +1,6 @@
 use super::*;
 
-use Length::{Fit, Fixed, Grow};
+use Length::{Fill, Fit, Fixed};
 
 pub fn view(tid: &TargetId, state: &State) -> Element {
     let target = match state.per_target.get(tid) {
@@ -12,17 +12,17 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
     let header = Row::new(el![
         Text::h2("Scrollable demo")
             .wrap(Wrap::None)
-            .size(Size::new(Fit, Grow)),
-        Spacer::new(Size::new(Grow, Grow)),
+            .size(Size::new(Fit, Fill(1.0))),
+        Spacer::new(Size::new(Fill(1.0), Fill(1.0))),
         Text::body(format!("button presses: {}", target.counter))
             .wrap(Wrap::None)
             .color(t.primary)
-            .size(Size::new(Fit, Grow)),
+            .size(Size::new(Fit, Fill(1.0))),
     ])
     .padding(Vec4::new(space::LG, space::MD, space::LG, space::MD))
     .spacing(space::MD)
     .color(t.surface_variant)
-    .size(Size::new(Grow, Fixed(size::HEADER_H)));
+    .size(Size::new(Fill(1.0), Fixed(size::HEADER_H)));
 
     Column::new(el![
         header,
@@ -30,10 +30,10 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
             .spacing(space::MD)
             .padding(Vec4::splat(space::MD))
             .color(t.surface_at(1))
-            .size(Size::new(Grow, Grow)),
+            .size(Size::new(Fill(1.0), Fill(1.0))),
     ])
     .color(t.surface)
-    .size(Size::new(Grow, Grow))
+    .size(Size::new(Fill(1.0), Fill(1.0)))
     .into()
 }
 
@@ -54,15 +54,15 @@ fn flat_panel(t: &Theme) -> Element {
                 .spacing(space::XS + 2)
                 .padding(Vec4::splat(space::SM))
                 .color(Color::TRANSPARENT)
-                .size(Size::new(Grow, Fit)),
+                .size(Size::new(Fill(1.0), Fit)),
         )
-        .size(Size::new(Grow, Grow))
+        .size(Size::new(Fill(1.0), Fill(1.0)))
         .bg(t.surface_variant),
     ])
     .spacing(space::SM)
     .color(t.surface)
     .padding(Vec4::splat(space::SM))
-    .size(Size::new(Grow, Grow))
+    .size(Size::new(Fill(1.0), Fill(1.0)))
     .into()
 }
 
@@ -92,9 +92,9 @@ fn nested_panel(t: &Theme) -> Element {
                 .spacing(space::XS)
                 .padding(Vec4::splat(space::SM))
                 .color(Color::TRANSPARENT)
-                .size(Size::new(Grow, Fit)),
+                .size(Size::new(Fill(1.0), Fit)),
         )
-        .size(Size::new(Grow, Fixed(220)))
+        .size(Size::new(Fill(1.0), Fixed(220)))
         .bg(t.surface_at(1)),
         filler_block(t, "Filler 3", 120),
         filler_block(t, "Filler 4", 120),
@@ -103,18 +103,18 @@ fn nested_panel(t: &Theme) -> Element {
     .spacing(space::SM)
     .padding(Vec4::splat(space::SM))
     .color(Color::TRANSPARENT)
-    .size(Size::new(Grow, Fit));
+    .size(Size::new(Fill(1.0), Fit));
 
     Column::new(el![
         panel_label(t, "Nested scrollable"),
         Scrollable::new(outer_content)
-            .size(Size::new(Grow, Grow))
+            .size(Size::new(Fill(1.0), Fill(1.0)))
             .bg(t.surface_variant),
     ])
     .spacing(space::SM)
     .color(t.surface)
     .padding(Vec4::splat(space::SM))
-    .size(Size::new(Grow, Grow))
+    .size(Size::new(Fill(1.0), Fill(1.0)))
     .into()
 }
 
@@ -123,34 +123,34 @@ fn labeled_button(t: &Theme, label: String) -> Button<Message> {
         Row::new(el![Text::label(label).wrap(Wrap::None).color(t.on_surface),])
             .padding(Vec4::new(space::MD, 0, space::MD, 0))
             .color(Color::TRANSPARENT)
-            .size(Size::new(Grow, Grow)),
+            .size(Size::new(Fill(1.0), Fill(1.0))),
     )
     .color(t.surface)
     .border()
     .on_press(Message::ButtonPressed)
-    .size(Size::new(Grow, Fixed(size::ROW_H)))
+    .size(Size::new(Fill(1.0), Fixed(size::ROW_H)))
 }
 
 fn panel_label(t: &Theme, s: &'static str) -> Element {
     Text::label(s)
         .color(t.on_surface_variant)
-        .size(Size::new(Grow, Fixed(20)))
+        .size(Size::new(Fill(1.0), Fixed(20)))
         .into()
 }
 
 fn section_text(t: &Theme, s: &'static str) -> Element {
     Text::caption(s)
         .color(t.on_surface_variant)
-        .size(Size::new(Grow, Fit))
+        .size(Size::new(Fill(1.0), Fit))
         .into()
 }
 
 fn filler_block(t: &Theme, label: &'static str, h: i32) -> Element {
     Row::new(el![Text::body(label)
         .color(t.on_surface_variant)
-        .size(Size::new(Fit, Grow)),])
+        .size(Size::new(Fit, Fill(1.0))),])
     .padding(Vec4::splat(space::MD))
     .color(t.surface)
-    .size(Size::new(Grow, Fixed(h)))
+    .size(Size::new(Fill(1.0), Fixed(h)))
     .into()
 }

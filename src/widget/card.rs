@@ -4,7 +4,7 @@ use crate::widget::prelude::*;
 pub struct Card {
     children: Vec<Element>,
     spacing: i32,
-    padding: Vec4<i32>,
+    padding: Inset,
     size: Size<Length>,
     min: Size<i32>,
     max: Size<i32>,
@@ -18,7 +18,7 @@ impl Card {
         Self {
             children: children.into_iter().map(Into::into).collect(),
             spacing: 0,
-            padding: Vec4::splat(0),
+            padding: Inset::ZERO,
             size: Size::splat(Length::Fit),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
@@ -28,8 +28,8 @@ impl Card {
         self.spacing = spacing;
         self
     }
-    pub fn padding(mut self, padding: Vec4<i32>) -> Self {
-        self.padding = padding;
+    pub fn padding(mut self, padding: impl Into<Inset>) -> Self {
+        self.padding = padding.into();
         self
     }
     pub fn size(mut self, size: Size<Length>) -> Self {
@@ -52,12 +52,7 @@ impl Widget for Card {
             min: self.min,
             max: self.max,
             layout_dir: Axis::Vertical,
-            padding: Padding {
-                left: self.padding.x,
-                top: self.padding.y,
-                right: self.padding.z,
-                bottom: self.padding.w,
-            },
+            padding: self.padding,
             spacing: self.spacing,
             ..Default::default()
         }

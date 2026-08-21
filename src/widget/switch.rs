@@ -76,11 +76,8 @@ impl<M: 'static> Widget for Switch<M> {
             size: Size::new(Length::Fit, Length::Fixed(TRACK_H)),
             min: Size::new(TRACK_W, TRACK_H),
             layout_dir: Axis::Horizontal,
-            cross_align: Align::Center,
-            padding: Padding {
-                left,
-                ..Default::default()
-            },
+            cross: Align::CENTER,
+            padding: Inset::new(left, 0, 0, 0),
             ..Default::default()
         }
     }

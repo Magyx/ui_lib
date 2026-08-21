@@ -224,11 +224,8 @@ impl<M: 'static> Widget for Checkbox<M> {
             size: Size::new(Length::Fit, Length::Fixed(self.size)),
             min: Size::splat(self.size),
             layout_dir: Axis::Horizontal,
-            cross_align: Align::Center,
-            padding: Padding {
-                left,
-                ..Default::default()
-            },
+            cross: Align::CENTER,
+            padding: Inset::new(left, 0, 0, 0),
             ..Default::default()
         }
     }

@@ -32,11 +32,11 @@ pub mod winit;
 /// Bring it into scope with `use ui::prelude::*;`. This is the app-facing
 /// surface: widget constructors, [`Element`](crate::widget::Element), the
 /// [`el!`](crate::el) macro, the layout primitives (`Length`, `Axis`,
-/// `Padding`), and the core model/theming types (`Color`, `Size`, `Theme`).
+/// `Inset`), and the core model/theming types (`Color`, `Size`, `Theme`).
 pub mod prelude {
     pub use crate::el;
 
-    pub use crate::layout::{Align, Axis, Length, Padding};
+    pub use crate::layout::{Align, Axis, Length, Main};
     #[cfg(feature = "svg")]
     pub use crate::widget::Svg;
     pub use crate::widget::{

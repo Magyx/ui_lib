@@ -180,7 +180,7 @@ impl Text {
             weight: None,
             color_opt: None,
             wrap: Wrap::Word,
-            size: Size::new(Length::Grow, Length::Fit),
+            size: Size::new(Length::Fill(1.0), Length::Fit),
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
         }

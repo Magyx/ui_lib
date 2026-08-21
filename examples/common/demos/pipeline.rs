@@ -10,7 +10,7 @@ static SPHERE: OnceLock<Arc<Mesh>> = OnceLock::new();
 static TORUS: OnceLock<Arc<Mesh>> = OnceLock::new();
 
 pub fn view(tid: &TargetId, state: &State) -> Element {
-    use Length::{Fit, Grow};
+    use Length::{Fill, Fit};
 
     let cube = CUBE.get_or_init(|| Arc::new(Mesh::cube()));
     let sphere = SPHERE.get_or_init(|| Arc::new(Mesh::uv_sphere(0.33, 64, 32)));
@@ -24,10 +24,10 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
 
     Overlay::new(el![
         Row::new(el![
-            SimpleCanvas::<PlanetPipeline>::new(Size::splat(Grow),).with_handle(|cx| {
+            SimpleCanvas::<PlanetPipeline>::new(Size::splat(Fill(1.0)),).with_handle(|cx| {
                 cx.ui.request_redraw();
             },),
-            MeshCanvas::new(Size::splat(Grow))
+            MeshCanvas::new(Size::splat(Fill(1.0)))
                 .push(
                     MeshItem::shared("sphere", sphere.clone())
                         .model(Mat4::translation([0.0, 0.66, 0.0]))
@@ -41,9 +41,9 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
                 .camera(Camera::default())
                 .spin(0.6)
         ])
-        .size(Size::splat(Grow)),
+        .size(Size::splat(Fill(1.0))),
         Row::new(el![
-            Spacer::new(Size::new(Grow, Fit)),
+            Spacer::new(Size::new(Fill(1.0), Fit)),
             Text::h3(format!(
                 "{:.0}",
                 target.fps.iter().sum::<f32>() / target.fps.len().max(1) as f32
@@ -52,10 +52,10 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
             .color(t.error),
         ])
         .padding(Vec4::splat(space::SM))
-        .size(Size::new(Grow, Fit)),
+        .size(Size::new(Fill(1.0), Fit)),
     ])
     .color(t.surface)
     .padding(Vec4::splat(0))
-    .size(Size::new(Grow, Grow))
+    .size(Size::new(Fill(1.0), Fill(1.0)))
     .into()
 }

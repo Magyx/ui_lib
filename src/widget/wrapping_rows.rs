@@ -8,7 +8,7 @@ pub struct WrappingRows {
     rows: Vec<Row>,
     size: Size<Length>,
     color: Color,
-    padding: Vec4<i32>,
+    padding: Inset,
     row_spacing: i32,
     min: Size<i32>,
     max: Size<i32>,
@@ -38,7 +38,7 @@ impl WrappingRows {
             rows,
             size: Size::splat(Length::Fit),
             color: Color::TRANSPARENT,
-            padding: Vec4::splat(0),
+            padding: Inset::ZERO,
             row_spacing: 8,
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
@@ -55,8 +55,8 @@ impl WrappingRows {
         }
         self
     }
-    pub fn padding(mut self, pad: Vec4<i32>) -> Self {
-        self.padding = pad;
+    pub fn padding(mut self, pad: impl Into<Inset>) -> Self {
+        self.padding = pad.into();
         self
     }
     pub fn size(mut self, s: Size<Length>) -> Self {
@@ -83,12 +83,7 @@ impl Widget for WrappingRows {
             min: self.min,
             max: self.max,
             layout_dir: Axis::Vertical,
-            padding: Padding {
-                left: self.padding.x,
-                top: self.padding.y,
-                right: self.padding.z,
-                bottom: self.padding.w,
-            },
+            padding: self.padding,
             spacing: self.row_spacing,
             ..Default::default()
         }

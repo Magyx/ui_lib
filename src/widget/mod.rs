@@ -8,7 +8,7 @@ pub mod prelude {
             Env, EventCtx, Id, LayoutCtx, OnSweep, PaintCtx, PrepareCtx, SweepCtx, ViewState,
         },
         el,
-        layout::{Align, Axis, Length, Node, Padding},
+        layout::{Align, Axis, Length, Main, Node},
         model::*,
         primitive::{Instance, InstanceStore},
         theme::Theme,

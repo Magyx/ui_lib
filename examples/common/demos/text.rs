@@ -1,7 +1,7 @@
 use super::*;
 
 pub fn view(state: &State) -> Element {
-    use Length::{Fit, Fixed, Grow, Weighted};
+    use Length::{Fill, Fit, Fixed};
 
     let t = &state.theme;
 
@@ -12,7 +12,7 @@ pub fn view(state: &State) -> Element {
         Row::new(el![Text::h3("Project Nimbus").wrap(Wrap::None)])
             .padding(Vec4::new(space::LG, space::LG, space::LG, space::SM))
             .color(Color::TRANSPARENT)
-            .size(Size::new(Grow, Fit)),
+            .size(Size::new(Fill(1.0), Fit)),
         // Sidebar items
         Column::new(el![
             Text::body("Overview"),
@@ -22,17 +22,17 @@ pub fn view(state: &State) -> Element {
         .spacing(space::SM)
         .padding(Vec4::new(space::LG, space::SM, space::LG, space::LG))
         .color(Color::TRANSPARENT)
-        .size(Size::new(Grow, Fit)),
+        .size(Size::new(Fill(1.0), Fit)),
     ])
     .spacing(space::XS)
     .padding(Vec4::splat(space::SM))
     .color(t.surface_at(1))
-    .size(Size::new(Weighted(0.2), Grow));
+    .size(Size::new(Fill(0.2), Fill(1.0)));
 
     // Top bar (fixed height)
     let topbar = Row::new(el![
         Text::h2("Dashboard"),
-        Spacer::new(Size::new(Grow, Grow)),
+        Spacer::new(Size::new(Fill(1.0), Fill(1.0))),
         // a little "pill" on the right
         Row::new(el![Text::label("LIVE").color(t.on_primary)])
             .padding(Vec4::new(
@@ -42,11 +42,11 @@ pub fn view(state: &State) -> Element {
                 space::XS + 2
             ))
             .color(t.primary)
-            .size(Size::new(Fit, Grow)),
+            .size(Size::new(Fit, Fill(1.0))),
     ])
     .padding(Vec4::new(space::LG, space::MD, space::LG, space::MD))
     .color(t.surface_at(1))
-    .size(Size::new(Grow, Fixed(52)));
+    .size(Size::new(Fill(1.0), Fixed(52)));
 
     // Main content
     let hero_text = "This area demonstrates styled, multiline text using cosmic-text. \n\
@@ -78,52 +78,52 @@ pub fn view(state: &State) -> Element {
 
     let content = Column::new(el![
         // Title
-        Text::h1("Welcome to the Showcase").size(Size::new(Grow, Fit)),
+        Text::h1("Welcome to the Showcase").size(Size::new(Fill(1.0), Fit)),
         // Body (multiline)
-        Text::body(hero_text).size(Size::new(Grow, Fit)),
+        Text::body(hero_text).size(Size::new(Fill(1.0), Fit)),
         // Body (fit checks)
         Column::new(el![
             Row::new(el![
-                Text::body(long).size(Size::new(Grow, Fit)),
-                Text::body(long).size(Size::new(Grow, Fit)),
+                Text::body(long).size(Size::new(Fill(1.0), Fit)),
+                Text::body(long).size(Size::new(Fill(1.0), Fit)),
             ])
-            .size(Size::new(Grow, Fit))
+            .size(Size::new(Fill(1.0), Fit))
             .spacing(space::MD),
-            Text::body(long).size(Size::new(Grow, Fit)),
+            Text::body(long).size(Size::new(Fill(1.0), Fit)),
         ])
-        .size(Size::new(Grow, Fit))
+        .size(Size::new(Fill(1.0), Fit))
         .spacing(space::MD),
         // List of text with scrolling
         Scrollable::new(Text::body(list))
-            .size(Size::new(Grow, Fixed(140)))
+            .size(Size::new(Fill(1.0), Fixed(140)))
             .bg(t.surface_variant),
         // A couple of stat tiles
         Row::new(el![
             Column::new(el![Text::label("Builds"), Text::h1("128").color(t.primary),])
                 .padding(Vec4::splat(space::MD))
                 .color(t.surface_at(1))
-                .size(Size::new(Grow, Fixed(88))),
+                .size(Size::new(Fill(1.0), Fixed(88))),
             Column::new(el![
                 Text::label("Warnings"),
                 Text::h1("3").color(t.secondary),
             ])
             .padding(Vec4::splat(space::MD))
             .color(t.surface_at(1))
-            .size(Size::new(Grow, Fixed(88))),
+            .size(Size::new(Fill(1.0), Fixed(88))),
             Column::new(el![Text::label("Errors"), Text::h1("0").color(t.error),])
                 .padding(Vec4::splat(space::MD))
                 .color(t.surface_at(1))
-                .size(Size::new(Grow, Fixed(88))),
+                .size(Size::new(Fill(1.0), Fixed(88))),
         ])
         .spacing(space::MD)
         .padding(Vec4::splat(0))
         .color(Color::TRANSPARENT)
-        .size(Size::new(Grow, Fit)),
+        .size(Size::new(Fill(1.0), Fit)),
     ])
     .spacing(space::MD)
     .padding(Vec4::splat(space::LG))
     .color(Color::TRANSPARENT)
-    .size(Size::new(Grow, Fit));
+    .size(Size::new(Fill(1.0), Fit));
 
     // Page layout: sidebar | (topbar + content)
     Row::new(el![
@@ -132,13 +132,13 @@ pub fn view(state: &State) -> Element {
             Column::new(el![topbar, content,])
                 .spacing(space::MD)
                 .color(Color::TRANSPARENT)
-                .size(Size::new(Grow, Fit)),
+                .size(Size::new(Fill(1.0), Fit)),
         )
-        .size(Size::new(Grow, Fit)),
+        .size(Size::new(Fill(1.0), Fit)),
     ])
     .spacing(space::MD)
     .padding(Vec4::splat(space::MD))
     .color(t.surface)
-    .size(Size::new(Grow, Grow))
+    .size(Size::new(Fill(1.0), Fill(1.0)))
     .into()
 }

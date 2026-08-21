@@ -61,7 +61,7 @@ impl ProgressBar {
 impl Widget for ProgressBar {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
         Node {
-            size: Size::new(Length::Grow, Length::Fixed(self.height)),
+            size: Size::new(Length::Fill(1.0), Length::Fixed(self.height)),
             ..Default::default()
         }
     }

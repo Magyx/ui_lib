@@ -2,7 +2,7 @@ use super::*;
 use std::num::NonZero;
 
 pub fn view(state: &State) -> Element {
-    use Length::{Fit, Fixed, Grow};
+    use Length::{Fill, Fit, Fixed};
 
     const ICON_PX: i32 = 48;
     const GRID_COLS: usize = 4;
@@ -28,7 +28,7 @@ pub fn view(state: &State) -> Element {
     .spacing(space::SM)
     .padding(Vec4::splat(space::MD))
     .color(t.surface_at(1))
-    .size(Size::new(Grow, Fit));
+    .size(Size::new(Fill(1.0), Fit));
 
     #[cfg(feature = "svg")]
     let svg_panel = {
@@ -53,7 +53,7 @@ pub fn view(state: &State) -> Element {
         .spacing(space::SM)
         .padding(Vec4::splat(space::MD))
         .color(t.surface_at(1))
-        .size(Size::new(Grow, Fit))
+        .size(Size::new(Fill(1.0), Fit))
     };
 
     #[cfg(not(feature = "svg"))]
@@ -64,15 +64,18 @@ pub fn view(state: &State) -> Element {
     .spacing(space::SM)
     .padding(Vec4::splat(space::MD))
     .color(t.surface_at(1))
-    .size(Size::new(Grow, Fit));
+    .size(Size::new(Fill(1.0), Fit));
 
     let two_col = Row::new(el![png_panel, svg_panel])
         .spacing(space::LG)
-        .size(Size::new(Grow, Fit));
+        .size(Size::new(Fill(1.0), Fit));
 
     Overlay::new(el![
-        Image::new(Size::new(Grow, Grow), state.background.unwrap_or_default())
-            .fit(ContentFit::Cover),
+        Image::new(
+            Size::new(Fill(1.0), Fill(1.0)),
+            state.background.unwrap_or_default()
+        )
+        .fit(ContentFit::Cover),
         Column::new(el![
             Rectangle::new(Size::new(Fixed(70), Fixed(20)), swatch(7)),
             Rectangle::new(Size::new(Fixed(40), Fixed(30)), swatch(6)),
@@ -83,9 +86,9 @@ pub fn view(state: &State) -> Element {
         .size(Size::splat(Fit)),
         Row::new(el![two_col])
             .padding(Vec4::splat(120))
-            .size(Size::new(Grow, Grow)),
+            .size(Size::new(Fill(1.0), Fill(1.0))),
     ])
     .padding(Vec4::splat(0))
-    .size(Size::new(Grow, Grow))
+    .size(Size::new(Fill(1.0), Fill(1.0)))
     .into()
 }
