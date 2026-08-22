@@ -7,12 +7,13 @@ use super::demos;
 #[derive(Clone, Copy)]
 pub enum View {
     Layout = 0,
-    Interaction = 1,
-    Pipeline = 2,
-    Texture = 3,
-    Text = 4,
-    Scrollable = 5,
-    ThemeEditor = 6,
+    Placement = 1,
+    Interaction = 2,
+    Pipeline = 3,
+    Texture = 4,
+    Text = 5,
+    Scrollable = 6,
+    ThemeEditor = 7,
 }
 
 #[allow(dead_code)]
@@ -22,12 +23,13 @@ impl View {
     fn from_u8(v: u8) -> Self {
         match v {
             0 => Self::Layout,
-            1 => Self::Interaction,
-            2 => Self::Pipeline,
-            3 => Self::Texture,
-            4 => Self::Text,
-            5 => Self::Scrollable,
-            6 => Self::ThemeEditor,
+            1 => Self::Placement,
+            2 => Self::Interaction,
+            3 => Self::Pipeline,
+            4 => Self::Texture,
+            5 => Self::Text,
+            6 => Self::Scrollable,
+            7 => Self::ThemeEditor,
             _ => unreachable!("value out of range"),
         }
     }
@@ -391,6 +393,7 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
     };
     match target.view {
         View::Layout => demos::layout::view(state),
+        View::Placement => demos::placement::view(state),
         View::Interaction => demos::interaction::view(tid, state),
         View::Pipeline => demos::pipeline::view(tid, state),
         View::Texture => demos::texture::view(state),

@@ -12,7 +12,7 @@ use crate::{
 };
 
 mod models;
-pub use models::{Align, Align2, Axis, Length, Main, Node};
+pub use models::{Align, Align2, Axis, Edges, Length, Main, Node, Placement};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeIdx(NonZeroU32);
@@ -208,7 +208,7 @@ macro_rules! impl_layout_pass {
                 let mut idx = Some(first);
                 while let Some(child) = idx {
                     self.$measure_fn(child);
-                    if !self.nodes[child].is_absolute {
+                    if !self.nodes[child].placement.is_absolute() {
                         let cv = self.nodes[child].min.$dim;
                         total += cv;
                         max_cross = max(max_cross, cv);
@@ -258,7 +258,7 @@ macro_rules! impl_layout_pass {
             let mut idx = Some(first);
             while let Some(child) = idx {
                 let n = &self.nodes[child];
-                if !n.is_absolute && n.size.$dim.weight().is_some() {
+                if !n.placement.is_absolute() && n.size.$dim.weight().is_some() {
                     open.push(child);
                 }
                 idx = n.next_sibling;
@@ -327,6 +327,21 @@ macro_rules! impl_layout_pass {
         // Phase 2 / 4: assign sizes within available space
         pub(crate) fn $assign_fn(&mut self, id: NodeIdx, parent_size: i32) {
             let target_v = match self.nodes[id].size.$dim {
+                // Both edges pinned: the size is derived from the parent,
+                // whatever the `Length` says. This is what makes a `Fit` child
+                // stretch under `Edges::horizontal(..)`.
+                _ if matches!(
+                    self.nodes[id].placement,
+                    Placement::Absolute { edges, .. }
+                        if edges.$pad_start().is_some() && edges.$pad_end().is_some()
+                ) =>
+                {
+                    let Placement::Absolute { edges, .. } = self.nodes[id].placement else {
+                        unreachable!()
+                    };
+                    let (a, b) = (edges.$pad_start().unwrap(), edges.$pad_end().unwrap());
+                    (parent_size - a - b).max(0)
+                }
                 Length::Fill(_) => parent_size,
                 Length::Fixed(v) => v,
                 Length::Fit
@@ -367,7 +382,7 @@ macro_rules! impl_layout_pass {
             let (mut count, mut total_base, mut fills) = (0, 0, 0);
             let mut idx = Some(first);
             while let Some(child) = idx {
-                if !self.nodes[child].is_absolute {
+                if !self.nodes[child].placement.is_absolute() {
                     count += 1;
                     if self.nodes[child].size.$dim.weight().is_some() {
                         fills += 1;
@@ -389,7 +404,7 @@ macro_rules! impl_layout_pass {
             // still over budget is taken back by the shrink loop below.
             let (mut total_used, mut idx) = (0, Some(first));
             while let Some(child) = idx {
-                if !self.nodes[child].is_absolute {
+                if !self.nodes[child].placement.is_absolute() {
                     total_used += self.nodes[child].current_size.$dim;
                 }
                 idx = self.nodes[child].next_sibling;
@@ -404,7 +419,7 @@ macro_rules! impl_layout_pass {
                     let mut idx = Some(first);
                     while let Some(child) = idx {
                         let n = &self.nodes[child];
-                        if !n.is_absolute
+                        if !n.placement.is_absolute()
                             && n.current_size.$dim > n.min.$dim
                             && !matches!(n.size.$dim, Length::Fixed(_))
                         {
@@ -421,7 +436,7 @@ macro_rules! impl_layout_pass {
                     while let Some(child) = idx {
                         let next = self.nodes[child].next_sibling;
                         let n = &mut self.nodes[child];
-                        if deficit > 0 && !n.is_absolute && !matches!(n.size.$dim, Length::Fixed(_))
+                        if deficit > 0 && !n.placement.is_absolute() && !matches!(n.size.$dim, Length::Fixed(_))
                         {
                             let reducible = n.current_size.$dim - n.min.$dim;
                             let amt = min(reducible, reduce_each);
@@ -444,7 +459,7 @@ macro_rules! impl_layout_pass {
             let mut idx = Some(first);
             while let Some(child) = idx {
                 let next = self.nodes[child].next_sibling;
-                let v = if self.nodes[child].is_absolute {
+                let v = if self.nodes[child].placement.is_absolute() {
                     inner_v
                 } else {
                     self.nodes[child].current_size.$dim
@@ -466,7 +481,7 @@ impl LayoutEngine {
     /// The caller pairs this with an axis check, since filling only applies
     /// across the parent's layout direction.
     fn parent_fills_cross(&self, id: NodeIdx) -> bool {
-        if self.nodes[id].is_absolute {
+        if self.nodes[id].placement.is_absolute() {
             return false;
         }
         match self.nodes[id].parent {
@@ -531,7 +546,7 @@ impl LayoutEngine {
             let mut n = 0;
             let mut idx = Some(child_idx);
             while let Some(child) = idx {
-                if !self.nodes[child].is_absolute {
+                if !self.nodes[child].placement.is_absolute() {
                     content_main += match layout_dir {
                         Axis::Horizontal => self.nodes[child].current_size.width,
                         Axis::Vertical => self.nodes[child].current_size.height,
@@ -570,10 +585,31 @@ impl LayoutEngine {
             let mut idx = Some(child_idx);
             while let Some(child) = idx {
                 idx = self.nodes[child].next_sibling;
-                if self.nodes[child].is_absolute {
-                    let offx = self.nodes[child].offset_pos.x;
-                    let offy = self.nodes[child].offset_pos.y;
-                    self.place(child, base_x + offx, base_y + offy);
+                if let Placement::Absolute {
+                    anchor,
+                    origin,
+                    offset,
+                    edges,
+                } = self.nodes[child].placement
+                {
+                    let size = self.nodes[child].current_size;
+                    let mut p = content.place(size, anchor, origin);
+
+                    // A pinned edge overrides the anchor on that axis. When
+                    // both are pinned the size was already derived in assign,
+                    // so the leading edge alone gives the right position.
+                    if let Some(l) = edges.left() {
+                        p.x = content.x + l;
+                    } else if let Some(r) = edges.right() {
+                        p.x = content.right() - r - size.width;
+                    }
+                    if let Some(t) = edges.top() {
+                        p.y = content.y + t;
+                    } else if let Some(b) = edges.bottom() {
+                        p.y = content.bottom() - b - size.height;
+                    }
+
+                    self.place(child, p.x + offset.x, p.y + offset.y);
                 } else {
                     let child_w = self.nodes[child].current_size.width;
                     let child_h = self.nodes[child].current_size.height;
@@ -597,6 +633,227 @@ impl LayoutEngine {
             self.nodes[id].current_size.width,
             self.nodes[id].current_size.height,
         )
+    }
+}
+
+#[cfg(test)]
+mod placement_tests {
+    use super::*;
+    use crate::model::Inset;
+
+    const PARENT: i32 = 200;
+
+    /// Lay out one absolutely placed child of `size` inside a 200x200 parent
+    /// with `pad` padding, and return where it landed.
+    fn place_one(pad: Inset, child: Size<Length>, placement: Placement) -> Rect {
+        let mut e = LayoutEngine::new();
+        let root = e.create_node(
+            Node {
+                size: Size::splat(Length::Fixed(PARENT)),
+                layout_dir: Axis::Horizontal,
+                padding: pad,
+                ..Default::default()
+            },
+            0,
+        );
+        let c = e.create_node(
+            Node {
+                size: child,
+                placement,
+                ..Default::default()
+            },
+            1,
+        );
+        e.add_child(root, c);
+        e.measure_width(root);
+        e.assign_width(root, PARENT);
+        e.measure_height(root);
+        e.assign_height(root, PARENT);
+        e.place(root, 0, 0);
+        Rect::from_parts(e.nodes[c].pos, e.nodes[c].current_size)
+    }
+
+    fn at(anchor: Align2, origin: Align2) -> Placement {
+        Placement::Absolute {
+            anchor,
+            origin,
+            offset: Position::new(0, 0),
+            edges: Edges::NONE,
+        }
+    }
+
+    fn fixed(w: i32, h: i32) -> Size<Length> {
+        Size::new(Length::Fixed(w), Length::Fixed(h))
+    }
+
+    #[test]
+    fn top_left_on_top_left_is_the_old_behaviour() {
+        let r = place_one(Inset::ZERO, fixed(40, 20), Placement::ABSOLUTE);
+        assert_eq!(r, Rect::new(0, 0, 40, 20));
+    }
+
+    /// The headline case: the child's centre on the parent's centre.
+    #[test]
+    fn centre_on_centre() {
+        let r = place_one(
+            Inset::ZERO,
+            fixed(40, 20),
+            at(Align2::CENTER, Align2::CENTER),
+        );
+        assert_eq!(r, Rect::new(80, 90, 40, 20));
+    }
+
+    /// Centring must not depend on the sizes sharing parity.
+    #[test]
+    fn centre_is_parity_independent() {
+        for w in [1, 2, 3, 39, 40, 41] {
+            let r = place_one(
+                Inset::ZERO,
+                fixed(w, 10),
+                at(Align2::CENTER, Align2::CENTER),
+            );
+            assert_eq!(r.x, (PARENT - w) / 2, "w={w}");
+        }
+    }
+
+    /// A badge whose own centre sits on the parent's corner hangs outside it.
+    #[test]
+    fn corner_anchor_with_centre_origin_goes_negative() {
+        let r = place_one(
+            Inset::ZERO,
+            fixed(20, 20),
+            at(Align2::TOP_RIGHT, Align2::CENTER),
+        );
+        assert_eq!(r, Rect::new(190, -10, 20, 20));
+    }
+
+    #[test]
+    fn every_anchor_with_top_left_origin() {
+        let cases = [
+            (Align2::TOP_LEFT, (0, 0)),
+            (Align2::TOP_CENTER, (100, 0)),
+            (Align2::TOP_RIGHT, (200, 0)),
+            (Align2::CENTER_LEFT, (0, 100)),
+            (Align2::CENTER, (100, 100)),
+            (Align2::BOTTOM_RIGHT, (200, 200)),
+        ];
+        for (a, (x, y)) in cases {
+            let r = place_one(Inset::ZERO, fixed(10, 10), at(a, Align2::TOP_LEFT));
+            assert_eq!((r.x, r.y), (x, y), "anchor {a:?}");
+        }
+    }
+
+    /// Anchoring is against the content box, so padding insets it.
+    /// This locks in the choice recorded in the write-up.
+    #[test]
+    fn anchors_against_the_content_box() {
+        let pad = Inset::new(10, 20, 30, 40);
+        let r = place_one(pad, fixed(10, 10), at(Align2::TOP_LEFT, Align2::TOP_LEFT));
+        assert_eq!((r.x, r.y), (10, 20));
+        let r = place_one(
+            pad,
+            fixed(10, 10),
+            at(Align2::BOTTOM_RIGHT, Align2::BOTTOM_RIGHT),
+        );
+        assert_eq!((r.x, r.y), (PARENT - 30 - 10, PARENT - 40 - 10));
+    }
+
+    #[test]
+    fn offset_applies_after_anchoring() {
+        let p = Placement::Absolute {
+            anchor: Align2::TOP_RIGHT,
+            origin: Align2::TOP_RIGHT,
+            offset: Position::new(-8, 8),
+            edges: Edges::NONE,
+        };
+        let r = place_one(Inset::ZERO, fixed(20, 20), p);
+        assert_eq!((r.x, r.y), (PARENT - 20 - 8, 8));
+    }
+
+    fn with_edges(child: Size<Length>, edges: Edges) -> Rect {
+        place_one(
+            Inset::ZERO,
+            child,
+            Placement::Absolute {
+                anchor: Align2::CENTER,
+                origin: Align2::CENTER,
+                offset: Position::new(0, 0),
+                edges,
+            },
+        )
+    }
+
+    /// One edge fixes the position on that axis and beats the anchor; the
+    /// other axis still anchors.
+    #[test]
+    fn single_edge_overrides_the_anchor() {
+        let r = with_edges(fixed(20, 20), Edges::NONE.with_left(12));
+        assert_eq!(r.x, 12);
+        assert_eq!(r.y, 90, "y still centred");
+
+        let r = with_edges(fixed(20, 20), Edges::NONE.with_right(12));
+        assert_eq!(r.x, PARENT - 12 - 20);
+    }
+
+    /// Both edges derive the size, so even a `Fit` child stretches.
+    #[test]
+    fn both_edges_stretch_a_fit_child() {
+        let r = with_edges(Size::splat(Length::Fit), Edges::horizontal(16));
+        assert_eq!(r.x, 16);
+        assert_eq!(r.w, PARENT - 32);
+    }
+
+    #[test]
+    fn all_edges_fill_minus_the_inset() {
+        let r = with_edges(Size::splat(Length::Fit), Edges::all(24));
+        assert_eq!(r, Rect::new(24, 24, PARENT - 48, PARENT - 48));
+    }
+
+    /// A pinned `0` must not read as "unset".
+    #[test]
+    fn zero_pin_is_flush_not_unset() {
+        let r = with_edges(fixed(20, 20), Edges::NONE.with_left(0));
+        assert_eq!(
+            r.x, 0,
+            "left(0) pins flush, it does not fall through to the anchor"
+        );
+    }
+
+    /// Absolute children contribute nothing to a `Fit` parent's size and
+    /// nothing to the fill pool.
+    #[test]
+    fn absolute_children_do_not_size_the_parent() {
+        let mut e = LayoutEngine::new();
+        let root = e.create_node(
+            Node {
+                size: Size::splat(Length::Fit),
+                layout_dir: Axis::Horizontal,
+                ..Default::default()
+            },
+            0,
+        );
+        let flow = e.create_node(
+            Node {
+                size: fixed(30, 10),
+                ..Default::default()
+            },
+            1,
+        );
+        let abs = e.create_node(
+            Node {
+                size: fixed(500, 500),
+                placement: Placement::ABSOLUTE,
+                ..Default::default()
+            },
+            2,
+        );
+        e.add_child(root, flow);
+        e.add_child(root, abs);
+        e.measure_width(root);
+        assert_eq!(
+            e.nodes[root].current_size.width, 30,
+            "the 500px absolute child must not widen a Fit parent"
+        );
     }
 }
 

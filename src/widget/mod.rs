@@ -8,7 +8,7 @@ pub mod prelude {
             Env, EventCtx, Id, LayoutCtx, OnSweep, PaintCtx, PrepareCtx, SweepCtx, ViewState,
         },
         el,
-        layout::{Align, Axis, Length, Main, Node},
+        layout::{Align, Align2, Axis, Edges, Length, Main, Node, Placement},
         model::*,
         primitive::{Instance, InstanceStore},
         theme::Theme,
@@ -31,8 +31,10 @@ pub use row::Row;
 mod column;
 pub use column::{Center, Column};
 
-mod overlay;
-pub use overlay::Overlay;
+mod positioned;
+mod stack;
+pub use positioned::{Place, Positioned};
+pub use stack::Stack;
 
 mod button;
 pub use button::Button;

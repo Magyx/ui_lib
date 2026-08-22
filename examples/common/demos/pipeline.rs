@@ -22,7 +22,7 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
     };
     let t = &state.theme;
 
-    Overlay::new(el![
+    Stack::new(el![
         Row::new(el![
             SimpleCanvas::<PlanetPipeline>::new(Size::splat(Fill(1.0)),).with_handle(|cx| {
                 cx.ui.request_redraw();
@@ -42,20 +42,17 @@ pub fn view(tid: &TargetId, state: &State) -> Element {
                 .spin(0.6)
         ])
         .size(Size::splat(Fill(1.0))),
-        Row::new(el![
-            Spacer::new(Size::new(Fill(1.0), Fit)),
-            Text::h3(format!(
-                "{:.0}",
-                target.fps.iter().sum::<f32>() / target.fps.len().max(1) as f32
-            ))
-            .size(Size::new(Fit, Fit))
-            .color(t.error),
-        ])
-        .padding(Vec4::splat(space::SM))
-        .size(Size::new(Fill(1.0), Fit)),
+        Text::h3(format!(
+            "{:.0}",
+            target.fps.iter().sum::<f32>() / target.fps.len().max(1) as f32
+        ))
+        .size(Size::splat(Fit))
+        .color(t.error)
+        .offset(-space::SM, space::SM)
+        .pinned(Align2::TOP_RIGHT),
     ])
     .color(t.surface)
     .padding(Vec4::splat(0))
-    .size(Size::new(Fill(1.0), Fill(1.0)))
+    .size(Size::splat(Fill(1.0)))
     .into()
 }

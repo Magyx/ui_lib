@@ -10,8 +10,7 @@ pub struct Node {
     pub spacing: i32,
     pub clip_children: bool,
     pub children_offset: Position<i32>,
-    pub is_absolute: bool,
-    pub offset_pos: Position<i32>,
+    pub placement: Placement,
     pub main: Main,
     pub cross: Align,
     /// Per-child override of the parent's `cross`. `None` inherits.
@@ -31,8 +30,7 @@ impl Default for Node {
             spacing: Default::default(),
             children_offset: Default::default(),
             clip_children: Default::default(),
-            is_absolute: Default::default(),
-            offset_pos: Default::default(),
+            placement: Placement::Flow,
             main: Main::default(),
             cross: Align::START,
             cross_self: None,
@@ -129,6 +127,128 @@ impl From<Align> for Main {
     #[inline]
     fn from(a: Align) -> Self {
         Self::At(a)
+    }
+}
+
+/// How a node is positioned by its parent.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Placement {
+    /// Participates in the parent's main-axis distribution.
+    #[default]
+    Flow,
+    /// Positioned against the parent's content box, out of flow.
+    Absolute {
+        /// The point on the parent the child attaches to.
+        anchor: Align2,
+        /// The point on the child that lands on the anchor.
+        origin: Align2,
+        /// Applied last, after anchoring and edge pinning.
+        offset: Position<i32>,
+        /// Per-side distances that override the anchor on that axis.
+        edges: Edges,
+    },
+}
+
+impl Placement {
+    /// Out of flow at the parent's top-left, with the child's own top-left
+    /// on it. The behaviour absolute children had before anchoring existed.
+    pub const ABSOLUTE: Self = Self::Absolute {
+        anchor: Align2::TOP_LEFT,
+        origin: Align2::TOP_LEFT,
+        offset: Position::new(0, 0),
+        edges: Edges::NONE,
+    };
+
+    #[inline]
+    pub const fn is_absolute(self) -> bool {
+        matches!(self, Self::Absolute { .. })
+    }
+}
+
+/// Distance from each side of the parent's content box. An unset side is not
+/// pinned; setting both sides of an axis derives the size on that axis.
+///
+/// Stored as an `Inset` plus a 4-bit mask rather than four `Option<i32>`:
+/// `i32` has no niche, so the obvious spelling costs 32 bytes against this
+/// one's 20. The mask also keeps a pinned `0` distinct from unset, so pinning
+/// flush to an edge is expressible.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Edges {
+    v: Inset,
+    set: u8,
+}
+
+impl Edges {
+    pub const NONE: Self = Self { v: Inset::ZERO, set: 0 };
+
+    const L: u8 = 1 << 0;
+    const T: u8 = 1 << 1;
+    const R: u8 = 1 << 2;
+    const B: u8 = 1 << 3;
+
+    // Named to match the layout macro's `$pad_start` / `$pad_end`, so that
+    // `edges.$pad_start()` resolves per-axis with no extra macro parameter.
+    #[inline]
+    pub const fn left(self) -> Option<i32> {
+        if self.set & Self::L != 0 { Some(self.v.left) } else { None }
+    }
+    #[inline]
+    pub const fn top(self) -> Option<i32> {
+        if self.set & Self::T != 0 { Some(self.v.top) } else { None }
+    }
+    #[inline]
+    pub const fn right(self) -> Option<i32> {
+        if self.set & Self::R != 0 { Some(self.v.right) } else { None }
+    }
+    #[inline]
+    pub const fn bottom(self) -> Option<i32> {
+        if self.set & Self::B != 0 { Some(self.v.bottom) } else { None }
+    }
+
+    #[inline]
+    pub const fn with_left(mut self, v: i32) -> Self {
+        self.v.left = v;
+        self.set |= Self::L;
+        self
+    }
+    #[inline]
+    pub const fn with_top(mut self, v: i32) -> Self {
+        self.v.top = v;
+        self.set |= Self::T;
+        self
+    }
+    #[inline]
+    pub const fn with_right(mut self, v: i32) -> Self {
+        self.v.right = v;
+        self.set |= Self::R;
+        self
+    }
+    #[inline]
+    pub const fn with_bottom(mut self, v: i32) -> Self {
+        self.v.bottom = v;
+        self.set |= Self::B;
+        self
+    }
+
+    /// Pin the left and right edges to the same distance.
+    #[inline]
+    pub const fn horizontal(v: i32) -> Self {
+        Self::NONE.with_left(v).with_right(v)
+    }
+    /// Pin the top and bottom edges to the same distance.
+    #[inline]
+    pub const fn vertical(v: i32) -> Self {
+        Self::NONE.with_top(v).with_bottom(v)
+    }
+    /// Pin all four edges; the child stretches to fill minus the inset.
+    #[inline]
+    pub const fn all(v: i32) -> Self {
+        Self::horizontal(v).with_top(v).with_bottom(v)
+    }
+
+    #[inline]
+    pub const fn is_none(self) -> bool {
+        self.set == 0
     }
 }
 

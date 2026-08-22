@@ -70,7 +70,7 @@ pub fn view(state: &State) -> Element {
         .spacing(space::LG)
         .size(Size::new(Fill(1.0), Fit));
 
-    Overlay::new(el![
+    Stack::new(el![
         Image::new(
             Size::new(Fill(1.0), Fill(1.0)),
             state.background.unwrap_or_default()
@@ -83,10 +83,12 @@ pub fn view(state: &State) -> Element {
         .spacing(space::SM)
         .padding(Vec4::splat(space::SM))
         .color(with_alpha(t.surface, 235))
-        .size(Size::splat(Fit)),
+        .size(Size::splat(Fit))
+        .pinned(Align2::TOP_RIGHT)
+        .offset(-space::MD, space::MD),
         Row::new(el![two_col])
-            .padding(Vec4::splat(120))
-            .size(Size::new(Fill(1.0), Fill(1.0))),
+            .size(Size::new(Fill(1.0), Fill(1.0)))
+            .edges(Edges::all(120)),
     ])
     .padding(Vec4::splat(0))
     .size(Size::new(Fill(1.0), Fill(1.0)))

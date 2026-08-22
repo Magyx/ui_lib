@@ -59,6 +59,7 @@ fn small_block(color: Color) -> Element {
 pub mod interaction;
 pub mod layout;
 pub mod pipeline;
+pub mod placement;
 pub mod scrollable;
 pub mod text;
 pub mod texture;

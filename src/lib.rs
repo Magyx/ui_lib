@@ -36,14 +36,14 @@ pub mod winit;
 pub mod prelude {
     pub use crate::el;
 
-    pub use crate::layout::{Align, Axis, Length, Main};
+    pub use crate::layout::{Align, Align2, Axis, Edges, Length, Main, Placement};
     #[cfg(feature = "svg")]
     pub use crate::widget::Svg;
     pub use crate::widget::{
-        Button, Center, CheckState, Checkbox, Column, ContentFit, Element, Image, Keyed, Mark,
-        MeshCanvas, MeshItem, Overlay, ProgressBar, RadioGroup, Rectangle, Row, Scrollable,
-        SimpleCanvas, Slider, Spacer, Spinner, Switch, Text, TextArea, TextField, TextRole,
-        WrappingRows,
+        Button, Card, Center, CheckState, Checkbox, Column, ContentFit, Element, Image, Keyed,
+        Mark, MeshCanvas, MeshItem, Place, Positioned, ProgressBar, RadioGroup, Rectangle, Row,
+        Scrollable, SimpleCanvas, Slider, Spacer, Spinner, Stack, Switch, Text, TextArea,
+        TextField, TextRole, WrappingRows,
     };
 
     pub use crate::engine::{Engine, TargetId};

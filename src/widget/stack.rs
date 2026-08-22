@@ -1,62 +1,17 @@
-use crate::widget::prelude::*;
+use crate::widget::{Positioned, prelude::*};
 
 #[derive(Widget)]
-struct Absolute {
-    inner: Element,
-    offx: i32,
-    offy: i32,
-}
-impl Widget for Absolute {
-    fn layout<'a>(&mut self, ctx: &mut LayoutCtx<'a>) -> Node {
-        let mut n = self.inner.as_mut().layout(ctx);
-        n.is_absolute = true;
-        n.offset_pos.x += self.offx;
-        n.offset_pos.y += self.offy;
-        n
-    }
-    fn key(&self) -> Option<u64> {
-        self.inner.as_ref().key()
-    }
-    fn child_count(&self) -> usize {
-        self.inner.as_ref().child_count()
-    }
-    fn child_mut(&mut self, i: usize) -> &mut dyn Widget {
-        self.inner.as_mut().child_mut(i)
-    }
-    fn child_env(&self, env: Env, theme: &Theme) -> Env {
-        self.inner.as_ref().child_env(env, theme)
-    }
-    fn min_height_for_width<'a>(&mut self, ctx: &mut LayoutCtx<'a>, width: i32) -> Option<i32> {
-        self.inner.as_mut().min_height_for_width(ctx, width)
-    }
-    fn prepare(&mut self, ctx: &mut PrepareCtx) {
-        self.inner.as_mut().prepare(ctx);
-    }
-    fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        self.inner.as_mut().paint(ctx, out);
-    }
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        self.inner.as_mut().paint_overlay(ctx, out);
-    }
-    fn handle(&mut self, ctx: &mut EventCtx) {
-        self.inner.as_mut().handle(ctx);
-    }
-    fn handle_after(&mut self, ctx: &mut EventCtx) {
-        self.inner.as_mut().handle_after(ctx);
-    }
-}
-
-#[derive(Widget)]
-pub struct Overlay {
-    children: Vec<Absolute>,
+pub struct Stack {
+    children: Vec<Positioned>,
     size: Size<Length>,
     color: Color,
     padding: Inset,
     min: Size<i32>,
     max: Size<i32>,
     modal: bool,
+    align: Align2,
 }
-impl Overlay {
+impl Stack {
     pub fn empty() -> Self {
         Self::new::<Vec<_>, Element>(el!())
     }
@@ -65,14 +20,7 @@ impl Overlay {
         I: IntoIterator<Item = E>,
         E: Into<Element>,
     {
-        let wrapped = children
-            .into_iter()
-            .map(|c| Absolute {
-                inner: c.into(),
-                offx: 0,
-                offy: 0,
-            })
-            .collect();
+        let wrapped = children.into_iter().map(|c| Positioned::new(c)).collect();
         Self {
             children: wrapped,
             size: Size::splat(Length::Fit),
@@ -81,7 +29,15 @@ impl Overlay {
             min: Size::splat(0),
             max: Size::splat(i32::MAX),
             modal: false,
+            align: Align2::TOP_LEFT,
         }
+    }
+
+    /// Where children that didn't ask for a placement of their own sit.
+    /// `Stack::new(..).align(Align2::CENTER)` centres everything.
+    pub fn align(mut self, a: Align2) -> Self {
+        self.align = a;
+        self
     }
     pub fn size(mut self, size: Size<Length>) -> Self {
         self.size = size;
@@ -111,19 +67,29 @@ impl Overlay {
         self
     }
 
-    pub fn push<E>(&mut self, element: E, x: i32, y: i32)
+    /// Position travels with the child now, so this takes no coordinates:
+    /// `stack.push(badge.pinned(Align2::TOP_RIGHT))`.
+    pub fn push<E>(&mut self, element: E)
     where
         E: Into<Element>,
     {
-        self.children.push(Absolute {
-            inner: element.into(),
-            offx: x,
-            offy: y,
-        });
+        self.children.push(Positioned::new(element));
     }
 }
-impl Widget for Overlay {
+impl Widget for Stack {
     fn layout<'a>(&mut self, _ctx: &mut LayoutCtx<'a>) -> Node {
+        // Children that didn't ask for a placement get one at `align`.
+        // `set_fallback` leaves an explicitly placed child alone, including
+        // one wrapped by `push`/`new` after it was already positioned.
+        let default = Placement::Absolute {
+            anchor: self.align,
+            origin: self.align,
+            offset: Position::new(0, 0),
+            edges: Edges::NONE,
+        };
+        for c in &mut self.children {
+            c.default_to(default);
+        }
         Node {
             size: self.size,
             min: self.min,

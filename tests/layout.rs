@@ -181,7 +181,7 @@ mod layout {
         let mut h = Harness::default();
 
         let (child, _) = probed_rect(Length::Fixed(40), Length::Fixed(20), Color::RED);
-        let (mut row, slot) = Probe::new(Row::new([child]).padding(Vec4::new(5, 6, 7, 8)));
+        let (mut row, slot) = Probe::new(Row::new([child]).padding(Inset::new(5, 6, 7, 8)));
 
         h.layout(&mut row, 1000, 1000);
         let r = read(&slot);
@@ -791,7 +791,7 @@ mod layout {
     // Overlay / absolute positioning
 
     #[test]
-    fn overlay_places_single_child_at_origin_when_not_pushed() {
+    fn stack_places_single_child_at_origin_when_not_pushed() {
         // Overlay::new wraps children with offset (0, 0) by default.
         // A single Fixed child should end up at (0, 0).
         let mut h = Harness::default();
@@ -801,12 +801,12 @@ mod layout {
             Color::RED,
         ));
 
-        let (mut overlay, overlay_slot) = Probe::new(Overlay::new([child]));
+        let (mut stack, stack_slot) = Probe::new(Stack::new([child]));
 
-        h.layout(&mut overlay, 800, 600);
+        h.layout(&mut stack, 800, 600);
 
         let child_r = read(&child_slot);
-        let overlay_r = read(&overlay_slot);
+        let overlay_r = read(&stack_slot);
 
         // Overlay is Fit + has Absolute children, which are skipped from
         // the sum. So overlay's fit size comes from zero children = 0x0.
@@ -820,7 +820,7 @@ mod layout {
     }
 
     #[test]
-    fn overlay_with_fixed_size_gives_absolute_child_full_inner_area() {
+    fn stack_with_fixed_size_gives_absolute_child_full_inner_area() {
         // Absolute children get inner_w / inner_h in assign_* phases.
         // A Fixed(300x200) Overlay with a Fill(1.0) child should stretch the
         // child to (300, 200).
@@ -831,10 +831,9 @@ mod layout {
             Color::BLUE,
         ));
 
-        let mut overlay =
-            Overlay::new([child]).size(Size::new(Length::Fixed(300), Length::Fixed(200)));
+        let mut stack = Stack::new([child]).size(Size::new(Length::Fixed(300), Length::Fixed(200)));
 
-        h.layout(&mut overlay, 1000, 1000);
+        h.layout(&mut stack, 1000, 1000);
 
         let r = read(&child_slot);
         assert_eq!(
@@ -845,31 +844,7 @@ mod layout {
     }
 
     #[test]
-    fn overlay_push_offsets_child_from_top_left() {
-        // Overlay::push places the child at an explicit offset. With a
-        // Fixed(400x300) overlay and a 50x30 child pushed to (100, 80),
-        // the child should end up at (100, 80).
-        let mut h = Harness::default();
-
-        let (child, child_slot) = Probe::new(Rectangle::new(
-            Size::new(Length::Fixed(50), Length::Fixed(30)),
-            Color::RED,
-        ));
-
-        let mut overlay = Overlay::new(Vec::<Element>::new())
-            .size(Size::new(Length::Fixed(400), Length::Fixed(300)));
-        overlay.push(child, 100, 80);
-
-        h.layout(&mut overlay, 1000, 1000);
-
-        let r = read(&child_slot);
-        assert_eq!(r.0, 100, "absolute child uses offset_pos.x");
-        assert_eq!(r.1, 80, "absolute child uses offset_pos.y");
-        assert_eq!((r.2, r.3), (50, 30), "fixed size preserved");
-    }
-
-    #[test]
-    fn overlay_with_padding_offsets_absolute_child_by_padding() {
+    fn stack_with_padding_offsets_absolute_child_by_padding() {
         // Absolute children are placed at `base_x + offset`, where base_x
         // already includes padding.left (see place() in layout.rs). So
         // pushing a child to (0, 0) inside a padded overlay should land
@@ -881,12 +856,12 @@ mod layout {
             Color::RED,
         ));
 
-        let mut overlay = Overlay::new(Vec::<Element>::new())
+        let mut stack = Stack::empty()
             .size(Size::new(Length::Fixed(200), Length::Fixed(200)))
-            .padding(Vec4::new(7, 11, 0, 0));
-        overlay.push(child, 0, 0);
+            .padding(Inset::new(7, 11, 0, 0));
+        stack.push(child);
 
-        h.layout(&mut overlay, 1000, 1000);
+        h.layout(&mut stack, 1000, 1000);
 
         let r = read(&child_slot);
         assert_eq!(
@@ -897,7 +872,7 @@ mod layout {
     }
 
     #[test]
-    fn overlay_mixes_absolute_children_independently() {
+    fn stack_mixes_absolute_children_independently() {
         // Two pushed children with different offsets should each land at
         // their own spot without affecting each other.
         let mut h = Harness::default();
@@ -911,12 +886,11 @@ mod layout {
             Color::GREEN,
         ));
 
-        let mut overlay = Overlay::new(Vec::<Element>::new())
-            .size(Size::new(Length::Fixed(500), Length::Fixed(400)));
-        overlay.push(a, 10, 20);
-        overlay.push(b, 200, 150);
+        let mut stack = Stack::empty().size(Size::new(Length::Fixed(500), Length::Fixed(400)));
+        stack.push(a.offset(10, 20));
+        stack.push(b.offset(200, 150));
 
-        h.layout(&mut overlay, 1000, 1000);
+        h.layout(&mut stack, 1000, 1000);
 
         let ra = read(&a_slot);
         let rb = read(&b_slot);
@@ -925,7 +899,7 @@ mod layout {
     }
 
     #[test]
-    fn overlay_nested_in_row_does_not_affect_sibling_positions() {
+    fn stack_nested_in_row_does_not_affect_sibling_positions() {
         // A Row containing [fixed 40, overlay{ absolute child 100x100 }, fixed 40].
         // Overlay reports its own size as 0x0 (absolute children are
         // skipped from fit-sum), so the Row should place the right
@@ -946,9 +920,9 @@ mod layout {
             Size::new(Length::Fixed(100), Length::Fixed(100)),
             Color::GREEN,
         );
-        let overlay = Overlay::new([inner_rect]);
+        let stack = Stack::new([inner_rect]);
 
-        let mut row = Row::new(el![left, overlay, right]);
+        let mut row = Row::new(el![left, stack, right]);
 
         h.layout(&mut row, 1000, 1000);
 
