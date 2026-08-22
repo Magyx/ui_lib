@@ -256,7 +256,7 @@ pub fn paint_tree(
 ) {
     crate::scope!("layout::paint_tree");
     let env = ctx.theme.root_env();
-    __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, env);
+    __paint_tree(w, ctx, eng, cursor, out, parent_clip, 0, 0, env);
 }
 #[allow(clippy::too_many_arguments)]
 fn __paint_tree(
@@ -266,6 +266,7 @@ fn __paint_tree(
     cursor: &mut usize,
     out: &mut InstanceStore,
     parent_clip: Option<Rect>,
+    parent_layer: u16,
     depth: usize,
     env: Env,
 ) {
@@ -275,6 +276,8 @@ fn __paint_tree(
 
     let clip = calculate_clip(&n, parent_clip);
     let prev_clip = out.set_clip(clip);
+    let layer = w.layer_shift().resolve(parent_layer);
+    let prev_layer = out.set_layer(layer);
     w.paint(ctx, out);
     if w.focusable() && ctx.is_focused() {
         w.paint_focus_ring(ctx, out);
@@ -285,13 +288,22 @@ fn __paint_tree(
     let child_env = w.child_env(env, ctx.theme);
     for i in 0..w.child_count() {
         let child = w.child_mut(i);
-        __paint_tree(child, ctx, eng, cursor, out, clip, depth + 1, child_env);
+        __paint_tree(
+            child,
+            ctx,
+            eng,
+            cursor,
+            out,
+            clip,
+            layer,
+            depth + 1,
+            child_env,
+        );
     }
 
-    ctx.__set_data(id, env);
-    w.paint_overlay(ctx, out);
-
     if eng.debug {
+        ctx.__set_data(id, env);
+        out.set_layer(layer);
         let r = ctx.rect();
         let col = color_for_depth(depth);
         let thickness = 1;
@@ -306,4 +318,5 @@ fn __paint_tree(
         ));
     }
     out.set_clip(prev_clip);
+    out.set_layer(prev_layer);
 }

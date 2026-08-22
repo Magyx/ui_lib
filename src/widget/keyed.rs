@@ -44,9 +44,6 @@ impl<W: Widget> Widget for Keyed<W> {
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         self.inner.paint(ctx, out)
     }
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        self.inner.paint_overlay(ctx, out)
-    }
 
     fn handle(&mut self, ctx: &mut EventCtx) {
         self.inner.handle(ctx)

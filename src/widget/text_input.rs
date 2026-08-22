@@ -562,6 +562,7 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
+        let id = ctx.id();
         let r = ctx.rect();
         let theme = ctx.theme;
         let fill = self.bg.unwrap_or(theme.surface_variant);
@@ -573,16 +574,11 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
             theme.border_width,
             theme.outline,
         ));
-    }
 
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         const SELECTION_ALPHA: u8 = 96;
         const SELECTION_PAD_X: f32 = 1.5;
         const SELECTION_PAD_Y: f32 = 1.0;
 
-        let id = ctx.id();
-
-        let rect = ctx.rect();
         let Some(st) = self.state(ctx.view_state, id) else {
             return;
         };
@@ -590,15 +586,15 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
             return;
         }
 
-        let clip_l = rect.x as f32;
-        let clip_r = (rect.x + rect.w) as f32;
+        let clip_l = r.x as f32;
+        let clip_r = (r.x + r.w) as f32;
 
         if !self.value.is_empty()
             && let Some(anchor) = st.selection_anchor
             && anchor != st.cursor
         {
             let (start, end) = order_cursors(anchor, st.cursor);
-            let (l, t) = self.text_origin(rect);
+            let (l, t) = self.text_origin(r);
             let p = ctx.theme.primary_container;
             let sel_color = Color::rgba(p.r(), p.g(), p.b(), SELECTION_ALPHA);
             if let Some(buf) = ctx
@@ -613,26 +609,28 @@ impl<M: 'static, Mode: TextMode + 'static> Widget for TextInput<M, Mode> {
                     if w <= 0.0 {
                         continue;
                     }
-                    out.push(Instance::ui(
-                        Position::new(x0, t as f32 + r.top - SELECTION_PAD_Y),
-                        Size::new(w, r.height + 2.0 * SELECTION_PAD_Y),
-                        sel_color,
-                    ));
+                    out.push_raised(
+                        Instance::ui(
+                            Position::new(x0, t as f32 + r.top - SELECTION_PAD_Y),
+                            Size::new(w, r.height + 2.0 * SELECTION_PAD_Y),
+                            sel_color,
+                        ),
+                        1,
+                    );
                 }
             }
         }
 
         if let Some((cx, cy, ch)) = st.caret_cache.rect {
             // no h-scroll yet: hide caret once it leaves the field
-            if cx < rect.x as f32 || cx > (rect.x + rect.w) as f32 {
+            if cx < r.x as f32 || cx > (r.x + r.w) as f32 {
                 return;
             }
             let caret = self.caret.unwrap_or(ctx.theme.on_surface);
-            out.push(Instance::ui(
-                Position::new(cx, cy),
-                Size::new(1.0, ch),
-                caret,
-            ));
+            out.push_raised(
+                Instance::ui(Position::new(cx, cy), Size::new(1.0, ch), caret),
+                1,
+            );
         }
     }
 

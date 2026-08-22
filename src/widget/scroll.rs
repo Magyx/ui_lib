@@ -195,11 +195,7 @@ impl Widget for Scrollable {
         if let Some(bg) = self.bg {
             ctx.fill(out, r.xywh(), bg);
         }
-    }
 
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        let r = ctx.rect();
-        let id = ctx.id();
         let content_h = ctx.child_content_height();
         let bar = self.bar_color.unwrap_or_else(|| {
             let s = ctx.theme.surface_variant;
@@ -211,16 +207,18 @@ impl Widget for Scrollable {
         state.viewport_h = r.h;
         if let Some((tx, ty, tw, th)) = self.thumb_rect(r, state, content_h) {
             let (track_x, track_y, track_w, track_h) = self.track_rect(r);
-            out.push(Instance::ui(
-                Position::new(track_x, track_y),
-                Size::new(track_w, track_h),
-                bar,
-            ));
-            out.push(Instance::ui(
-                Position::new(tx, ty),
-                Size::new(tw, th),
-                thumb,
-            ));
+            out.push_raised(
+                Instance::ui(
+                    Position::new(track_x, track_y),
+                    Size::new(track_w, track_h),
+                    bar,
+                ),
+                1,
+            );
+            out.push_raised(
+                Instance::ui(Position::new(tx, ty), Size::new(tw, th), thumb),
+                1,
+            );
         }
     }
 

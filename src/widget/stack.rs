@@ -1,4 +1,7 @@
-use crate::widget::{Positioned, prelude::*};
+use crate::{
+    primitive::LayerShift,
+    widget::{Positioned, prelude::*},
+};
 
 #[derive(Widget)]
 pub struct Stack {
@@ -10,6 +13,7 @@ pub struct Stack {
     max: Size<i32>,
     modal: bool,
     align: Align2,
+    layer: LayerShift,
 }
 impl Stack {
     pub fn empty() -> Self {
@@ -30,6 +34,7 @@ impl Stack {
             max: Size::splat(i32::MAX),
             modal: false,
             align: Align2::TOP_LEFT,
+            layer: LayerShift::Inherit,
         }
     }
 
@@ -45,6 +50,15 @@ impl Stack {
     }
     pub fn color(mut self, color: Color) -> Self {
         self.color = color;
+        self
+    }
+    pub const MODAL_LAYER: u16 = 1000;
+    pub fn raise(mut self, n: u16) -> Self {
+        self.layer = LayerShift::Above(n);
+        self
+    }
+    pub fn layer(mut self, shift: LayerShift) -> Self {
+        self.layer = shift;
         self
     }
     pub fn modal(mut self) -> Self {
@@ -109,6 +123,10 @@ impl Widget for Stack {
 
     fn focus_trap(&self) -> bool {
         self.modal
+    }
+
+    fn layer_shift(&self) -> LayerShift {
+        self.layer
     }
 
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {

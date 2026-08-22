@@ -278,20 +278,47 @@ impl Instance<Primitive> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LayerShift {
+    /// Same layer as the parent. The default, and what every widget that
+    /// doesn't care about z-order returns.
+    #[default]
+    Inherit,
+    /// The parent's effective layer plus `n`.
+    Above(u16),
+    /// A reserved band above everything, for tooltips that must beat a modal
+    /// they can't see. `TOP_BASE + n`.
+    Top(u16),
+}
+impl LayerShift {
+    pub const TOP_BASE: u16 = u16::MAX / 2;
+
+    #[inline]
+    pub fn resolve(self, parent: u16) -> u16 {
+        match self {
+            LayerShift::Inherit => parent,
+            LayerShift::Above(n) => parent.saturating_add(n),
+            LayerShift::Top(n) => Self::TOP_BASE.saturating_add(n),
+        }
+    }
+}
+
 /// One run of instances sharing a pipeline and a clip.
 pub struct Batch {
     pub id: PipelineId,
     pub byte_offset: u64,
     pub count: u32,
     pub clip: Option<Rect>,
+    pub layer: u16,
 }
 
 /// Instances emitted during one paint pass, in draw order.
 pub struct InstanceStore {
     data: Vec<u32>,
     batches: Vec<Batch>,
-    clip: Option<Rect>,
     count: usize,
+    clip: Option<Rect>,
+    layer: u16,
 }
 impl Default for InstanceStore {
     fn default() -> Self {
@@ -303,8 +330,9 @@ impl InstanceStore {
         Self {
             data: Vec::new(),
             batches: Vec::new(),
-            clip: None,
             count: 0,
+            clip: None,
+            layer: 0,
         }
     }
 
@@ -335,9 +363,34 @@ impl InstanceStore {
         self.batches.clear();
         self.clip = None;
         self.count = 0;
+        self.layer = 0;
     }
     pub(crate) fn set_clip(&mut self, clip: Option<Rect>) -> Option<Rect> {
         mem::replace(&mut self.clip, clip)
+    }
+
+    pub(crate) fn set_layer(&mut self, layer: u16) -> u16 {
+        mem::replace(&mut self.layer, layer)
+    }
+
+    #[inline]
+    pub fn layer(&self) -> u16 {
+        self.layer
+    }
+
+    pub fn push_raised<D: InstanceData>(&mut self, i: Instance<D>, n: u16) {
+        let prev = self.layer;
+        self.layer = prev.saturating_add(n);
+        self.push(i);
+        self.layer = prev;
+    }
+
+    pub(crate) fn draw_order(&self, out: &mut Vec<usize>) {
+        out.clear();
+        out.extend(0..self.batches.len());
+        if self.batches.iter().any(|b| b.layer != 0) {
+            out.sort_by_key(|&i| self.batches[i].layer);
+        }
     }
 
     pub fn push<D: InstanceData>(&mut self, i: Instance<D>) {
@@ -357,7 +410,7 @@ impl InstanceStore {
         self.count += 1;
 
         match self.batches.last_mut() {
-            Some(b) if b.id == i.kind && b.clip == self.clip => {
+            Some(b) if b.id == i.kind && b.clip == self.clip && b.layer == self.layer => {
                 debug_assert_eq!(
                     byte_offset,
                     b.byte_offset + b.count as u64 * std::mem::size_of::<D>() as u64,
@@ -371,8 +424,243 @@ impl InstanceStore {
                 byte_offset,
                 count: 1,
                 clip: self.clip,
+                layer: self.layer,
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod layer_tests {
+    use super::*;
+
+    #[test]
+    fn inherit_is_the_default() {
+        assert_eq!(LayerShift::default(), LayerShift::Inherit);
+        assert_eq!(LayerShift::Inherit.resolve(7), 7);
+    }
+
+    #[test]
+    fn above_is_relative_to_the_parent() {
+        assert_eq!(LayerShift::Above(10).resolve(0), 10);
+        assert_eq!(LayerShift::Above(10).resolve(100), 110);
+    }
+
+    /// The propagation case: a popup inside a modal must land *above* the
+    /// modal's own content, which is what additive shifts buy over absolute
+    /// ones — an absolute `10` inside a `100` modal would sit underneath it.
+    #[test]
+    fn nested_shifts_compose_upward() {
+        let modal = LayerShift::Above(1000).resolve(0);
+        let content = LayerShift::Inherit.resolve(modal);
+        let dropdown = LayerShift::Above(10).resolve(content);
+        assert_eq!((modal, content, dropdown), (1000, 1000, 1010));
+        assert!(dropdown > content);
+    }
+
+    #[test]
+    fn top_escapes_any_ancestor() {
+        let deep = LayerShift::Above(500).resolve(LayerShift::Above(1000).resolve(0));
+        assert!(LayerShift::Top(0).resolve(deep) > deep);
+    }
+
+    #[test]
+    fn shifts_saturate_rather_than_wrap() {
+        let high = LayerShift::Above(u16::MAX).resolve(0);
+        assert_eq!(LayerShift::Above(u16::MAX).resolve(high), u16::MAX);
+        assert_eq!(LayerShift::Top(u16::MAX).resolve(0), u16::MAX);
+    }
+}
+
+#[cfg(test)]
+mod layer_store_tests {
+    use super::*;
+    use crate::model::{Color, Position, Size};
+
+    fn ui(x: f32) -> Instance<Primitive> {
+        Instance::ui(
+            Position::new(x, 0.0),
+            Size::new(1.0, 1.0),
+            Color::rgba(255, 0, 0, 255),
+        )
+    }
+
+    /// Instances at the same layer coalesce; a layer change breaks the batch
+    /// the same way a clip change does.
+    #[test]
+    fn layer_change_breaks_the_batch() {
+        let mut s = InstanceStore::new();
+        s.push(ui(0.0));
+        s.push(ui(1.0));
+        assert_eq!(s.batches().len(), 1);
+        s.set_layer(1);
+        s.push(ui(2.0));
+        assert_eq!(s.batches().len(), 2);
+        assert_eq!(s.batches()[0].layer, 0);
+        assert_eq!(s.batches()[1].layer, 1);
+    }
+
+    /// The point of `push_raised` over a paired raise/restore: the store's
+    /// layer is exactly as it was, so nothing leaks onto later siblings.
+    #[test]
+    fn push_raised_restores_the_layer() {
+        let mut s = InstanceStore::new();
+        s.set_layer(100);
+        s.push_raised(ui(0.0), 1);
+        assert_eq!(s.layer(), 100);
+        s.push(ui(1.0));
+        assert_eq!(s.batches().last().unwrap().layer, 100);
+    }
+
+    #[test]
+    fn push_raised_is_relative_to_the_walk() {
+        let mut s = InstanceStore::new();
+        s.set_layer(1000);
+        s.push_raised(ui(0.0), 1);
+        assert_eq!(
+            s.batches()[0].layer,
+            1001,
+            "must compose with an ancestor's shift"
+        );
+    }
+
+    /// Repeated raised pushes coalesce rather than fragmenting into one batch
+    /// each, because they all resolve to the same layer.
+    #[test]
+    fn consecutive_raised_pushes_share_a_batch() {
+        let mut s = InstanceStore::new();
+        s.push_raised(ui(0.0), 1);
+        s.push_raised(ui(1.0), 1);
+        s.push_raised(ui(2.0), 1);
+        assert_eq!(s.batches().len(), 1);
+        assert_eq!(s.batches()[0].count, 3);
+    }
+
+    #[test]
+    fn push_raised_saturates() {
+        let mut s = InstanceStore::new();
+        s.set_layer(u16::MAX);
+        s.push_raised(ui(0.0), 5);
+        assert_eq!(s.batches()[0].layer, u16::MAX);
+        assert_eq!(s.layer(), u16::MAX);
+    }
+
+    #[test]
+    fn draw_order_puts_higher_layers_last() {
+        let mut s = InstanceStore::new();
+        s.set_layer(5);
+        s.push(ui(0.0)); // painted first, drawn last
+        s.set_layer(0);
+        s.push(ui(1.0));
+
+        let mut order = Vec::new();
+        s.draw_order(&mut order);
+        let layers: Vec<u16> = order.iter().map(|&i| s.batches()[i].layer).collect();
+        assert_eq!(layers, vec![0, 5]);
+    }
+
+    /// Ordering must not disturb the batch list itself. Paint order is a
+    /// record worth keeping: batches tile `data` contiguously, and the last
+    /// batch is the last thing painted.
+    #[test]
+    fn draw_order_leaves_the_batch_list_alone() {
+        let mut s = InstanceStore::new();
+        s.set_layer(5);
+        s.push(ui(0.0));
+        s.set_layer(0);
+        s.push(ui(1.0));
+
+        let before: Vec<(u16, u64)> = s
+            .batches()
+            .iter()
+            .map(|b| (b.layer, b.byte_offset))
+            .collect();
+        let mut order = Vec::new();
+        s.draw_order(&mut order);
+        let after: Vec<(u16, u64)> = s
+            .batches()
+            .iter()
+            .map(|b| (b.layer, b.byte_offset))
+            .collect();
+        assert_eq!(before, after);
+    }
+
+    /// Batches must keep tiling the byte buffer with no gap or overlap — the
+    /// invariant `tests/paint.rs` asserts against a real paint walk.
+    #[test]
+    fn batches_stay_contiguous_regardless_of_layer() {
+        let mut s = InstanceStore::new();
+        for x in 0..6 {
+            s.set_layer((x % 3) as u16);
+            s.push(ui(x as f32));
+        }
+        let stride = std::mem::size_of::<Primitive>() as u64;
+        let mut next = 0u64;
+        let mut total = 0usize;
+        for b in s.batches() {
+            assert_eq!(b.byte_offset, next, "gap or overlap between batches");
+            assert!(b.count > 0, "empty batch");
+            next += b.count as u64 * stride;
+            total += b.count as usize;
+        }
+        assert_eq!(total, s.len());
+    }
+
+    /// Equal layers keep the order they were painted in, so a modal's scrim
+    /// still draws under its own children.
+    #[test]
+    fn draw_order_is_stable_within_a_layer() {
+        let mut s = InstanceStore::new();
+        for x in 0..3 {
+            s.set_layer(0);
+            s.push(ui(x as f32));
+            s.set_layer(1);
+            s.push(ui(x as f32));
+        }
+        let mut order = Vec::new();
+        s.draw_order(&mut order);
+
+        for want in [0u16, 1] {
+            let offs: Vec<u64> = order
+                .iter()
+                .map(|&i| &s.batches()[i])
+                .filter(|b| b.layer == want)
+                .map(|b| b.byte_offset)
+                .collect();
+            assert!(
+                offs.windows(2).all(|w| w[0] < w[1]),
+                "layer {want} lost paint order"
+            );
+        }
+    }
+
+    /// Every batch is drawn exactly once, whatever the layers.
+    #[test]
+    fn draw_order_is_a_permutation() {
+        let mut s = InstanceStore::new();
+        for x in 0..6 {
+            s.set_layer((x % 3) as u16);
+            s.push(ui(x as f32));
+        }
+        let mut order = Vec::new();
+        s.draw_order(&mut order);
+        let mut seen = order.clone();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), s.batches().len());
+        assert_eq!(order.len(), s.batches().len());
+    }
+
+    #[test]
+    fn draw_order_is_identity_when_everything_is_layer_zero() {
+        let mut s = InstanceStore::new();
+        for x in 0..4 {
+            s.set_clip(Some(Rect::new(x, 0, 1, 1)));
+            s.push(ui(x as f32));
+        }
+        let mut order = Vec::new();
+        s.draw_order(&mut order);
+        assert_eq!(order, (0..s.batches().len()).collect::<Vec<_>>());
     }
 }
 

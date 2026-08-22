@@ -105,9 +105,6 @@ impl Widget for Positioned {
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
         self.inner.as_mut().paint(ctx, out);
     }
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        self.inner.as_mut().paint_overlay(ctx, out);
-    }
     fn handle(&mut self, ctx: &mut EventCtx) {
         self.inner.as_mut().handle(ctx);
     }

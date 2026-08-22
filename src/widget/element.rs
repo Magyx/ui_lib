@@ -1,7 +1,7 @@
 use crate::{
     context::{Env, EventCtx, LayoutCtx, PaintCtx, PrepareCtx},
     layout::Node,
-    primitive::InstanceStore,
+    primitive::{InstanceStore, LayerShift},
     theme::Theme,
 };
 
@@ -24,6 +24,10 @@ pub trait Widget: IntoElement {
         env
     }
 
+    fn layer_shift(&self) -> LayerShift {
+        LayerShift::Inherit
+    }
+
     fn focusable(&self) -> bool {
         false
     }
@@ -38,9 +42,6 @@ pub trait Widget: IntoElement {
         let _ = ctx;
     }
     fn paint(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore);
-    fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-        let _ = (ctx, out);
-    }
 
     fn handle(&mut self, ctx: &mut EventCtx) {
         let _ = ctx;

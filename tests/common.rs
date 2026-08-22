@@ -218,9 +218,6 @@ mod harness {
             self.slot.set(Some(r));
             self.inner.paint(ctx, out);
         }
-        fn paint_overlay(&mut self, ctx: &mut PaintCtx, out: &mut InstanceStore) {
-            self.inner.paint_overlay(ctx, out);
-        }
         fn handle(&mut self, ctx: &mut ui::context::EventCtx) {
             self.inner.handle(ctx);
         }

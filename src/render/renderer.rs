@@ -20,6 +20,7 @@ pub(crate) enum Presented {
 pub(crate) struct Renderer {
     instance_buffer: wgpu::Buffer,
     instance_capacity: u64,
+    draw_order: Vec<usize>,
 
     pub(crate) textures: TextureRegistry,
 }
@@ -37,6 +38,7 @@ impl Renderer {
         Self {
             instance_capacity: max_instances * std::mem::size_of::<Primitive>() as u64,
             instance_buffer,
+            draw_order: Vec::new(),
             textures: TextureRegistry::new(device),
         }
     }
@@ -115,7 +117,6 @@ impl Renderer {
         gpu.queue
             .write_buffer(&self.instance_buffer, 0, store.bytes());
 
-        // ---- frame hooks -------------------------------------------------
         // Before the shared pass, with the encoder and the queue. Offscreen
         // passes, compute dispatches, and per-frame uploads happen here.
         let active = PipelineRegistry::active_ids(store.batches());
@@ -138,6 +139,8 @@ impl Renderer {
                 pipeline.frame(&mut ctx);
             }
         }
+
+        store.draw_order(&mut self.draw_order);
 
         // Depth slices: count the batches that asked to be isolated, then hand
         // them descending ranges so later-painted widgets sit nearer the
