@@ -21,6 +21,7 @@ pub(crate) struct Renderer {
     instance_buffer: wgpu::Buffer,
     instance_capacity: u64,
     draw_order: Vec<usize>,
+    isolated: Vec<usize>,
 
     pub(crate) textures: TextureRegistry,
 }
@@ -39,6 +40,7 @@ impl Renderer {
             instance_capacity: max_instances * std::mem::size_of::<Primitive>() as u64,
             instance_buffer,
             draw_order: Vec::new(),
+            isolated: Vec::new(),
             textures: TextureRegistry::new(device),
         }
     }
@@ -145,21 +147,23 @@ impl Renderer {
         // Depth slices: count the batches that asked to be isolated, then hand
         // them descending ranges so later-painted widgets sit nearer the
         // camera and cannot be rejected by an earlier widget's depth.
-        let isolated: Vec<usize> = store
-            .batches()
-            .iter()
-            .enumerate()
-            .filter(|(_, b)| {
-                registry
-                    .requirements_of(b.id)
-                    .is_some_and(|r| r.isolate_depth && r.depth != DepthUse::None)
-            })
-            .map(|(i, _)| i)
-            .collect();
-        let slice = if isolated.is_empty() {
+        self.isolated.clear();
+        self.isolated.extend(
+            store
+                .batches()
+                .iter()
+                .enumerate()
+                .filter(|(_, b)| {
+                    registry
+                        .requirements_of(b.id)
+                        .is_some_and(|r| r.isolate_depth && r.depth != DepthUse::None)
+                })
+                .map(|(i, _)| i),
+        );
+        let slice = if self.isolated.is_empty() {
             1.0
         } else {
-            1.0 / isolated.len() as f32
+            1.0 / self.isolated.len() as f32
         };
 
         {
@@ -248,8 +252,8 @@ impl Renderer {
                 // Depth range for this batch. Reverse order: the first
                 // isolated batch gets the far slice.
                 let want_range = if config.has_depth() {
-                    if isolated.contains(&i) {
-                        let k = isolated.len() - 1 - isolated_seen;
+                    if self.isolated.contains(&i) {
+                        let k = self.isolated.len() - 1 - isolated_seen;
                         isolated_seen += 1;
                         Some((k as f32 * slice, (k as f32 + 1.0) * slice))
                     } else {
